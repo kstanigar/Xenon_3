@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Top-Scrolling Flying Game</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+      display: block;
+      margin: 0 auto;
+      background-color: black;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="score">Score: 0</div>
+  <div id="gameOver" style="display: none">Game Over!</div>
+  <button id="startButton">Start Game</button>
+  <script>
+    // Get the canvas element
+    var canvas = document.getElementById("gameCanvas");
+    var ctx = canvas.getContext("2d");
+
+    // Load player image
+    var playerImg = new Image();
+    playerImg.src = "/Xenon_2/player.png";
+
+    // Load enemy image
+    var enemyImg = new Image();
+    enemyImg.src = "/Xenon_2/enemy.png";
+
+    // Player object
+    var player = {
+      x: canvas.width / 2,
+      y: canvas.height - 30,
+      width: 50,
+      height: 50,
+      speed: 5,
+    };
+
+    // Bullets arrays
+    var playerBullets = [];
+    var enemyBullets = [];
+
+    // Enemy objects
+    var enemies = [];
+
+    // Score
+    var score = 0;
+
+    // Game over flag
+    var gameOver = true; // Set to true initially
+
+    function createEnemy() {
+      var enemy = {
+        x: Math.random() * (canvas.width - 50),
+        y: 0,
+        width: 50,
+        height: 50,
+        speed: Math.random() * 2 + 2, // Random speed between 2 and 4
+      };
+      enemies.push(enemy);
+    }
+
+    // Keyboard event listeners
+    var rightPressed = false;
+    var leftPressed = false;
+
+    document.addEventListener("keydown", keyDownHandler, false);
+    document.addEventListener("keyup", keyUpHandler, false);
+
+    function keyDownHandler(e) {
+      if (e.key == "Right" || e.key == "ArrowRight") {
+        rightPressed = true;
+      } else if (e.key == "Left" || e.key == "ArrowLeft") {
+        leftPressed = true;
+      } else if (e.key == " ") {
+        // Use " " for space key
+        shootBullet();
+      }
+    }
+
+    function keyUpHandler(e) {
+      if (e.key == "Right" || e.key == "ArrowRight") {
+        rightPressed = false;
+      } else if (e.key == "Left" || e.key == "ArrowLeft") {
+        leftPressed = false;
+      }
+    }
+
+    // Shoot player bullet
+    function shootBullet() {
+      var bullet = {
+        x: player.x + player.width / 2 - 2.5, // Bullet starts from the middle of the player
+        y: player.y,
+        width: 5,
+        height: 10,
+        speed: 8,
+      };
+      playerBullets.push(bullet);
+    }
+
+    // Shoot enemy bullet
+    function shootEnemyBullet(enemy) {
+      var bullet = {
+        x: enemy.x + enemy.width / 2 - 2.5, // Bullet starts from the middle of the enemy
+        y: enemy.y + enemy.height,
+        width: 5,
+        height: 10,
+        speed: 4, // Adjust speed as needed
+      };
+      enemyBullets.push(bullet);
+    }
+
+    // Main game loop
+    function draw() {
+      if (!gameOver) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw player
+        ctx.drawImage(
+          playerImg,
+          player.x,
+          player.y,
+          player.width,
+          player.height
+        );
+
+        // Move player
+        if (rightPressed && player.x < canvas.width - player.width) {
+          player.x += player.speed;
+        } else if (leftPressed && player.x > 0) {
+          player.x -= player.speed;
+        }
+
+        // Draw and move player bullets
+        for (var i = 0; i < playerBullets.length; i++) {
+          ctx.fillStyle = "#00FF00";
+          ctx.fillRect(
+            playerBullets[i].x,
+            playerBullets[i].y,
+            playerBullets[i].width,
+            playerBullets[i].height
+          );
+
+          playerBullets[i].y -= playerBullets[i].speed;
+
+          // Remove bullets that have reached the top of the screen
+          if (playerBullets[i].y < 0) {
+            playerBullets.splice(i, 1);
+            continue;
+          }
+
+          // Check for collisions with enemies
+          for (var j = 0; j < enemies.length; j++) {
+            if (
+              playerBullets[i].x < enemies[j].x + enemies[j].width &&
+              playerBullets[i].x + playerBullets[i].width > enemies[j].x &&
+              playerBullets[i].y < enemies[j].y + enemies[j].height &&
+              playerBullets[i].y + playerBullets[i].height > enemies[j].y
+            ) {
+              // Collision detected, remove bullet and enemy
+              playerBullets.splice(i, 1);
+              enemies.splice(j, 1);
+              // Decrement i to handle the removed bullet
+              i--;
+              // Increment score
+              score += 10;
+              document.getElementById("score").innerText = "Score: " + score;
+              break; // Exit the inner loop since the bullet can only collide with one enemy
+            }
+          }
+        }
+
+        // Draw and move enemy bullets
+        for (var i = 0; i < enemyBullets.length; i++) {
+          ctx.fillStyle = "#FF0000";
+          ctx.fillRect(
+            enemyBullets[i].x,
+            enemyBullets[i].y,
+            enemyBullets[i].width,
+            enemyBullets[i].height
+          );
+
+          enemyBullets[i].y += enemyBullets[i].speed;
+
+          // Remove bullets that have reached the bottom of the screen
+          if (enemyBullets[i].y > canvas.height) {
+            enemyBullets.splice(i, 1);
+            continue;
+          }
+
+          // Check for collisions with player
+          if (
+            enemyBullets[i].x < player.x + player.width &&
+            enemyBullets[i].x + enemyBullets[i].width > player.x &&
+            enemyBullets[i].y < player.y + player.height &&
+            enemyBullets[i].y + enemyBullets[i].height > player.y
+          ) {
+            // Collision detected with player, game over
+            gameOver = true;
+            document.getElementById("gameOver").style.display = "block";
+            break;
+          }
+        }
+
+        // Draw and move enemies
+        for (var i = 0; i < enemies.length; i++) {
+          ctx.drawImage(
+            enemyImg,
+            enemies[i].x,
+            enemies[i].y,
+            enemies[i].width,
+            enemies[i].height
+          );
+
+          enemies[i].y += enemies[i].speed;
+
+          // Check for collision with player
+          if (
+            player.x < enemies[i].x + enemies[i].width &&
+            player.x + player.width > enemies[i].x &&
+            player.y < enemies[i].y + enemies[i].height &&
+            player.y + player.height > enemies[i].y
+          ) {
+            // Collision detected with player, game over
+            gameOver = true;
+            document.getElementById("gameOver").style.display = "block";
+            break;
+          }
+
+          // Remove enemies that have reached the bottom of the screen
+          if (enemies[i].y > canvas.height) {
+            enemies.splice(i, 1);
+            // Decrement i to handle the removed enemy
+            i--;
+            // End the game if an enemy reaches the bottom
+            endGame();
+          }
+
+          // Randomly shoot bullets from enemies
+          if (Math.random() < 0.005) {
+            // Adjust the frequency of enemy shooting
+            shootEnemyBullet(enemies[i]);
+          }
+        }
+
+        // Create new enemies randomly
+        if (Math.random() < 0.01) {
+          createEnemy();
+        }
+
+        requestAnimationFrame(draw);
+      }
+    }
+
+    function endGame() {
+      gameOver = true;
+      document.getElementById("gameOver").style.display = "block";
+    }
+
+    // Event listener for the start button
+    document
+      .getElementById("startButton")
+      .addEventListener("click", function () {
+        if (gameOver) {
+          // Reset game state
+          gameOver = false;
+          score = 0;
+          document.getElementById("score").innerText = "Score: " + score;
+          player.x = canvas.width / 2;
+          enemies = [];
+          playerBullets = [];
+          enemyBullets = [];
+          document.getElementById("gameOver").style.display = "none";
+          // Start the game loop
+          draw();
+        }
+      });
+  </script>
+</body>
+
+</html>
