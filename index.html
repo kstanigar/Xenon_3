@@ -238,7 +238,7 @@
             document.getElementById("gameOver").style.display = "block";
             break;
           }
-
+          /*    Enemy gets past - Game Over    */
           if (enemies[i].y > canvas.height) {
             enemies.splice(i, 1);
             i--;
@@ -264,6 +264,8 @@
     }
 
     document.getElementById("startButton").addEventListener("click", function () {
+      this.blur(); // 👈 Removes focus from the button
+
       if (gameOver) {
         gameOver = false;
         score = 0;
