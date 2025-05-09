@@ -74,6 +74,7 @@
     <div id="intro">Use Left/Right Arrows and Spacebar to Shoot</div>
     <div id="score">Score: 0</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="level" style="font-size: 24px; color: white; margin-bottom: 10px;">Level 1</div>
     <div id="gameOver">Game Over!</div>
   </div>
 
@@ -100,6 +101,7 @@
     var enemyBullets = [];
     var enemies = [];
     var score = 0;
+    var level = 1;
     var gameOver = true;
 
     function createEnemy() {
@@ -196,6 +198,7 @@
               score += 10;
               document.getElementById("score").innerText = "Score: " + score;
               break;
+
             }
           }
         }
@@ -242,10 +245,12 @@
           if (enemies[i].y > canvas.height) {
             enemies.splice(i, 1);
             i--;
-            endGame();
+            if (score > 200) {
+              endGame();
+            }
           }
 
-          if (Math.random() < 0.005) {
+          if (score >= 100 && Math.random() < 0.005) {
             shootEnemyBullet(enemies[i]);
           }
         }
