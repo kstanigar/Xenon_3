@@ -64,6 +64,34 @@
       color: red;
       z-index: 2;
     }
+
+    #levelDisplay {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      color: #00FF00;
+      text-shadow: 0 0 20px #00FF00, 0 0 40px #00FF00;
+      z-index: 3;
+      animation: levelPulse 0.5s ease-in-out;
+    }
+
+    @keyframes levelPulse {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+
+    #levelIndicator {
+      color: white;
+      position: absolute;
+      top: 40px;
+      right: 10px;
+      font-size: 16px;
+      z-index: 2;
+    }
   </style>
 </head>
 
@@ -74,27 +102,70 @@
     <div id="intro">Use Left/Right Arrows and Spacebar to Shoot</div>
     <div id="score">Score: 0</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="level" style="font-size: 24px; color: white; margin-bottom: 10px;">Level 1</div>
+    <div id="levelIndicator">Level: 1</div>
+    <div id="levelDisplay">Level 1</div>
     <div id="gameOver">Game Over!</div>
   </div>
 
   <script>
-    // Your existing JavaScript code remains the same
+    // ============================================
+    // GAME CONFIGURATION - Easy to modify values
+    // ============================================
+    var CONFIG = {
+      // Player settings
+      playerSpeed: 5,
+      bulletSpeed: 12,
+
+      // Enemy settings
+      enemyBaseSpeed: 1.5,
+      enemySpeedIncrease: 0.3,  // Per level
+      enemySpawnRate: 0.01,
+      enemySpawnIncrease: 0.005, // Per level
+
+      // Enemy shooting (starts at level 2)
+      enemyShootChance: 0.005,
+      enemyShootIncrease: 0.002, // Per level
+      enemyBulletSpeed: 3,
+
+      // Level thresholds (score needed for each level)
+      levelThresholds: [0, 100, 200, 300],
+
+      // Enemy types available at each level
+      // Level 1: shapes only
+      // Level 2: shapes + sprite1 (enemy.png)
+      // Level 3: shapes + sprite1 + sprite2 (enemy2.png)
+      // Level 4: sprites only
+      levelEnemyTypes: {
+        1: ['diamond', 'hexagon'],
+        2: ['diamond', 'hexagon', 'sprite1'],
+        3: ['diamond', 'hexagon', 'sprite1', 'sprite2'],
+        4: ['sprite1', 'sprite2']
+      }
+    };
+
+    // ============================================
+    // CANVAS AND IMAGE SETUP
+    // ============================================
     var canvas = document.getElementById("gameCanvas");
     var ctx = canvas.getContext("2d");
 
     var playerImg = new Image();
     playerImg.src = "/Xenon_3/player.png";
 
-    var enemyImg = new Image();
-    enemyImg.src = "/Xenon_2/enemy.png";
+    var enemyImg1 = new Image();
+    enemyImg1.src = "/Xenon_3/enemy.png";
 
+    var enemyImg2 = new Image();
+    enemyImg2.src = "/Xenon_3/enemy2.png";
+
+    // ============================================
+    // GAME STATE
+    // ============================================
     var player = {
       x: canvas.width / 2,
       y: canvas.height - 80,
       width: 75,
-      height: 75,
-      speed: 5,
+      height: 75
     };
 
     var playerBullets = [];
@@ -103,183 +174,312 @@
     var score = 0;
     var level = 1;
     var gameOver = true;
+    var rightPressed = false;
+    var leftPressed = false;
+
+    // Enemy types: 'diamond', 'hexagon', 'sprite1', 'sprite2'
+    var ENEMY_TYPES = {
+      DIAMOND: 'diamond',
+      HEXAGON: 'hexagon',
+      SPRITE1: 'sprite1',
+      SPRITE2: 'sprite2'
+    };
+
+    // ============================================
+    // LEVEL MANAGEMENT
+    // ============================================
+    function showLevelAnnouncement(levelNum) {
+      var levelDisplay = document.getElementById("levelDisplay");
+      levelDisplay.innerText = "Level " + levelNum;
+      levelDisplay.style.display = "block";
+      setTimeout(function() {
+        levelDisplay.style.display = "none";
+      }, 2000);
+    }
+
+    function checkLevelUp() {
+      var thresholds = CONFIG.levelThresholds;
+      var newLevel = 1;
+
+      for (var i = thresholds.length - 1; i >= 0; i--) {
+        if (score >= thresholds[i]) {
+          newLevel = i + 1;
+          break;
+        }
+      }
+
+      if (newLevel > level) {
+        level = newLevel;
+        document.getElementById("levelIndicator").innerText = "Level: " + level;
+        showLevelAnnouncement(level);
+      }
+    }
+
+    // ============================================
+    // ENEMY CREATION AND DRAWING
+    // ============================================
+    function getEnemyType() {
+      // Get available enemy types for current level
+      var availableTypes = CONFIG.levelEnemyTypes[level] || CONFIG.levelEnemyTypes[4];
+      // Pick a random type from available types
+      var randomIndex = Math.floor(Math.random() * availableTypes.length);
+      return availableTypes[randomIndex];
+    }
 
     function createEnemy() {
+      var speedVariation = 1;
+      var baseSpeed = CONFIG.enemyBaseSpeed + (level - 1) * CONFIG.enemySpeedIncrease;
+
       var enemy = {
         x: Math.random() * (canvas.width - 50),
         y: 0,
         width: 50,
         height: 50,
-        speed: Math.random() * 2 + 2,
+        speed: baseSpeed + Math.random() * speedVariation,
+        type: getEnemyType()
       };
+
       enemies.push(enemy);
     }
 
-    var rightPressed = false;
-    var leftPressed = false;
+    function drawDiamond(enemy) {
+      var x = enemy.x;
+      var y = enemy.y;
+      var w = enemy.width;
+      var h = enemy.height;
 
-    document.addEventListener("keydown", keyDownHandler, false);
-    document.addEventListener("keyup", keyUpHandler, false);
+      ctx.fillStyle = "#FF3333";
+      ctx.beginPath();
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x + w, y + h / 2);
+      ctx.lineTo(x + w / 2, y + h);
+      ctx.lineTo(x, y + h / 2);
+      ctx.closePath();
+      ctx.fill();
 
-    function keyDownHandler(e) {
-      if (e.key == "Right" || e.key == "ArrowRight") {
-        rightPressed = true;
-      } else if (e.key == "Left" || e.key == "ArrowLeft") {
-        leftPressed = true;
-      } else if (e.key == " ") {
-        shootBullet();
+      ctx.strokeStyle = "#FF0000";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawHexagon(enemy) {
+      var cx = enemy.x + enemy.width / 2;
+      var cy = enemy.y + enemy.height / 2;
+      var r = enemy.width / 2;
+
+      ctx.fillStyle = "#9933FF";
+      ctx.beginPath();
+      for (var i = 0; i < 6; i++) {
+        var angle = (Math.PI / 3) * i - Math.PI / 2;
+        var px = cx + r * Math.cos(angle);
+        var py = cy + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "#6600CC";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Inner circle
+      ctx.fillStyle = "#CC00FF";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r / 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawEnemy(enemy) {
+      switch (enemy.type) {
+        case ENEMY_TYPES.DIAMOND:
+          drawDiamond(enemy);
+          break;
+        case ENEMY_TYPES.HEXAGON:
+          drawHexagon(enemy);
+          break;
+        case ENEMY_TYPES.SPRITE1:
+          ctx.drawImage(enemyImg1, enemy.x, enemy.y, enemy.width, enemy.height);
+          break;
+        case ENEMY_TYPES.SPRITE2:
+          ctx.drawImage(enemyImg2, enemy.x, enemy.y, enemy.width, enemy.height);
+          break;
       }
     }
 
-    function keyUpHandler(e) {
-      if (e.key == "Right" || e.key == "ArrowRight") {
-        rightPressed = false;
-      } else if (e.key == "Left" || e.key == "ArrowLeft") {
-        leftPressed = false;
-      }
-    }
-
+    // ============================================
+    // BULLETS
+    // ============================================
     function shootBullet() {
-      var bullet = {
+      playerBullets.push({
         x: player.x + player.width / 2 - 2.5,
         y: player.y,
         width: 5,
         height: 10,
-        speed: 8,
-      };
-      playerBullets.push(bullet);
+        speed: CONFIG.bulletSpeed
+      });
     }
 
     function shootEnemyBullet(enemy) {
-      var bullet = {
+      enemyBullets.push({
         x: enemy.x + enemy.width / 2 - 2.5,
         y: enemy.y + enemy.height,
         width: 5,
         height: 10,
-        speed: 4,
-      };
-      enemyBullets.push(bullet);
+        speed: CONFIG.enemyBulletSpeed
+      });
     }
 
+    // ============================================
+    // COLLISION DETECTION
+    // ============================================
+    function isColliding(a, b) {
+      return a.x < b.x + b.width &&
+             a.x + a.width > b.x &&
+             a.y < b.y + b.height &&
+             a.y + a.height > b.y;
+    }
+
+    // ============================================
+    // INPUT HANDLING
+    // ============================================
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+      else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+      else if (e.key === " ") shootBullet();
+    });
+
+    document.addEventListener("keyup", function(e) {
+      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+      else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+    });
+
+    // ============================================
+    // MAIN GAME LOOP
+    // ============================================
     function draw() {
-      if (!gameOver) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (gameOver) return;
 
-        ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (rightPressed && player.x < canvas.width - player.width) {
-          player.x += player.speed;
-        } else if (leftPressed && player.x > 0) {
-          player.x -= player.speed;
-        }
-
-        for (var i = 0; i < playerBullets.length; i++) {
-          ctx.fillStyle = "#00FF00";
-          ctx.fillRect(playerBullets[i].x, playerBullets[i].y, playerBullets[i].width, playerBullets[i].height);
-
-          playerBullets[i].y -= playerBullets[i].speed;
-
-          if (playerBullets[i].y < 0) {
-            playerBullets.splice(i, 1);
-            continue;
-          }
-
-          for (var j = 0; j < enemies.length; j++) {
-            if (
-              playerBullets[i] &&
-              playerBullets[i].x < enemies[j].x + enemies[j].width &&
-              playerBullets[i].x + playerBullets[i].width > enemies[j].x &&
-              playerBullets[i].y < enemies[j].y + enemies[j].height &&
-              playerBullets[i].y + playerBullets[i].height > enemies[j].y
-            ) {
-              playerBullets.splice(i, 1);
-              enemies.splice(j, 1);
-              i--;
-              score += 10;
-              document.getElementById("score").innerText = "Score: " + score;
-              break;
-
-            }
-          }
-        }
-
-        for (var i = 0; i < enemyBullets.length; i++) {
-          ctx.fillStyle = "#FF0000";
-          ctx.fillRect(enemyBullets[i].x, enemyBullets[i].y, enemyBullets[i].width, enemyBullets[i].height);
-
-          enemyBullets[i].y += enemyBullets[i].speed;
-
-          if (enemyBullets[i].y > canvas.height) {
-            enemyBullets.splice(i, 1);
-            continue;
-          }
-
-          if (
-            enemyBullets[i].x < player.x + player.width &&
-            enemyBullets[i].x + enemyBullets[i].width > player.x &&
-            enemyBullets[i].y < player.y + player.height &&
-            enemyBullets[i].y + enemyBullets[i].height > player.y
-          ) {
-            gameOver = true;
-            document.getElementById("gameOver").style.display = "block";
-            break;
-          }
-        }
-
-        for (var i = 0; i < enemies.length; i++) {
-          ctx.drawImage(enemyImg, enemies[i].x, enemies[i].y, enemies[i].width, enemies[i].height);
-
-          enemies[i].y += enemies[i].speed;
-
-          if (
-            player.x < enemies[i].x + enemies[i].width &&
-            player.x + player.width > enemies[i].x &&
-            player.y < enemies[i].y + enemies[i].height &&
-            player.y + player.height > enemies[i].y
-          ) {
-            gameOver = true;
-            document.getElementById("gameOver").style.display = "block";
-            break;
-          }
-          /*    Enemy gets past - Game Over    */
-          if (enemies[i].y > canvas.height) {
-            enemies.splice(i, 1);
-            i--;
-            if (score > 200) {
-              endGame();
-            }
-          }
-
-          if (score >= 100 && Math.random() < 0.005) {
-            shootEnemyBullet(enemies[i]);
-          }
-        }
-
-        if (Math.random() < 0.01) {
-          createEnemy();
-        }
-
-        requestAnimationFrame(draw);
+      // Draw and move player
+      ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+      if (rightPressed && player.x < canvas.width - player.width) {
+        player.x += CONFIG.playerSpeed;
+      } else if (leftPressed && player.x > 0) {
+        player.x -= CONFIG.playerSpeed;
       }
+
+      // Update player bullets
+      for (var i = playerBullets.length - 1; i >= 0; i--) {
+        var bullet = playerBullets[i];
+
+        ctx.fillStyle = "#00FF00";
+        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        bullet.y -= bullet.speed;
+
+        // Remove if off screen
+        if (bullet.y < 0) {
+          playerBullets.splice(i, 1);
+          continue;
+        }
+
+        // Check collision with enemies
+        for (var j = enemies.length - 1; j >= 0; j--) {
+          if (isColliding(bullet, enemies[j])) {
+            playerBullets.splice(i, 1);
+            enemies.splice(j, 1);
+            score += 10;
+            document.getElementById("score").innerText = "Score: " + score;
+            checkLevelUp();
+            break;
+          }
+        }
+      }
+
+      // Update enemy bullets
+      for (var i = enemyBullets.length - 1; i >= 0; i--) {
+        var bullet = enemyBullets[i];
+
+        ctx.fillStyle = "#FF0000";
+        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        bullet.y += bullet.speed;
+
+        // Remove if off screen
+        if (bullet.y > canvas.height) {
+          enemyBullets.splice(i, 1);
+          continue;
+        }
+
+        // Check collision with player
+        if (isColliding(bullet, player)) {
+          gameOver = true;
+          document.getElementById("gameOver").style.display = "block";
+          return;
+        }
+      }
+
+      // Update enemies
+      for (var i = enemies.length - 1; i >= 0; i--) {
+        var enemy = enemies[i];
+
+        drawEnemy(enemy);
+        enemy.y += enemy.speed;
+
+        // Check collision with player
+        if (isColliding(enemy, player)) {
+          gameOver = true;
+          document.getElementById("gameOver").style.display = "block";
+          return;
+        }
+
+        // Remove if off screen
+        if (enemy.y > canvas.height) {
+          enemies.splice(i, 1);
+          continue;
+        }
+
+        // Enemy shooting (level 2+)
+        if (level >= 2) {
+          var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
+          if (Math.random() < shootChance) {
+            shootEnemyBullet(enemy);
+          }
+        }
+      }
+
+      // Spawn new enemies
+      var spawnChance = CONFIG.enemySpawnRate + (level - 1) * CONFIG.enemySpawnIncrease;
+      if (Math.random() < spawnChance) {
+        createEnemy();
+      }
+
+      requestAnimationFrame(draw);
     }
 
-    function endGame() {
-      gameOver = true;
-      document.getElementById("gameOver").style.display = "block";
-    }
-
-    document.getElementById("startButton").addEventListener("click", function () {
-      this.blur(); // 👈 Removes focus from the button
+    // ============================================
+    // GAME START
+    // ============================================
+    document.getElementById("startButton").addEventListener("click", function() {
+      this.blur();
 
       if (gameOver) {
+        // Reset game state
         gameOver = false;
         score = 0;
-        document.getElementById("score").innerText = "Score: " + score;
+        level = 1;
         player.x = canvas.width / 2;
         enemies = [];
         playerBullets = [];
         enemyBullets = [];
+
+        // Update UI
+        document.getElementById("score").innerText = "Score: " + score;
+        document.getElementById("levelIndicator").innerText = "Level: " + level;
+        document.getElementById("levelDisplay").style.display = "none";
         document.getElementById("gameOver").style.display = "none";
+
+        showLevelAnnouncement(1);
         draw();
       }
     });
