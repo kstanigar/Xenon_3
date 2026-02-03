@@ -172,13 +172,20 @@
       enemyBulletSpeed: 3,
 
       // Boss settings
-      bossScoreThreshold: 400,
+      boss1ScoreThreshold: 400,
+      boss2ScoreThreshold: 1250,
       bossHealth: 50,
       bossSpeed: 1,
       bossShootChance: 0.02,
 
       // Level thresholds
+      // Levels 1-4: original enemies, Boss 1 at 400
+      // Levels 5-8: red enemies (start after Boss 1 defeated)
+      // Level thresholds are calculated dynamically after Boss 1
       levelThresholds: [0, 100, 200, 300],
+
+      // Red level speed multiplier (faster than original)
+      redLevelSpeedMultiplier: 1.3,
 
       // Power-up settings
       powerupSpeed: 4,  // Twice as fast as enemies
@@ -193,8 +200,15 @@
         1: ['enemy1'],
         2: ['enemy1', 'enemy2'],
         3: ['enemy1', 'enemy2', 'enemy3'],
-        4: ['enemy1', 'enemy2', 'enemy3', 'enemy4']
-      }
+        4: ['enemy1', 'enemy2', 'enemy3', 'enemy4'],
+        5: ['enemy1_red'],
+        6: ['enemy1_red', 'enemy2_red'],
+        7: ['enemy1_red', 'enemy2_red', 'enemy3_red'],
+        8: ['enemy1_red', 'enemy2_red', 'enemy3_red', 'enemy4_red']
+      },
+
+      // Enemies that zigzag
+      zigzagEnemies: ['enemy3', 'enemy2_red', 'enemy4_red']
     };
 
     // ============================================
@@ -220,6 +234,68 @@
 
     var bossImg = new Image();
     bossImg.src = "/Xenon_3/Boss.png";
+
+    // Red enemy images (levels 5-8)
+    var enemyImg1Red = new Image();
+    enemyImg1Red.src = "/Xenon_3/enemy1_Red.png";
+
+    var enemyImg2Red = new Image();
+    enemyImg2Red.src = "/Xenon_3/enemy2_Red.png";
+
+    var enemyImg3Red = new Image();
+    enemyImg3Red.src = "/Xenon_3/enemy3_Red.png";
+
+    var enemyImg4Red = new Image();
+    enemyImg4Red.src = "/Xenon_3/enemy4_Red.png";
+
+    var bossImgRed = new Image();
+    bossImgRed.src = "/Xenon_3/boss_Red.png";
+
+    // ============================================
+    // SOUND SETUP
+    // ============================================
+    var sounds = {
+      playerBullet: new Audio("/Xenon_3/sfx/playerBullet.mp3"),
+      playerHit: new Audio("/Xenon_3/sfx/playerHit.mp3"),
+      playerDead: new Audio("/Xenon_3/sfx/playerDead.mp3"),
+      enemyDead: new Audio("/Xenon_3/sfx/enemyDead.mp3"),
+      bossIntro: new Audio("/Xenon_3/sfx/bossIntro.mp3")
+    };
+
+    // Reduce volume by 2dB (multiply by ~0.79)
+    sounds.enemyDead.volume = 0.79;
+    sounds.playerHit.volume = 0.79;
+
+    var bossIntroInterval = null;
+
+    function playSound(soundName) {
+      var sound = sounds[soundName];
+      if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(function(e) {
+          // Ignore autoplay errors
+        });
+      }
+    }
+
+    function startBossMusic() {
+      playSound('bossIntro');
+      // Repeat every 10 seconds
+      bossIntroInterval = setInterval(function() {
+        if (bossActive && !gameOver) {
+          playSound('bossIntro');
+        }
+      }, 10000);
+    }
+
+    function stopBossMusic() {
+      if (bossIntroInterval) {
+        clearInterval(bossIntroInterval);
+        bossIntroInterval = null;
+      }
+      sounds.bossIntro.pause();
+      sounds.bossIntro.currentTime = 0;
+    }
 
     // ============================================
     // GAME STATE
@@ -260,6 +336,13 @@
     var bossBlinkTimer = 0;
     var bossVisible = true;
 
+    // Game phase tracking
+    var currentBoss = 0;        // 0 = no boss yet, 1 = boss 1, 2 = boss 2
+    var boss1Defeated = false;
+    var boss2Defeated = false;
+    var redPhase = false;       // True after boss 1 is defeated (levels 5-8)
+    var redPhaseStartScore = 0; // Score when red phase started
+
     // Power-up types
     var POWERUP_TYPES = {
       HEALTH: 'health',       // Red diamond - restore health
@@ -288,27 +371,53 @@
     // LEVEL MANAGEMENT
     // ============================================
     function checkLevelUp() {
-      var thresholds = CONFIG.levelThresholds;
-      var newLevel = 1;
+      var newLevel;
 
-      for (var i = thresholds.length - 1; i >= 0; i--) {
-        if (score >= thresholds[i]) {
-          newLevel = i + 1;
-          break;
+      if (!redPhase) {
+        // Levels 1-4 (original enemies)
+        var thresholds = CONFIG.levelThresholds;
+        newLevel = 1;
+
+        for (var i = thresholds.length - 1; i >= 0; i--) {
+          if (score >= thresholds[i]) {
+            newLevel = i + 1;
+            break;
+          }
         }
-      }
 
-      if (newLevel > level && newLevel <= 4) {
-        level = newLevel;
-        // Reset power-up spawns for new level
-        powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
-        updateUI();
-        showAnnouncement("levelDisplay", "Level " + level, 2000);
-      }
+        if (newLevel > level && newLevel <= 4) {
+          level = newLevel;
+          powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
+          updateUI();
+          showAnnouncement("levelDisplay", "Level " + level, 2000);
+        }
 
-      // Check for boss spawn
-      if (score >= CONFIG.bossScoreThreshold && !bossActive && !bossDefeated) {
-        spawnBoss();
+        // Check for boss 1 spawn
+        if (score >= CONFIG.boss1ScoreThreshold && !bossActive && !boss1Defeated) {
+          currentBoss = 1;
+          spawnBoss();
+        }
+      } else {
+        // Levels 5-8 (red enemies)
+        var scoreInRedPhase = score - redPhaseStartScore;
+        newLevel = 5; // Start at level 5
+
+        if (scoreInRedPhase >= 300) newLevel = 8;
+        else if (scoreInRedPhase >= 200) newLevel = 7;
+        else if (scoreInRedPhase >= 100) newLevel = 6;
+
+        if (newLevel > level) {
+          level = newLevel;
+          powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
+          updateUI();
+          showAnnouncement("levelDisplay", "Level " + level, 2000);
+        }
+
+        // Check for boss 2 spawn
+        if (score >= CONFIG.boss2ScoreThreshold && !bossActive && !boss2Defeated) {
+          currentBoss = 2;
+          spawnBoss();
+        }
       }
     }
 
@@ -318,15 +427,31 @@
     function createPowerup(type) {
       // Double laser moves slightly slower (3.5) than health powerup (4)
       var speed = (type === POWERUP_TYPES.DOUBLE_LASER) ? 3.5 : CONFIG.powerupSpeed;
+      var width = 40;
+      var height = 40;
+
+      // Find a non-overlapping spawn position (try up to 10 times)
+      var x, y = 0;
+      var attempts = 0;
+      do {
+        x = Math.random() * (canvas.width - width);
+        attempts++;
+      } while (isOverlappingEnemy(x, y, width, height) && attempts < 10);
+
+      // If we couldn't find a spot, skip spawning
+      if (attempts >= 10 && isOverlappingEnemy(x, y, width, height)) {
+        return false; // Indicate spawn failed
+      }
 
       powerups.push({
-        x: Math.random() * (canvas.width - 40),
-        y: 0,
-        width: 40,
-        height: 40,
+        x: x,
+        y: y,
+        width: width,
+        height: height,
         speed: speed,
         type: type
       });
+      return true;
     }
 
     function drawPowerup(powerup) {
@@ -393,15 +518,19 @@
       if (Math.random() > CONFIG.powerupSpawnChance) return;
 
       // Randomly choose which power-up to try spawning
+      // Only mark as spawned if createPowerup succeeds
       if (!powerupsSpawnedThisLevel.health && Math.random() < 0.5) {
-        powerupsSpawnedThisLevel.health = true;
-        createPowerup(POWERUP_TYPES.HEALTH);
+        if (createPowerup(POWERUP_TYPES.HEALTH)) {
+          powerupsSpawnedThisLevel.health = true;
+        }
       } else if (!powerupsSpawnedThisLevel.doubleLaser) {
-        powerupsSpawnedThisLevel.doubleLaser = true;
-        createPowerup(POWERUP_TYPES.DOUBLE_LASER);
+        if (createPowerup(POWERUP_TYPES.DOUBLE_LASER)) {
+          powerupsSpawnedThisLevel.doubleLaser = true;
+        }
       } else if (!powerupsSpawnedThisLevel.health) {
-        powerupsSpawnedThisLevel.health = true;
-        createPowerup(POWERUP_TYPES.HEALTH);
+        if (createPowerup(POWERUP_TYPES.HEALTH)) {
+          powerupsSpawnedThisLevel.health = true;
+        }
       }
     }
 
@@ -414,22 +543,63 @@
       return availableTypes[randomIndex];
     }
 
+    function isOverlappingEnemy(x, y, width, height) {
+      for (var i = 0; i < enemies.length; i++) {
+        var e = enemies[i];
+        if (x < e.x + e.width &&
+            x + width > e.x &&
+            y < e.y + e.height &&
+            y + height > e.y) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     function createEnemy() {
       var speedVariation = 1;
-      var baseSpeed = CONFIG.enemyBaseSpeed + (level - 1) * CONFIG.enemySpeedIncrease;
+      var effectiveLevel = redPhase ? (level - 4) : level; // Levels 5-8 map to 1-4 for speed calc
+      var baseSpeed = CONFIG.enemyBaseSpeed + (effectiveLevel - 1) * CONFIG.enemySpeedIncrease;
+
+      // Apply speed multiplier for red phase
+      if (redPhase) {
+        baseSpeed *= CONFIG.redLevelSpeedMultiplier;
+      }
+
       var enemyType = getEnemyType();
+      var width = 50;
+      var height = 50;
+
+      // enemy2_red is 50% smaller than normal enemies
+      if (enemyType === 'enemy2_red') {
+        width = 29;
+        height = 29;
+      }
+
+      // Find a non-overlapping spawn position (try up to 10 times)
+      var x, y = 0;
+      var attempts = 0;
+      do {
+        x = Math.random() * (canvas.width - width);
+        attempts++;
+      } while (isOverlappingEnemy(x, y, width, height) && attempts < 10);
+
+      // If we couldn't find a spot after 10 tries, skip spawning
+      if (attempts >= 10 && isOverlappingEnemy(x, y, width, height)) {
+        return;
+      }
 
       var enemy = {
-        x: Math.random() * (canvas.width - 50),
-        y: 0,
-        width: 50,
-        height: 50,
+        x: x,
+        y: y,
+        width: width,
+        height: height,
         speed: baseSpeed + Math.random() * speedVariation,
         type: enemyType
       };
 
-      // Add zigzag properties for enemy3
-      if (enemyType === 'enemy3') {
+      // Add zigzag properties based on config
+      if (CONFIG.zigzagEnemies.indexOf(enemyType) !== -1) {
         enemy.zigzag = true;
         enemy.zigzagDirection = Math.random() < 0.5 ? 1 : -1;
         enemy.zigzagSpeed = 2;
@@ -447,6 +617,10 @@
         case 'enemy2': img = enemyImg2; break;
         case 'enemy3': img = enemyImg3; break;
         case 'enemy4': img = enemyImg4; break;
+        case 'enemy1_red': img = enemyImg1Red; break;
+        case 'enemy2_red': img = enemyImg2Red; break;
+        case 'enemy3_red': img = enemyImg3Red; break;
+        case 'enemy4_red': img = enemyImg4Red; break;
         default: img = enemyImg1;
       }
       ctx.drawImage(img, enemy.x, enemy.y, enemy.width, enemy.height);
@@ -460,6 +634,7 @@
       enemies = []; // Clear regular enemies
       bossMinions = []; // Clear any existing minions
       showAnnouncement("levelDisplay", "BOSS!", 2000);
+      startBossMusic();
 
       boss = {
         x: canvas.width / 2 - 75,
@@ -470,7 +645,8 @@
         maxHealth: CONFIG.bossHealth,
         speed: CONFIG.bossSpeed,
         direction: 1,
-        entering: true
+        entering: true,
+        isRedBoss: (currentBoss === 2) // Track which boss type
       };
     }
 
@@ -485,7 +661,8 @@
         width: 50,
         height: 50,
         speed: CONFIG.bossMinionSpeed,
-        direction: fromLeft ? 1 : -1
+        direction: fromLeft ? 1 : -1,
+        isRedMinion: (currentBoss === 2) // Track which boss phase
       });
     }
 
@@ -493,8 +670,9 @@
       for (var i = bossMinions.length - 1; i >= 0; i--) {
         var minion = bossMinions[i];
 
-        // Draw minion (using enemy2 sprite)
-        ctx.drawImage(enemyImg2, minion.x, minion.y, minion.width, minion.height);
+        // Draw minion (enemy2 for boss 1, enemy3_red for boss 2)
+        var minionImg = minion.isRedMinion ? enemyImg3Red : enemyImg2;
+        ctx.drawImage(minionImg, minion.x, minion.y, minion.width, minion.height);
 
         // Move horizontally
         minion.x += minion.speed * minion.direction;
@@ -513,6 +691,7 @@
             bossMinions.splice(i, 1);
             score += 10;
             updateUI();
+            playSound('enemyDead');
             break;
           }
         }
@@ -569,7 +748,8 @@
 
       // Draw boss (only if visible during blink)
       if (bossVisible) {
-        ctx.drawImage(bossImg, boss.x, boss.y, boss.width, boss.height);
+        var bossImage = boss.isRedBoss ? bossImgRed : bossImg;
+        ctx.drawImage(bossImage, boss.x, boss.y, boss.width, boss.height);
       }
 
       // Draw health bar (always visible)
@@ -591,11 +771,39 @@
       if (boss.health <= 0) {
         // Boss defeated!
         bossActive = false;
-        bossDefeated = true;
         boss = null;
-        score += 100;
-        updateUI();
-        showVictory();
+        bossMinions = [];
+        enemies = [];
+        stopBossMusic();
+
+        if (currentBoss === 1) {
+          // Boss 1 defeated - show victory, then start red phase
+          boss1Defeated = true;
+          score += 100;
+          // Round up to nearest 100
+          score = Math.ceil(score / 100) * 100;
+          redPhaseStartScore = score;
+          updateUI();
+
+          // Show victory message first
+          showAnnouncement("levelDisplay", "Victory!", 2500);
+
+          // After delay, start level 5
+          setTimeout(function() {
+            redPhase = true;
+            level = 5;
+            powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
+            updateUI();
+            showAnnouncement("levelDisplay", "Level 5", 2000);
+          }, 3000);
+        } else if (currentBoss === 2) {
+          // Boss 2 defeated - game complete!
+          boss2Defeated = true;
+          bossDefeated = true;
+          score += 100;
+          updateUI();
+          showVictory();
+        }
       }
     }
 
@@ -612,6 +820,7 @@
 
     function showVictory() {
       gameOver = true;
+      stopBossMusic();
       document.getElementById("victory").style.display = "block";
     }
 
@@ -619,6 +828,7 @@
     // BULLETS
     // ============================================
     function shootBullet() {
+      playSound('playerBullet');
       if (hasDoubleLaser) {
         // Double laser - two side-by-side bullets
         playerBullets.push({
@@ -648,12 +858,17 @@
     }
 
     function shootEnemyBullet(enemy) {
+      var bulletSpeed = CONFIG.enemyBulletSpeed;
+      // 15% faster bullets in red phase
+      if (redPhase) {
+        bulletSpeed *= 1.15;
+      }
       enemyBullets.push({
         x: enemy.x + enemy.width / 2 - 2.5,
         y: enemy.y + enemy.height,
         width: 5,
         height: 10,
-        speed: CONFIG.enemyBulletSpeed
+        speed: bulletSpeed
       });
     }
 
@@ -678,11 +893,20 @@
       playerBlinking = true;
       playerBlinkTimer = 30; // Blink for 30 frames (~0.5 seconds)
 
+      // Lose double laser in red phase when hit
+      if (redPhase && hasDoubleLaser) {
+        hasDoubleLaser = false;
+      }
+
       if (health <= 0) {
         health = 0;
         updateUI();
         gameOver = true;
+        playSound('playerDead');
+        stopBossMusic();
         document.getElementById("gameOver").style.display = "block";
+      } else {
+        playSound('playerHit');
       }
     }
 
@@ -763,6 +987,7 @@
             enemies.splice(j, 1);
             score += 10;
             updateUI();
+            playSound('enemyDead');
             checkLevelUp();
             break;
           }
@@ -816,22 +1041,52 @@
         var minionGameOver = updateBossMinions();
         if (minionGameOver) return;
 
-        // Spawn and update enemy3 (zigzag enemies from top)
+        // Spawn zigzag enemies from top (enemy3 for boss 1, enemy3_red for boss 2)
         if (Math.random() < 0.008) {
-          var enemy3 = {
+          var isRedBoss = (currentBoss === 2);
+          var zigzagEnemy = {
             x: Math.random() * (canvas.width - 50),
             y: 0,
             width: 50,
             height: 50,
-            speed: CONFIG.enemyBaseSpeed + 0.5,
-            type: 'enemy3',
+            speed: CONFIG.enemyBaseSpeed + (isRedBoss ? 1 : 0.5),
+            type: isRedBoss ? 'enemy3_red' : 'enemy3',
             zigzag: true,
             zigzagDirection: Math.random() < 0.5 ? 1 : -1,
             zigzagSpeed: 2,
             zigzagTimer: 0,
             zigzagInterval: 30
           };
-          enemies.push(enemy3);
+          enemies.push(zigzagEnemy);
+        }
+
+        // Boss 2 only: Spawn bouncing enemy2_red from top
+        if (currentBoss === 2 && Math.random() < 0.006) {
+          var bouncingEnemy = {
+            x: Math.random() * (canvas.width - 29),
+            y: 0,
+            width: 29,
+            height: 29,
+            speed: CONFIG.enemyBaseSpeed + 0.8,
+            type: 'enemy2_red',
+            bouncing: true,
+            direction: 1  // 1 = down, -1 = up
+          };
+          enemies.push(bouncingEnemy);
+        }
+
+        // Boss 2 only: Random powerup spawn (once during boss fight)
+        if (currentBoss === 2 && !powerupsSpawnedThisLevel.health && !powerupsSpawnedThisLevel.doubleLaser) {
+          if (Math.random() < 0.001) {
+            var powerupType = Math.random() < 0.5 ? POWERUP_TYPES.HEALTH : POWERUP_TYPES.DOUBLE_LASER;
+            if (createPowerup(powerupType)) {
+              if (powerupType === POWERUP_TYPES.HEALTH) {
+                powerupsSpawnedThisLevel.health = true;
+              } else {
+                powerupsSpawnedThisLevel.doubleLaser = true;
+              }
+            }
+          }
         }
 
         // Update enemy3 during boss fight
@@ -839,7 +1094,23 @@
           var enemy = enemies[i];
 
           drawEnemy(enemy);
-          enemy.y += enemy.speed;
+
+          // Bouncing movement (enemy2_red in boss 2)
+          if (enemy.bouncing) {
+            enemy.y += enemy.speed * enemy.direction;
+            // Bounce off bottom
+            if (enemy.y > canvas.height - enemy.height) {
+              enemy.y = canvas.height - enemy.height;
+              enemy.direction = -1;
+            }
+            // Bounce off top (stay in play area)
+            if (enemy.y < 100) {
+              enemy.y = 100;
+              enemy.direction = 1;
+            }
+          } else {
+            enemy.y += enemy.speed;
+          }
 
           // Zigzag movement
           if (enemy.zigzag) {
@@ -866,8 +1137,8 @@
             continue;
           }
 
-          // Remove if off screen
-          if (enemy.y > canvas.height) {
+          // Remove if off screen (but not bouncing enemies)
+          if (!enemy.bouncing && enemy.y > canvas.height) {
             enemies.splice(i, 1);
             continue;
           }
@@ -879,6 +1150,7 @@
               enemies.splice(i, 1);
               score += 10;
               updateUI();
+              playSound('enemyDead');
               break;
             }
           }
@@ -957,6 +1229,7 @@
 
       if (gameOver) {
         // Reset game state
+        stopBossMusic();
         gameOver = false;
         score = 0;
         level = 1;
@@ -970,6 +1243,13 @@
         boss = null;
         bossBlinking = false;
         bossVisible = true;
+
+        // Reset phase tracking
+        currentBoss = 0;
+        boss1Defeated = false;
+        boss2Defeated = false;
+        redPhase = false;
+        redPhaseStartScore = 0;
 
         player.x = canvas.width / 2;
         enemies = [];
