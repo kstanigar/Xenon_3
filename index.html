@@ -87,10 +87,43 @@
     #levelIndicator {
       color: white;
       position: absolute;
-      top: 40px;
+      top: 60px;
       right: 10px;
       font-size: 16px;
       z-index: 2;
+    }
+
+    #health {
+      color: white;
+      position: absolute;
+      top: 60px;
+      left: 10px;
+      font-size: 16px;
+      z-index: 2;
+    }
+
+    #powerupDisplay {
+      display: none;
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      color: #FFD700;
+      text-shadow: 0 0 15px #FFD700;
+      z-index: 3;
+    }
+
+    #victory {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 36px;
+      color: #00FF00;
+      text-shadow: 0 0 20px #00FF00;
+      z-index: 3;
     }
   </style>
 </head>
@@ -103,7 +136,10 @@
     <div id="score">Score: 0</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <div id="levelIndicator">Level: 1</div>
+    <div id="health">Health: 50</div>
     <div id="levelDisplay">Level 1</div>
+    <div id="powerupDisplay"></div>
+    <div id="victory">Victory!</div>
     <div id="gameOver">Game Over!</div>
   </div>
 
@@ -115,31 +151,49 @@
       // Player settings
       playerSpeed: 5,
       bulletSpeed: 12,
+      startingHealth: 50,
+      maxHealth: 100,
+
+      // Damage values
+      enemyBulletDamage: 10,
+      enemyCollisionDamage: 20,
+      bossDamage: 25,
+      healthPowerupAmount: 10,
 
       // Enemy settings
       enemyBaseSpeed: 1.5,
-      enemySpeedIncrease: 0.3,  // Per level
+      enemySpeedIncrease: 0.3,
       enemySpawnRate: 0.01,
-      enemySpawnIncrease: 0.005, // Per level
+      enemySpawnIncrease: 0.005,
 
       // Enemy shooting (starts at level 2)
       enemyShootChance: 0.005,
-      enemyShootIncrease: 0.002, // Per level
+      enemyShootIncrease: 0.002,
       enemyBulletSpeed: 3,
 
-      // Level thresholds (score needed for each level)
+      // Boss settings
+      bossScoreThreshold: 400,
+      bossHealth: 50,
+      bossSpeed: 1,
+      bossShootChance: 0.02,
+
+      // Level thresholds
       levelThresholds: [0, 100, 200, 300],
 
-      // Enemy types available at each level
-      // Level 1: shapes only
-      // Level 2: shapes + sprite1 (enemy.png)
-      // Level 3: shapes + sprite1 + sprite2 (enemy2.png)
-      // Level 4: sprites only
+      // Power-up settings
+      powerupSpeed: 4,  // Twice as fast as enemies
+      powerupSpawnChance: 0.003,
+
+      // Boss minion settings
+      bossMinionSpeed: 2,
+      bossMinionSpawnChance: 0.015,
+
+      // Enemy types per level (each level adds a new enemy)
       levelEnemyTypes: {
-        1: ['diamond', 'hexagon'],
-        2: ['diamond', 'hexagon', 'sprite1'],
-        3: ['diamond', 'hexagon', 'sprite1', 'sprite2'],
-        4: ['sprite1', 'sprite2']
+        1: ['enemy1'],
+        2: ['enemy1', 'enemy2'],
+        3: ['enemy1', 'enemy2', 'enemy3'],
+        4: ['enemy1', 'enemy2', 'enemy3', 'enemy4']
       }
     };
 
@@ -158,6 +212,15 @@
     var enemyImg2 = new Image();
     enemyImg2.src = "/Xenon_3/enemy2.png";
 
+    var enemyImg3 = new Image();
+    enemyImg3.src = "/Xenon_3/enemy3.png";
+
+    var enemyImg4 = new Image();
+    enemyImg4.src = "/Xenon_3/enemy4.png";
+
+    var bossImg = new Image();
+    bossImg.src = "/Xenon_3/Boss.png";
+
     // ============================================
     // GAME STATE
     // ============================================
@@ -171,32 +234,59 @@
     var playerBullets = [];
     var enemyBullets = [];
     var enemies = [];
+    var powerups = [];
     var score = 0;
     var level = 1;
+    var health = 50;
     var gameOver = true;
     var rightPressed = false;
     var leftPressed = false;
 
-    // Enemy types: 'diamond', 'hexagon', 'sprite1', 'sprite2'
-    var ENEMY_TYPES = {
-      DIAMOND: 'diamond',
-      HEXAGON: 'hexagon',
-      SPRITE1: 'sprite1',
-      SPRITE2: 'sprite2'
+    // Power-up state
+    var hasDoubleLaser = false;
+    var powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
+
+    // Player blink state (when damaged)
+    var playerBlinking = false;
+    var playerBlinkTimer = 0;
+    var playerVisible = true;
+
+    // Boss state
+    var boss = null;
+    var bossActive = false;
+    var bossDefeated = false;
+    var bossMinions = [];  // Side-scrolling enemies during boss fight
+    var bossBlinking = false;
+    var bossBlinkTimer = 0;
+    var bossVisible = true;
+
+    // Power-up types
+    var POWERUP_TYPES = {
+      HEALTH: 'health',       // Red diamond - restore health
+      DOUBLE_LASER: 'laser'   // Purple hexagon - double lasers
     };
+
+    // ============================================
+    // UI UPDATES
+    // ============================================
+    function updateUI() {
+      document.getElementById("score").innerText = "Score: " + score;
+      document.getElementById("levelIndicator").innerText = "Level: " + level;
+      document.getElementById("health").innerText = "Health: " + health;
+    }
+
+    function showAnnouncement(element, text, duration) {
+      var el = document.getElementById(element);
+      el.innerText = text;
+      el.style.display = "block";
+      setTimeout(function() {
+        el.style.display = "none";
+      }, duration || 2000);
+    }
 
     // ============================================
     // LEVEL MANAGEMENT
     // ============================================
-    function showLevelAnnouncement(levelNum) {
-      var levelDisplay = document.getElementById("levelDisplay");
-      levelDisplay.innerText = "Level " + levelNum;
-      levelDisplay.style.display = "block";
-      setTimeout(function() {
-        levelDisplay.style.display = "none";
-      }, 2000);
-    }
-
     function checkLevelUp() {
       var thresholds = CONFIG.levelThresholds;
       var newLevel = 1;
@@ -208,10 +298,110 @@
         }
       }
 
-      if (newLevel > level) {
+      if (newLevel > level && newLevel <= 4) {
         level = newLevel;
-        document.getElementById("levelIndicator").innerText = "Level: " + level;
-        showLevelAnnouncement(level);
+        // Reset power-up spawns for new level
+        powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
+        updateUI();
+        showAnnouncement("levelDisplay", "Level " + level, 2000);
+      }
+
+      // Check for boss spawn
+      if (score >= CONFIG.bossScoreThreshold && !bossActive && !bossDefeated) {
+        spawnBoss();
+      }
+    }
+
+    // ============================================
+    // POWER-UP SYSTEM
+    // ============================================
+    function createPowerup(type) {
+      // Double laser moves slightly slower (3.5) than health powerup (4)
+      var speed = (type === POWERUP_TYPES.DOUBLE_LASER) ? 3.5 : CONFIG.powerupSpeed;
+
+      powerups.push({
+        x: Math.random() * (canvas.width - 40),
+        y: 0,
+        width: 40,
+        height: 40,
+        speed: speed,
+        type: type
+      });
+    }
+
+    function drawPowerup(powerup) {
+      var x = powerup.x;
+      var y = powerup.y;
+      var w = powerup.width;
+      var h = powerup.height;
+
+      if (powerup.type === POWERUP_TYPES.HEALTH) {
+        // Red diamond - restore health
+        ctx.fillStyle = "#FF3333";
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, y);
+        ctx.lineTo(x + w, y + h / 2);
+        ctx.lineTo(x + w / 2, y + h);
+        ctx.lineTo(x, y + h / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#FF0000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Plus symbol
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(x + w/2 - 2, y + h/4, 4, h/2);
+        ctx.fillRect(x + w/4, y + h/2 - 2, w/2, 4);
+      } else if (powerup.type === POWERUP_TYPES.DOUBLE_LASER) {
+        // Purple hexagon - double laser
+        var cx = x + w / 2;
+        var cy = y + h / 2;
+        var r = w / 2;
+        ctx.fillStyle = "#9933FF";
+        ctx.beginPath();
+        for (var i = 0; i < 6; i++) {
+          var angle = (Math.PI / 3) * i - Math.PI / 2;
+          var px = cx + r * Math.cos(angle);
+          var py = cy + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#6600CC";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        // Double bar symbol
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(cx - 8, cy - 8, 4, 16);
+        ctx.fillRect(cx + 4, cy - 8, 4, 16);
+      }
+    }
+
+    function collectPowerup(powerup) {
+      if (powerup.type === POWERUP_TYPES.HEALTH) {
+        health = Math.min(health + CONFIG.healthPowerupAmount, CONFIG.maxHealth);
+        updateUI();
+        showAnnouncement("powerupDisplay", "+10 Health!", 1500);
+      } else if (powerup.type === POWERUP_TYPES.DOUBLE_LASER) {
+        hasDoubleLaser = true;
+        showAnnouncement("powerupDisplay", "Double Laser!", 1500);
+      }
+    }
+
+    function trySpawnPowerup() {
+      if (Math.random() > CONFIG.powerupSpawnChance) return;
+
+      // Randomly choose which power-up to try spawning
+      if (!powerupsSpawnedThisLevel.health && Math.random() < 0.5) {
+        powerupsSpawnedThisLevel.health = true;
+        createPowerup(POWERUP_TYPES.HEALTH);
+      } else if (!powerupsSpawnedThisLevel.doubleLaser) {
+        powerupsSpawnedThisLevel.doubleLaser = true;
+        createPowerup(POWERUP_TYPES.DOUBLE_LASER);
+      } else if (!powerupsSpawnedThisLevel.health) {
+        powerupsSpawnedThisLevel.health = true;
+        createPowerup(POWERUP_TYPES.HEALTH);
       }
     }
 
@@ -219,9 +409,7 @@
     // ENEMY CREATION AND DRAWING
     // ============================================
     function getEnemyType() {
-      // Get available enemy types for current level
       var availableTypes = CONFIG.levelEnemyTypes[level] || CONFIG.levelEnemyTypes[4];
-      // Pick a random type from available types
       var randomIndex = Math.floor(Math.random() * availableTypes.length);
       return availableTypes[randomIndex];
     }
@@ -229,6 +417,7 @@
     function createEnemy() {
       var speedVariation = 1;
       var baseSpeed = CONFIG.enemyBaseSpeed + (level - 1) * CONFIG.enemySpeedIncrease;
+      var enemyType = getEnemyType();
 
       var enemy = {
         x: Math.random() * (canvas.width - 50),
@@ -236,88 +425,226 @@
         width: 50,
         height: 50,
         speed: baseSpeed + Math.random() * speedVariation,
-        type: getEnemyType()
+        type: enemyType
       };
+
+      // Add zigzag properties for enemy3
+      if (enemyType === 'enemy3') {
+        enemy.zigzag = true;
+        enemy.zigzagDirection = Math.random() < 0.5 ? 1 : -1;
+        enemy.zigzagSpeed = 2;
+        enemy.zigzagTimer = 0;
+        enemy.zigzagInterval = 30; // Change direction every 30 frames
+      }
 
       enemies.push(enemy);
     }
 
-    function drawDiamond(enemy) {
-      var x = enemy.x;
-      var y = enemy.y;
-      var w = enemy.width;
-      var h = enemy.height;
-
-      ctx.fillStyle = "#FF3333";
-      ctx.beginPath();
-      ctx.moveTo(x + w / 2, y);
-      ctx.lineTo(x + w, y + h / 2);
-      ctx.lineTo(x + w / 2, y + h);
-      ctx.lineTo(x, y + h / 2);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = "#FF0000";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    function drawHexagon(enemy) {
-      var cx = enemy.x + enemy.width / 2;
-      var cy = enemy.y + enemy.height / 2;
-      var r = enemy.width / 2;
-
-      ctx.fillStyle = "#9933FF";
-      ctx.beginPath();
-      for (var i = 0; i < 6; i++) {
-        var angle = (Math.PI / 3) * i - Math.PI / 2;
-        var px = cx + r * Math.cos(angle);
-        var py = cy + r * Math.sin(angle);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = "#6600CC";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      // Inner circle
-      ctx.fillStyle = "#CC00FF";
-      ctx.beginPath();
-      ctx.arc(cx, cy, r / 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
     function drawEnemy(enemy) {
+      var img;
       switch (enemy.type) {
-        case ENEMY_TYPES.DIAMOND:
-          drawDiamond(enemy);
-          break;
-        case ENEMY_TYPES.HEXAGON:
-          drawHexagon(enemy);
-          break;
-        case ENEMY_TYPES.SPRITE1:
-          ctx.drawImage(enemyImg1, enemy.x, enemy.y, enemy.width, enemy.height);
-          break;
-        case ENEMY_TYPES.SPRITE2:
-          ctx.drawImage(enemyImg2, enemy.x, enemy.y, enemy.width, enemy.height);
-          break;
+        case 'enemy1': img = enemyImg1; break;
+        case 'enemy2': img = enemyImg2; break;
+        case 'enemy3': img = enemyImg3; break;
+        case 'enemy4': img = enemyImg4; break;
+        default: img = enemyImg1;
       }
+      ctx.drawImage(img, enemy.x, enemy.y, enemy.width, enemy.height);
+    }
+
+    // ============================================
+    // BOSS SYSTEM
+    // ============================================
+    function spawnBoss() {
+      bossActive = true;
+      enemies = []; // Clear regular enemies
+      bossMinions = []; // Clear any existing minions
+      showAnnouncement("levelDisplay", "BOSS!", 2000);
+
+      boss = {
+        x: canvas.width / 2 - 75,
+        y: -150,
+        width: 150,
+        height: 150,
+        health: CONFIG.bossHealth,
+        maxHealth: CONFIG.bossHealth,
+        speed: CONFIG.bossSpeed,
+        direction: 1,
+        entering: true
+      };
+    }
+
+    function createBossMinion() {
+      // Spawn from left or right side randomly
+      var fromLeft = Math.random() < 0.5;
+      var targetY = 100 + Math.random() * 150; // Stay in upper half
+
+      bossMinions.push({
+        x: fromLeft ? -50 : canvas.width,
+        y: targetY,
+        width: 50,
+        height: 50,
+        speed: CONFIG.bossMinionSpeed,
+        direction: fromLeft ? 1 : -1
+      });
+    }
+
+    function updateBossMinions() {
+      for (var i = bossMinions.length - 1; i >= 0; i--) {
+        var minion = bossMinions[i];
+
+        // Draw minion (using enemy2 sprite)
+        ctx.drawImage(enemyImg2, minion.x, minion.y, minion.width, minion.height);
+
+        // Move horizontally
+        minion.x += minion.speed * minion.direction;
+
+        // Remove if off screen on opposite side
+        if ((minion.direction > 0 && minion.x > canvas.width) ||
+            (minion.direction < 0 && minion.x < -minion.width)) {
+          bossMinions.splice(i, 1);
+          continue;
+        }
+
+        // Check collision with player bullets
+        for (var j = playerBullets.length - 1; j >= 0; j--) {
+          if (isColliding(playerBullets[j], minion)) {
+            playerBullets.splice(j, 1);
+            bossMinions.splice(i, 1);
+            score += 10;
+            updateUI();
+            break;
+          }
+        }
+      }
+
+      // Check collision with player (separate loop since array may have changed)
+      for (var i = bossMinions.length - 1; i >= 0; i--) {
+        if (isColliding(bossMinions[i], player)) {
+          bossMinions.splice(i, 1);
+          playerTakeDamage(CONFIG.enemyCollisionDamage);
+          if (gameOver) return true; // Signal game over
+        }
+      }
+
+      // Spawn new minions
+      if (Math.random() < CONFIG.bossMinionSpawnChance) {
+        createBossMinion();
+      }
+
+      return false; // Game continues
+    }
+
+    function updateBoss() {
+      if (!boss) return;
+
+      // Update boss blink effect
+      updateBossBlink();
+
+      // Boss entrance animation
+      if (boss.entering) {
+        boss.y += 1;
+        if (boss.y >= 30) {
+          boss.entering = false;
+        }
+      } else {
+        // Move side to side
+        boss.x += boss.speed * boss.direction;
+        if (boss.x <= 0 || boss.x >= canvas.width - boss.width) {
+          boss.direction *= -1;
+        }
+
+        // Boss shooting
+        if (Math.random() < CONFIG.bossShootChance) {
+          enemyBullets.push({
+            x: boss.x + boss.width / 2 - 2.5,
+            y: boss.y + boss.height,
+            width: 8,
+            height: 15,
+            speed: CONFIG.enemyBulletSpeed + 1,
+            isBossBullet: true
+          });
+        }
+      }
+
+      // Draw boss (only if visible during blink)
+      if (bossVisible) {
+        ctx.drawImage(bossImg, boss.x, boss.y, boss.width, boss.height);
+      }
+
+      // Draw health bar (always visible)
+      var healthPercent = boss.health / boss.maxHealth;
+      ctx.fillStyle = "#333";
+      ctx.fillRect(boss.x, boss.y - 15, boss.width, 10);
+      ctx.fillStyle = healthPercent > 0.3 ? "#00FF00" : "#FF0000";
+      ctx.fillRect(boss.x, boss.y - 15, boss.width * healthPercent, 10);
+    }
+
+    function damageBoss() {
+      if (!boss) return;
+      boss.health--;
+
+      // Start boss blinking effect
+      bossBlinking = true;
+      bossBlinkTimer = 10; // Short blink (10 frames)
+
+      if (boss.health <= 0) {
+        // Boss defeated!
+        bossActive = false;
+        bossDefeated = true;
+        boss = null;
+        score += 100;
+        updateUI();
+        showVictory();
+      }
+    }
+
+    function updateBossBlink() {
+      if (bossBlinking) {
+        bossBlinkTimer--;
+        bossVisible = Math.floor(bossBlinkTimer / 2) % 2 === 0;
+        if (bossBlinkTimer <= 0) {
+          bossBlinking = false;
+          bossVisible = true;
+        }
+      }
+    }
+
+    function showVictory() {
+      gameOver = true;
+      document.getElementById("victory").style.display = "block";
     }
 
     // ============================================
     // BULLETS
     // ============================================
     function shootBullet() {
-      playerBullets.push({
-        x: player.x + player.width / 2 - 2.5,
-        y: player.y,
-        width: 5,
-        height: 10,
-        speed: CONFIG.bulletSpeed
-      });
+      if (hasDoubleLaser) {
+        // Double laser - two side-by-side bullets
+        playerBullets.push({
+          x: player.x + player.width / 4 - 2.5,
+          y: player.y,
+          width: 5,
+          height: 10,
+          speed: CONFIG.bulletSpeed
+        });
+        playerBullets.push({
+          x: player.x + (player.width * 3 / 4) - 2.5,
+          y: player.y,
+          width: 5,
+          height: 10,
+          speed: CONFIG.bulletSpeed
+        });
+      } else {
+        // Single bullet
+        playerBullets.push({
+          x: player.x + player.width / 2 - 2.5,
+          y: player.y,
+          width: 5,
+          height: 10,
+          speed: CONFIG.bulletSpeed
+        });
+      }
     }
 
     function shootEnemyBullet(enemy) {
@@ -341,12 +668,46 @@
     }
 
     // ============================================
+    // PLAYER DAMAGE
+    // ============================================
+    function playerTakeDamage(damage) {
+      health -= damage;
+      updateUI();
+
+      // Start blinking effect
+      playerBlinking = true;
+      playerBlinkTimer = 30; // Blink for 30 frames (~0.5 seconds)
+
+      if (health <= 0) {
+        health = 0;
+        updateUI();
+        gameOver = true;
+        document.getElementById("gameOver").style.display = "block";
+      }
+    }
+
+    function updatePlayerBlink() {
+      if (playerBlinking) {
+        playerBlinkTimer--;
+        // Toggle visibility every 3 frames
+        playerVisible = Math.floor(playerBlinkTimer / 3) % 2 === 0;
+        if (playerBlinkTimer <= 0) {
+          playerBlinking = false;
+          playerVisible = true;
+        }
+      }
+    }
+
+    // ============================================
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function(e) {
       if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
-      else if (e.key === " ") shootBullet();
+      else if (e.key === " ") {
+        e.preventDefault();
+        shootBullet();
+      }
     });
 
     document.addEventListener("keyup", function(e) {
@@ -362,8 +723,13 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw and move player
-      ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+      // Update player blink effect
+      updatePlayerBlink();
+
+      // Draw and move player (only if visible during blink)
+      if (playerVisible) {
+        ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+      }
       if (rightPressed && player.x < canvas.width - player.width) {
         player.x += CONFIG.playerSpeed;
       } else if (leftPressed && player.x > 0) {
@@ -378,9 +744,15 @@
         ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
         bullet.y -= bullet.speed;
 
-        // Remove if off screen
         if (bullet.y < 0) {
           playerBullets.splice(i, 1);
+          continue;
+        }
+
+        // Check collision with boss
+        if (boss && isColliding(bullet, boss)) {
+          playerBullets.splice(i, 1);
+          damageBoss();
           continue;
         }
 
@@ -390,7 +762,7 @@
             playerBullets.splice(i, 1);
             enemies.splice(j, 1);
             score += 10;
-            document.getElementById("score").innerText = "Score: " + score;
+            updateUI();
             checkLevelUp();
             break;
           }
@@ -405,53 +777,173 @@
         ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
         bullet.y += bullet.speed;
 
-        // Remove if off screen
         if (bullet.y > canvas.height) {
           enemyBullets.splice(i, 1);
           continue;
         }
 
-        // Check collision with player
         if (isColliding(bullet, player)) {
-          gameOver = true;
-          document.getElementById("gameOver").style.display = "block";
-          return;
+          enemyBullets.splice(i, 1);
+          var damage = bullet.isBossBullet ? CONFIG.bossDamage : CONFIG.enemyBulletDamage;
+          playerTakeDamage(damage);
+          if (gameOver) return;
         }
       }
 
-      // Update enemies
-      for (var i = enemies.length - 1; i >= 0; i--) {
-        var enemy = enemies[i];
+      // Update power-ups
+      for (var i = powerups.length - 1; i >= 0; i--) {
+        var powerup = powerups[i];
 
-        drawEnemy(enemy);
-        enemy.y += enemy.speed;
+        drawPowerup(powerup);
+        powerup.y += powerup.speed;
 
-        // Check collision with player
-        if (isColliding(enemy, player)) {
-          gameOver = true;
-          document.getElementById("gameOver").style.display = "block";
-          return;
-        }
-
-        // Remove if off screen
-        if (enemy.y > canvas.height) {
-          enemies.splice(i, 1);
+        if (powerup.y > canvas.height) {
+          powerups.splice(i, 1);
           continue;
         }
 
-        // Enemy shooting (level 2+)
-        if (level >= 2) {
-          var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
-          if (Math.random() < shootChance) {
-            shootEnemyBullet(enemy);
-          }
+        if (isColliding(powerup, player)) {
+          collectPowerup(powerup);
+          powerups.splice(i, 1);
         }
       }
 
-      // Spawn new enemies
-      var spawnChance = CONFIG.enemySpawnRate + (level - 1) * CONFIG.enemySpawnIncrease;
-      if (Math.random() < spawnChance) {
-        createEnemy();
+      // Boss mode
+      if (bossActive) {
+        updateBoss();
+
+        // Update side-scrolling minions (enemy2)
+        var minionGameOver = updateBossMinions();
+        if (minionGameOver) return;
+
+        // Spawn and update enemy3 (zigzag enemies from top)
+        if (Math.random() < 0.008) {
+          var enemy3 = {
+            x: Math.random() * (canvas.width - 50),
+            y: 0,
+            width: 50,
+            height: 50,
+            speed: CONFIG.enemyBaseSpeed + 0.5,
+            type: 'enemy3',
+            zigzag: true,
+            zigzagDirection: Math.random() < 0.5 ? 1 : -1,
+            zigzagSpeed: 2,
+            zigzagTimer: 0,
+            zigzagInterval: 30
+          };
+          enemies.push(enemy3);
+        }
+
+        // Update enemy3 during boss fight
+        for (var i = enemies.length - 1; i >= 0; i--) {
+          var enemy = enemies[i];
+
+          drawEnemy(enemy);
+          enemy.y += enemy.speed;
+
+          // Zigzag movement
+          if (enemy.zigzag) {
+            enemy.x += enemy.zigzagSpeed * enemy.zigzagDirection;
+            enemy.zigzagTimer++;
+            if (enemy.zigzagTimer >= enemy.zigzagInterval) {
+              enemy.zigzagTimer = 0;
+              enemy.zigzagDirection *= -1;
+            }
+            if (enemy.x <= 0) {
+              enemy.x = 0;
+              enemy.zigzagDirection = 1;
+            } else if (enemy.x >= canvas.width - enemy.width) {
+              enemy.x = canvas.width - enemy.width;
+              enemy.zigzagDirection = -1;
+            }
+          }
+
+          // Check collision with player
+          if (isColliding(enemy, player)) {
+            enemies.splice(i, 1);
+            playerTakeDamage(CONFIG.enemyCollisionDamage);
+            if (gameOver) return;
+            continue;
+          }
+
+          // Remove if off screen
+          if (enemy.y > canvas.height) {
+            enemies.splice(i, 1);
+            continue;
+          }
+
+          // Check collision with player bullets
+          for (var j = playerBullets.length - 1; j >= 0; j--) {
+            if (isColliding(playerBullets[j], enemy)) {
+              playerBullets.splice(j, 1);
+              enemies.splice(i, 1);
+              score += 10;
+              updateUI();
+              break;
+            }
+          }
+        }
+
+        // Check boss collision with player
+        if (boss && isColliding(boss, player)) {
+          playerTakeDamage(CONFIG.bossDamage);
+          if (gameOver) return;
+        }
+      } else {
+        // Regular enemy mode
+        for (var i = enemies.length - 1; i >= 0; i--) {
+          var enemy = enemies[i];
+
+          drawEnemy(enemy);
+          enemy.y += enemy.speed;
+
+          // Zigzag movement for enemy3
+          if (enemy.zigzag) {
+            enemy.x += enemy.zigzagSpeed * enemy.zigzagDirection;
+            enemy.zigzagTimer++;
+            // Change direction periodically
+            if (enemy.zigzagTimer >= enemy.zigzagInterval) {
+              enemy.zigzagTimer = 0;
+              enemy.zigzagDirection *= -1;
+            }
+            // Keep within canvas bounds
+            if (enemy.x <= 0) {
+              enemy.x = 0;
+              enemy.zigzagDirection = 1;
+            } else if (enemy.x >= canvas.width - enemy.width) {
+              enemy.x = canvas.width - enemy.width;
+              enemy.zigzagDirection = -1;
+            }
+          }
+
+          if (isColliding(enemy, player)) {
+            enemies.splice(i, 1);
+            playerTakeDamage(CONFIG.enemyCollisionDamage);
+            if (gameOver) return;
+            continue;
+          }
+
+          if (enemy.y > canvas.height) {
+            enemies.splice(i, 1);
+            continue;
+          }
+
+          // Enemy shooting (level 2+)
+          if (level >= 2) {
+            var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
+            if (Math.random() < shootChance) {
+              shootEnemyBullet(enemy);
+            }
+          }
+        }
+
+        // Spawn enemies and power-ups
+        var spawnChance = CONFIG.enemySpawnRate + (level - 1) * CONFIG.enemySpawnIncrease;
+        if (Math.random() < spawnChance) {
+          createEnemy();
+        }
+
+        trySpawnPowerup();
       }
 
       requestAnimationFrame(draw);
@@ -468,18 +960,32 @@
         gameOver = false;
         score = 0;
         level = 1;
+        health = CONFIG.startingHealth;
+        hasDoubleLaser = false;
+        powerupsSpawnedThisLevel = { health: false, doubleLaser: false };
+        playerBlinking = false;
+        playerVisible = true;
+        bossActive = false;
+        bossDefeated = false;
+        boss = null;
+        bossBlinking = false;
+        bossVisible = true;
+
         player.x = canvas.width / 2;
         enemies = [];
         playerBullets = [];
         enemyBullets = [];
+        powerups = [];
+        bossMinions = [];
 
         // Update UI
-        document.getElementById("score").innerText = "Score: " + score;
-        document.getElementById("levelIndicator").innerText = "Level: " + level;
+        updateUI();
         document.getElementById("levelDisplay").style.display = "none";
+        document.getElementById("powerupDisplay").style.display = "none";
         document.getElementById("gameOver").style.display = "none";
+        document.getElementById("victory").style.display = "none";
 
-        showLevelAnnouncement(1);
+        showAnnouncement("levelDisplay", "Level 1", 2000);
         draw();
       }
     });
