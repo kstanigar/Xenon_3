@@ -169,7 +169,7 @@
       // Enemy shooting (starts at level 2)
       enemyShootChance: 0.005,
       enemyShootIncrease: 0.002,
-      enemyBulletSpeed: 3,
+      enemyBulletSpeed: 5,
 
       // Boss settings
       boss1ScoreThreshold: 400,
@@ -645,6 +645,7 @@
         maxHealth: CONFIG.bossHealth,
         speed: CONFIG.bossSpeed,
         direction: 1,
+        verticalDirection: 1, // For red boss vertical movement
         entering: true,
         isRedBoss: (currentBoss === 2) // Track which boss type
       };
@@ -733,14 +734,28 @@
           boss.direction *= -1;
         }
 
+        // Red boss also moves north/south
+        if (boss.isRedBoss) {
+          boss.y += boss.speed * 0.6 * boss.verticalDirection;
+          if (boss.y <= 20) {
+            boss.verticalDirection = 1;
+          } else if (boss.y >= 100) {
+            boss.verticalDirection = -1;
+          }
+        }
+
         // Boss shooting
         if (Math.random() < CONFIG.bossShootChance) {
+          var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1;
+          if (boss.isRedBoss) {
+            bossBulletSpeed = CONFIG.enemyBulletSpeed + 3; // Faster for red boss
+          }
           enemyBullets.push({
-            x: boss.x + boss.width / 2 - 2.5,
-            y: boss.y + boss.height,
+            x: Math.floor(boss.x + boss.width / 2 - 4),
+            y: Math.floor(boss.y + boss.height),
             width: 8,
             height: 15,
-            speed: CONFIG.enemyBulletSpeed + 1,
+            speed: bossBulletSpeed,
             isBossBullet: true
           });
         }
@@ -832,15 +847,15 @@
       if (hasDoubleLaser) {
         // Double laser - two side-by-side bullets
         playerBullets.push({
-          x: player.x + player.width / 4 - 2.5,
-          y: player.y,
+          x: Math.floor(player.x + player.width / 4 - 2),
+          y: Math.floor(player.y),
           width: 5,
           height: 10,
           speed: CONFIG.bulletSpeed
         });
         playerBullets.push({
-          x: player.x + (player.width * 3 / 4) - 2.5,
-          y: player.y,
+          x: Math.floor(player.x + (player.width * 3 / 4) - 2),
+          y: Math.floor(player.y),
           width: 5,
           height: 10,
           speed: CONFIG.bulletSpeed
@@ -848,8 +863,8 @@
       } else {
         // Single bullet
         playerBullets.push({
-          x: player.x + player.width / 2 - 2.5,
-          y: player.y,
+          x: Math.floor(player.x + player.width / 2 - 2),
+          y: Math.floor(player.y),
           width: 5,
           height: 10,
           speed: CONFIG.bulletSpeed
@@ -861,11 +876,11 @@
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       // 15% faster bullets in red phase
       if (redPhase) {
-        bulletSpeed *= 1.15;
+        bulletSpeed *= 1.4; // 40% faster in red phase
       }
       enemyBullets.push({
-        x: enemy.x + enemy.width / 2 - 2.5,
-        y: enemy.y + enemy.height,
+        x: Math.floor(enemy.x + enemy.width / 2 - 2),
+        y: Math.floor(enemy.y + enemy.height),
         width: 5,
         height: 10,
         speed: bulletSpeed
