@@ -467,6 +467,12 @@
     var bossBlinkTimer = 0;
     var bossVisible = true;
 
+    // Screen shake state
+    var screenShakeActive = false;
+    var screenShakeIntensity = 0;
+    var screenShakeDuration = 0;
+    var screenShakeTimer = 0;
+
     // Game phase tracking
     var currentBoss = 0;        // 0 = no boss yet, 1 = boss 1, 2 = boss 2
     var boss1Defeated = false;
@@ -501,6 +507,38 @@
       setTimeout(function() {
         el.style.display = "none";
       }, duration || 2000);
+    }
+
+    // Screen shake effect
+    function triggerScreenShake(intensity, duration) {
+      screenShakeActive = true;
+      screenShakeIntensity = intensity || 10;
+      screenShakeDuration = duration || 500;
+      screenShakeTimer = Date.now();
+    }
+
+    function updateScreenShake() {
+      if (!screenShakeActive) {
+        canvas.style.transform = '';
+        return;
+      }
+
+      var elapsed = Date.now() - screenShakeTimer;
+      if (elapsed >= screenShakeDuration) {
+        screenShakeActive = false;
+        canvas.style.transform = '';
+        return;
+      }
+
+      // Decrease intensity over time for decay effect
+      var progress = elapsed / screenShakeDuration;
+      var currentIntensity = screenShakeIntensity * (1 - progress);
+
+      // Random shake offset
+      var offsetX = (Math.random() - 0.5) * 2 * currentIntensity;
+      var offsetY = (Math.random() - 0.5) * 2 * currentIntensity;
+
+      canvas.style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px)';
     }
 
     // ============================================
@@ -1398,9 +1436,12 @@
       // If all shields are down, check for regeneration
       if (allShieldsDown) {
         if (now - shieldRegenTime >= 5000) {
-          // Regenerate all shields
+          // Regenerate all shields (except those broken by 25 hits)
           formationEnemies.forEach(function(e) {
-            e.shielded = true;
+            if (!e.shieldBroken) {
+              e.shielded = true;
+              e.shieldHits = 0; // Reset hit counter on regen
+            }
           });
           // Reset cascade
           shieldCascadeStarted = true;
@@ -1865,8 +1906,13 @@
       // Different colors based on enemy type (golden shield color when protected)
       var rippleColor;
       if (isShielded) {
-        // Golden/yellow shield ripple - more visible
-        rippleColor = 'rgba(255, 215, 0, ' + (rippleAlpha * 0.7) + ')';
+        // Golden/yellow shield ripple - fades to white as it weakens from hits
+        var shieldHits = enemy.shieldHits || 0;
+        var shieldWeakness = Math.min(shieldHits / 25, 1); // 0 to 1
+        // Interpolate from golden (255, 215, 0) to light yellow/white (255, 255, 200)
+        var g = Math.round(215 + (255 - 215) * shieldWeakness); // 215 -> 255
+        var b = Math.round(0 + 200 * shieldWeakness); // 0 -> 200
+        rippleColor = 'rgba(255, ' + g + ', ' + b + ', ' + (rippleAlpha * 0.7) + ')';
       } else if (enemy.type.indexOf('_red') !== -1) {
         rippleColor = 'rgba(255, 80, 80, ' + (rippleAlpha * 0.4) + ')';
       } else if (enemy.type === 'enemy1') {
@@ -2392,7 +2438,9 @@
       bossBlinkTimer = 10; // Short blink (10 frames)
 
       if (boss.health <= 0) {
-        // Boss defeated!
+        // Boss defeated - trigger screen shake!
+        triggerScreenShake(15, 800); // Strong shake for boss death
+
         bossActive = false;
         boss = null;
         bossMinions = [];
@@ -2594,6 +2642,11 @@
         } else {
           showAnnouncement("powerupDisplay", "Shield: " + shieldHitsRemaining + " hits left", 800);
         }
+        // Shield protects health when at 15 or below - no damage taken
+        if (health <= 15) {
+          showAnnouncement("powerupDisplay", "Shield absorbed damage!", 800);
+          return; // Exit without reducing health
+        }
       } else {
         // Lose double laser in red phase when hit (only without shield)
         if (redPhase && hasDoubleLaser) {
@@ -2698,6 +2751,9 @@
         return;
       }
 
+      // Update screen shake effect
+      updateScreenShake();
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Update player blink effect
@@ -2768,6 +2824,18 @@
           if (isColliding(bullet, enemy)) {
             // Check if enemy is shielded
             if (enemy.shielded) {
+              // Track shield hits - shield breaks after 25 hits
+              if (typeof enemy.shieldHits === 'undefined') {
+                enemy.shieldHits = 0;
+              }
+              enemy.shieldHits++;
+
+              // Break shield permanently after 25 hits
+              if (enemy.shieldHits >= 25) {
+                enemy.shielded = false;
+                enemy.shieldBroken = true; // Mark as broken so cascade doesn't restore it
+              }
+
               // Bullet stops at shield - destroy bullet but enemy survives
               playerBullets.splice(i, 1);
               // Optional: play shield hit sound here later
