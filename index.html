@@ -129,6 +129,24 @@
       z-index: 3;
     }
 
+    #warningDisplay {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      color: #FF3333;
+      text-shadow: 0 0 10px #FF0000, 0 0 20px #FF0000;
+      z-index: 3;
+      animation: warningPulse 0.5s ease-in-out infinite;
+    }
+
+    @keyframes warningPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
     #pauseDisplay {
       display: none;
       position: absolute;
@@ -171,6 +189,7 @@
     <div id="levelDisplay">Level 1</div>
     <div id="powerupDisplay"></div>
     <div id="bonusDisplay"></div>
+    <div id="warningDisplay">Warning! Shielded Enemy!</div>
     <div id="pauseDisplay">PAUSED</div>
     <div id="victory">Thank you for playing!<br><br>Special thanks to Modmotif for the music.<br><br>Please submit your email to download the song for remix.<br><br>&copy; 2026</div>
     <div id="gameOver">Game Over!</div>
@@ -184,8 +203,8 @@
       // Player settings
       playerSpeed: 5,
       bulletSpeed: 12,
-      startingHealth: 50,
-      maxHealth: 100,
+      startingHealth: 100,
+      maxHealth: 250,
 
       // Damage values
       enemyBulletDamage: 10,
@@ -431,6 +450,8 @@
     // Power-up state
     var hasDoubleLaser = false;
     var powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+    var lastPowerupSpawnTime = 0;
+    var powerupSpawnCooldown = 5000; // 5 seconds minimum between power-ups
 
     // Player blink state (when damaged)
     var playerBlinking = false;
@@ -665,28 +686,41 @@
     }
 
     function trySpawnPowerup() {
+      // Stagger power-ups - minimum 5 seconds between spawns
+      var now = Date.now();
+      if (now - lastPowerupSpawnTime < powerupSpawnCooldown) return;
       if (Math.random() > CONFIG.powerupSpawnChance) return;
 
       // Randomly choose which power-up to try spawning
       // Only mark as spawned if createPowerup succeeds
       var rand = Math.random();
+      var spawned = false;
+
       if (!powerupsSpawnedThisLevel.health && rand < 0.4) {
         if (createPowerup(POWERUP_TYPES.HEALTH)) {
           powerupsSpawnedThisLevel.health = true;
+          spawned = true;
         }
       } else if (!powerupsSpawnedThisLevel.doubleLaser && rand < 0.7) {
         if (createPowerup(POWERUP_TYPES.DOUBLE_LASER)) {
           powerupsSpawnedThisLevel.doubleLaser = true;
+          spawned = true;
         }
       } else if (!powerupsSpawnedThisLevel.shield && level >= 3) {
         // Shield only spawns level 3+
         if (createPowerup(POWERUP_TYPES.SHIELD)) {
           powerupsSpawnedThisLevel.shield = true;
+          spawned = true;
         }
       } else if (!powerupsSpawnedThisLevel.health) {
         if (createPowerup(POWERUP_TYPES.HEALTH)) {
           powerupsSpawnedThisLevel.health = true;
+          spawned = true;
         }
+      }
+
+      if (spawned) {
+        lastPowerupSpawnTime = now;
       }
     }
 
@@ -789,265 +823,329 @@
     var morphStartTime = 0;     // When current formation started (for morphing)
     var currentMorphShape = 0;  // Index into formation shapes
 
-    // Formation shapes (marching band style - 2D, well-spaced, no overlap)
-    // Each shape returns positions that flow smoothly into the next via rotation
+    // Formation shapes - each has a collapsed and exploded version
+    // Dance pattern: exploded (enter) -> collapsed -> exploded (repeat)
     var FORMATION_SHAPES = {
-      // Circle - evenly spaced around perimeter
-      circle: function(count) {
+      // 3x3 Grid - collapsed
+      grid3x3: function(count) {
         var positions = [];
-        for (var i = 0; i < count; i++) {
-          var angle = (i / count) * Math.PI * 2 - Math.PI / 2; // Start from top
-          positions.push({ x: Math.cos(angle), y: Math.sin(angle) });
-        }
-        return positions;
-      },
-      // Oval - wider than tall
-      oval: function(count) {
-        var positions = [];
-        for (var i = 0; i < count; i++) {
-          var angle = (i / count) * Math.PI * 2 - Math.PI / 2;
-          positions.push({ x: Math.cos(angle) * 1.4, y: Math.sin(angle) * 0.6 });
-        }
-        return positions;
-      },
-      // Horizontal line - spread across
-      lineH: function(count) {
-        var positions = [];
-        var spacing = 2 / (count - 1 || 1);
-        for (var i = 0; i < count; i++) {
-          positions.push({ x: -1 + i * spacing, y: 0 });
-        }
-        return positions;
-      },
-      // Vertical line
-      lineV: function(count) {
-        var positions = [];
-        var spacing = 1.6 / (count - 1 || 1);
-        for (var i = 0; i < count; i++) {
-          positions.push({ x: 0, y: -0.8 + i * spacing });
-        }
-        return positions;
-      },
-      // V formation (like flying geese) - pointing down
-      veeDown: function(count) {
-        var positions = [];
-        var half = Math.floor(count / 2);
-        var spacing = 0.22;
-        for (var i = 0; i < count; i++) {
-          if (i < half) {
-            // Left arm
-            positions.push({ x: -spacing * (half - i), y: -spacing * (half - i) });
-          } else if (i === half && count % 2 === 1) {
-            // Center point (tip)
-            positions.push({ x: 0, y: 0 });
-          } else {
-            // Right arm
-            var idx = i - half - (count % 2 === 1 ? 1 : 0);
-            positions.push({ x: spacing * (idx + 1), y: -spacing * (idx + 1) });
+        var cols = 3, rows = 3;
+        var spacing = 0.35;
+        for (var row = 0; row < rows; row++) {
+          for (var col = 0; col < cols; col++) {
+            if (positions.length >= count) break;
+            positions.push({ x: (col - 1) * spacing, y: (row - 1) * spacing });
           }
         }
         return positions;
       },
-      // Inverted V (pointing up)
-      veeUp: function(count) {
+      // 3x3 Grid - exploded
+      grid3x3Exploded: function(count) {
         var positions = [];
-        var half = Math.floor(count / 2);
-        var spacing = 0.22;
-        for (var i = 0; i < count; i++) {
-          if (i < half) {
-            positions.push({ x: -spacing * (half - i), y: spacing * (half - i) });
-          } else if (i === half && count % 2 === 1) {
-            positions.push({ x: 0, y: 0 });
-          } else {
-            var idx = i - half - (count % 2 === 1 ? 1 : 0);
-            positions.push({ x: spacing * (idx + 1), y: spacing * (idx + 1) });
+        var cols = 3, rows = 3;
+        var spacing = 0.35;
+        var explode = 2.5;
+        for (var row = 0; row < rows; row++) {
+          for (var col = 0; col < cols; col++) {
+            if (positions.length >= count) break;
+            var x = (col - 1) * spacing;
+            var y = (row - 1) * spacing;
+            var dist = Math.sqrt(x * x + y * y);
+            if (dist > 0.01) { x *= explode; y *= explode; }
+            positions.push({ x: x, y: y });
           }
         }
         return positions;
       },
-      // Square outline (not filled)
-      square: function(count) {
-        var positions = [];
-        var perSide = Math.floor(count / 4);
-        var remainder = count % 4;
-        var idx = 0;
-        // Top edge (left to right)
-        for (var i = 0; i < perSide + (remainder > 0 ? 1 : 0); i++) {
-          var t = i / (perSide + (remainder > 0 ? 1 : 0));
-          positions.push({ x: -1 + t * 2, y: -0.7 });
-          idx++;
-        }
-        // Right edge (top to bottom)
-        for (var i = 0; i < perSide + (remainder > 1 ? 1 : 0); i++) {
-          var t = i / (perSide + (remainder > 1 ? 1 : 0));
-          positions.push({ x: 1, y: -0.7 + t * 1.4 });
-          idx++;
-        }
-        // Bottom edge (right to left)
-        for (var i = 0; i < perSide + (remainder > 2 ? 1 : 0); i++) {
-          var t = i / (perSide + (remainder > 2 ? 1 : 0));
-          positions.push({ x: 1 - t * 2, y: 0.7 });
-          idx++;
-        }
-        // Left edge (bottom to top)
-        while (idx < count) {
-          var remaining = count - idx;
-          var t = (idx - (count - remaining)) / remaining;
-          positions.push({ x: -1, y: 0.7 - t * 1.4 });
-          idx++;
-        }
-        return positions;
-      },
-      // Diamond (square rotated 45°)
+      // Diamond - 9 enemies (4 corners + 4 edges + 1 center)
       diamond: function(count) {
         var positions = [];
-        var perSide = Math.floor(count / 4);
-        var remainder = count % 4;
-        var size = 0.9;
-        var idx = 0;
-        // Top-right edge
-        for (var i = 0; i < perSide + (remainder > 0 ? 1 : 0); i++) {
-          var t = i / (perSide + (remainder > 0 ? 1 : 0));
-          positions.push({ x: t * size, y: -size + t * size });
-          idx++;
-        }
-        // Bottom-right edge
-        for (var i = 0; i < perSide + (remainder > 1 ? 1 : 0); i++) {
-          var t = i / (perSide + (remainder > 1 ? 1 : 0));
-          positions.push({ x: size - t * size, y: t * size });
-          idx++;
-        }
-        // Bottom-left edge
-        for (var i = 0; i < perSide + (remainder > 2 ? 1 : 0); i++) {
-          var t = i / (perSide + (remainder > 2 ? 1 : 0));
-          positions.push({ x: -t * size, y: size - t * size });
-          idx++;
-        }
-        // Top-left edge
-        while (idx < count) {
-          var remaining = count - idx;
-          var t = (idx - (count - remaining)) / remaining;
-          positions.push({ x: -size + t * size, y: -t * size });
-          idx++;
+        var size = 0.4;
+        // Center
+        positions.push({ x: 0, y: 0 });
+        // 4 cardinal points
+        positions.push({ x: 0, y: -size });      // top
+        positions.push({ x: size, y: 0 });       // right
+        positions.push({ x: 0, y: size });       // bottom
+        positions.push({ x: -size, y: 0 });      // left
+        // 4 diagonal points (outer)
+        positions.push({ x: -size * 0.7, y: -size * 0.7 }); // top-left
+        positions.push({ x: size * 0.7, y: -size * 0.7 });  // top-right
+        positions.push({ x: size * 0.7, y: size * 0.7 });   // bottom-right
+        positions.push({ x: -size * 0.7, y: size * 0.7 });  // bottom-left
+        return positions.slice(0, count);
+      },
+      // Diamond - exploded
+      diamondExploded: function(count) {
+        var positions = [];
+        var size = 1.0;
+        positions.push({ x: 0, y: 0 });
+        positions.push({ x: 0, y: -size });
+        positions.push({ x: size, y: 0 });
+        positions.push({ x: 0, y: size });
+        positions.push({ x: -size, y: 0 });
+        positions.push({ x: -size * 0.7, y: -size * 0.7 });
+        positions.push({ x: size * 0.7, y: -size * 0.7 });
+        positions.push({ x: size * 0.7, y: size * 0.7 });
+        positions.push({ x: -size * 0.7, y: size * 0.7 });
+        return positions.slice(0, count);
+      },
+      // Circle - evenly spaced ring
+      circle: function(count) {
+        var positions = [];
+        var radius = 0.45;
+        for (var i = 0; i < count; i++) {
+          var angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+          positions.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
         }
         return positions;
       },
-      // Two parallel horizontal lines
-      twoLines: function(count) {
+      // Circle - exploded
+      circleExploded: function(count) {
         var positions = [];
+        var radius = 1.1;
+        for (var i = 0; i < count; i++) {
+          var angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+          positions.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+        }
+        return positions;
+      },
+      // Flying V - point facing down
+      flyingV: function(count) {
+        var positions = [];
+        var spacing = 0.25;
         var half = Math.floor(count / 2);
-        var spacing = 1.8 / (half - 1 || 1);
-        // Top line
-        for (var i = 0; i < half; i++) {
-          positions.push({ x: -0.9 + i * spacing, y: -0.4 });
+        // Tip at bottom center
+        positions.push({ x: 0, y: spacing * half * 0.7 });
+        // Left arm going up-left
+        for (var i = 1; i <= half; i++) {
+          positions.push({ x: -spacing * i, y: spacing * (half - i) * 0.7 });
         }
-        // Bottom line
-        for (var i = half; i < count; i++) {
-          positions.push({ x: -0.9 + (i - half) * spacing, y: 0.4 });
+        // Right arm going up-right
+        for (var i = 1; i < count - half - 1; i++) {
+          positions.push({ x: spacing * i, y: spacing * (half - i) * 0.7 });
         }
-        return positions;
+        return positions.slice(0, count);
       },
-      // Arrow pointing right
-      arrowRight: function(count) {
+      // Flying V - exploded
+      flyingVExploded: function(count) {
         var positions = [];
-        var shaftCount = Math.floor(count * 0.6);
-        var headCount = count - shaftCount;
-        // Shaft (horizontal line on left)
-        var shaftSpacing = 1.2 / (shaftCount - 1 || 1);
-        for (var i = 0; i < shaftCount; i++) {
-          positions.push({ x: -1 + i * shaftSpacing, y: 0 });
+        var spacing = 0.5;
+        var half = Math.floor(count / 2);
+        positions.push({ x: 0, y: spacing * half * 0.7 });
+        for (var i = 1; i <= half; i++) {
+          positions.push({ x: -spacing * i, y: spacing * (half - i) * 0.7 });
         }
-        // Arrow head (V shape on right)
-        var headHalf = Math.floor(headCount / 2);
-        for (var i = 0; i < headCount; i++) {
-          if (i < headHalf) {
-            positions.push({ x: 0.4 + (headHalf - i) * 0.18, y: -(headHalf - i) * 0.25 });
-          } else {
-            var idx = i - headHalf;
-            positions.push({ x: 0.4 + idx * 0.18, y: idx * 0.25 });
+        for (var i = 1; i < count - half - 1; i++) {
+          positions.push({ x: spacing * i, y: spacing * (half - i) * 0.7 });
+        }
+        return positions.slice(0, count);
+      },
+      // 4x4 Square grid
+      grid4x4: function(count) {
+        var positions = [];
+        var spacing = 0.28;
+        for (var row = 0; row < 4; row++) {
+          for (var col = 0; col < 4; col++) {
+            if (positions.length >= count) break;
+            positions.push({ x: (col - 1.5) * spacing, y: (row - 1.5) * spacing });
           }
         }
         return positions;
       },
-      // Crescent/arc shape
-      arc: function(count) {
+      // 4x4 Square - exploded
+      grid4x4Exploded: function(count) {
         var positions = [];
-        for (var i = 0; i < count; i++) {
-          var angle = Math.PI * 0.2 + (i / (count - 1 || 1)) * Math.PI * 0.6;
-          positions.push({ x: Math.cos(angle) * 1.2, y: Math.sin(angle) * 0.8 - 0.2 });
+        var spacing = 0.28;
+        var explode = 2.2;
+        for (var row = 0; row < 4; row++) {
+          for (var col = 0; col < 4; col++) {
+            if (positions.length >= count) break;
+            var x = (col - 1.5) * spacing;
+            var y = (row - 1.5) * spacing;
+            var dist = Math.sqrt(x * x + y * y);
+            if (dist > 0.01) { x *= explode; y *= explode; }
+            positions.push({ x: x, y: y });
+          }
+        }
+        return positions;
+      },
+      // Double Diamond - inner (5) + outer (8)
+      doubleDiamond: function(count) {
+        var positions = [];
+        var innerSize = 0.25;
+        var outerSize = 0.55;
+        // Inner diamond (5)
+        positions.push({ x: 0, y: 0 });
+        positions.push({ x: 0, y: -innerSize });
+        positions.push({ x: innerSize, y: 0 });
+        positions.push({ x: 0, y: innerSize });
+        positions.push({ x: -innerSize, y: 0 });
+        // Outer diamond (8)
+        positions.push({ x: 0, y: -outerSize });
+        positions.push({ x: outerSize, y: 0 });
+        positions.push({ x: 0, y: outerSize });
+        positions.push({ x: -outerSize, y: 0 });
+        positions.push({ x: -outerSize * 0.7, y: -outerSize * 0.7 });
+        positions.push({ x: outerSize * 0.7, y: -outerSize * 0.7 });
+        positions.push({ x: outerSize * 0.7, y: outerSize * 0.7 });
+        positions.push({ x: -outerSize * 0.7, y: outerSize * 0.7 });
+        return positions.slice(0, count);
+      },
+      // Double Diamond - exploded
+      doubleDiamondExploded: function(count) {
+        var positions = [];
+        var innerSize = 0.5;
+        var outerSize = 1.1;
+        positions.push({ x: 0, y: 0 });
+        positions.push({ x: 0, y: -innerSize });
+        positions.push({ x: innerSize, y: 0 });
+        positions.push({ x: 0, y: innerSize });
+        positions.push({ x: -innerSize, y: 0 });
+        positions.push({ x: 0, y: -outerSize });
+        positions.push({ x: outerSize, y: 0 });
+        positions.push({ x: 0, y: outerSize });
+        positions.push({ x: -outerSize, y: 0 });
+        positions.push({ x: -outerSize * 0.7, y: -outerSize * 0.7 });
+        positions.push({ x: outerSize * 0.7, y: -outerSize * 0.7 });
+        positions.push({ x: outerSize * 0.7, y: outerSize * 0.7 });
+        positions.push({ x: -outerSize * 0.7, y: outerSize * 0.7 });
+        return positions.slice(0, count);
+      },
+      // Double V - front V (5) + rear V (6)
+      doubleV: function(count) {
+        var positions = [];
+        var spacing = 0.22;
+        // Front V (closer to bottom, 5 enemies)
+        positions.push({ x: 0, y: 0.3 }); // tip
+        positions.push({ x: -spacing, y: 0.1 });
+        positions.push({ x: spacing, y: 0.1 });
+        positions.push({ x: -spacing * 2, y: -0.1 });
+        positions.push({ x: spacing * 2, y: -0.1 });
+        // Rear V (further back, 6 enemies)
+        positions.push({ x: 0, y: -0.15 }); // tip
+        positions.push({ x: -spacing, y: -0.35 });
+        positions.push({ x: spacing, y: -0.35 });
+        positions.push({ x: -spacing * 2, y: -0.55 });
+        positions.push({ x: spacing * 2, y: -0.55 });
+        positions.push({ x: 0, y: -0.55 }); // extra center back
+        return positions.slice(0, count);
+      },
+      // Double V - exploded
+      doubleVExploded: function(count) {
+        var positions = [];
+        var spacing = 0.45;
+        positions.push({ x: 0, y: 0.6 });
+        positions.push({ x: -spacing, y: 0.2 });
+        positions.push({ x: spacing, y: 0.2 });
+        positions.push({ x: -spacing * 2, y: -0.2 });
+        positions.push({ x: spacing * 2, y: -0.2 });
+        positions.push({ x: 0, y: -0.3 });
+        positions.push({ x: -spacing, y: -0.7 });
+        positions.push({ x: spacing, y: -0.7 });
+        positions.push({ x: -spacing * 2, y: -1.1 });
+        positions.push({ x: spacing * 2, y: -1.1 });
+        positions.push({ x: 0, y: -1.1 });
+        return positions.slice(0, count);
+      },
+      // Dual Sine Waves - two parallel wavy lines
+      dualSineWave: function(count) {
+        var positions = [];
+        var half = Math.floor(count / 2);
+        var xSpacing = 0.2;
+        var amplitude = 0.15;
+        // Top wave
+        for (var i = 0; i < half; i++) {
+          var x = (i - (half - 1) / 2) * xSpacing;
+          var y = Math.sin(i * 0.8) * amplitude - 0.25;
+          positions.push({ x: x, y: y });
+        }
+        // Bottom wave (offset phase)
+        for (var i = 0; i < count - half; i++) {
+          var x = (i - (count - half - 1) / 2) * xSpacing;
+          var y = Math.sin(i * 0.8 + Math.PI) * amplitude + 0.25;
+          positions.push({ x: x, y: y });
+        }
+        return positions;
+      },
+      // Dual Sine Waves - exploded
+      dualSineWaveExploded: function(count) {
+        var positions = [];
+        var half = Math.floor(count / 2);
+        var xSpacing = 0.35;
+        var amplitude = 0.3;
+        for (var i = 0; i < half; i++) {
+          var x = (i - (half - 1) / 2) * xSpacing;
+          var y = Math.sin(i * 0.8) * amplitude - 0.55;
+          positions.push({ x: x, y: y });
+        }
+        for (var i = 0; i < count - half; i++) {
+          var x = (i - (count - half - 1) / 2) * xSpacing;
+          var y = Math.sin(i * 0.8 + Math.PI) * amplitude + 0.55;
+          positions.push({ x: x, y: y });
         }
         return positions;
       }
     };
 
-    // Level definitions with 2 waves each
-    // Each level uses ONE enemy type for the whole formation (like the original game)
-    // Kamikazes: enemies that break off from formation and dive at player
-    // Fillers only spawn after 4 morphs to let player enjoy the formations
+    // Level definitions - single wave per level
+    // Dance pattern: exploded (enter) -> collapsed -> exploded (repeat)
+    // Barriers: circle, horizontalLine, arrow, orbitingShield, dualLines
     var LEVEL_WAVES = {
       1: {
         enemyType: 'enemy1',
         waves: [
-          { count: 8, kamikazes: 2, shapes: ['lineH', 'veeDown', 'lineH', 'veeUp', 'lineH'] },
-          { count: 10, kamikazes: 3, shapes: ['circle', 'oval', 'circle', 'oval', 'circle'] }
+          { count: 9, kamikazes: 2, shapes: ['grid3x3Exploded', 'grid3x3'], barrier: 'circle', barrierCount: 5 }
         ]
       },
       2: {
         enemyType: 'enemy2',
         waves: [
-          { count: 10, kamikazes: 2, shapes: ['veeDown', 'lineH', 'veeUp', 'lineH', 'veeDown'] },
-          { count: 10, kamikazes: 3, shapes: ['square', 'diamond', 'square', 'diamond', 'square'] }
+          { count: 9, kamikazes: 2, shapes: ['diamondExploded', 'diamond'], barrier: 'horizontalLine', barrierCount: 5 }
         ]
       },
       3: {
         enemyType: 'enemy3',
         waves: [
-          { count: 10, kamikazes: 3, shapes: ['circle', 'square', 'diamond', 'circle', 'square'] },
-          { count: 12, kamikazes: 3, shapes: ['twoLines', 'lineH', 'arc', 'lineH', 'twoLines'] }
+          { count: 10, kamikazes: 3, shapes: ['circleExploded', 'circle'], barrier: null }
         ]
       },
       4: {
         enemyType: 'enemy4',
         waves: [
-          { count: 12, kamikazes: 3, shapes: ['diamond', 'square', 'lineH', 'veeDown', 'diamond'] },
-          { count: 14, kamikazes: 4, shapes: ['circle', 'oval', 'lineH', 'oval', 'circle'] }
+          { count: 9, kamikazes: 3, shapes: ['flyingVExploded', 'flyingV'], barrier: 'arrow', barrierCount: 5 }
         ]
       },
       5: {
         enemyType: 'enemy1_red',
         waves: [
-          { count: 10, kamikazes: 2, shapes: ['lineH', 'arc', 'lineH', 'arc', 'lineH'] },
-          { count: 10, kamikazes: 3, shapes: ['veeUp', 'lineH', 'veeDown', 'lineH', 'veeUp'] }
+          { count: 16, kamikazes: 3, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
         ]
       },
       6: {
         enemyType: 'enemy2_red',
         waves: [
-          { count: 10, kamikazes: 3, shapes: ['circle', 'diamond', 'circle', 'diamond', 'circle'] },
-          { count: 12, kamikazes: 3, shapes: ['square', 'lineH', 'twoLines', 'lineH', 'square'] }
+          { count: 13, kamikazes: 3, shapes: ['doubleDiamondExploded', 'doubleDiamond'], barrier: 'orbitingShield', barrierCount: 6 }
         ]
       },
       7: {
         enemyType: 'enemy3_red',
         waves: [
-          { count: 12, kamikazes: 3, shapes: ['arrowRight', 'lineH', 'veeDown', 'lineH', 'arrowRight'] },
-          { count: 14, kamikazes: 4, shapes: ['diamond', 'oval', 'diamond', 'square', 'diamond'] }
+          { count: 11, kamikazes: 4, shapes: ['doubleVExploded', 'doubleV'], barrier: null }
         ]
       },
       8: {
         enemyType: 'enemy4_red',
         waves: [
-          { count: 14, kamikazes: 4, shapes: ['circle', 'square', 'diamond', 'lineH', 'circle'] },
-          { count: 16, kamikazes: 4, shapes: ['twoLines', 'veeDown', 'lineV', 'veeUp', 'twoLines'] }
+          { count: 12, kamikazes: 4, shapes: ['dualSineWaveExploded', 'dualSineWave'], barrier: 'dualLines', barrierCount: 8 }
         ]
       }
     };
 
-    // Filler enemy tracking - only spawn after 4 morphs
-    var lastFillerTime = 0;
-    var fillerCooldown = 2000; // 2 seconds between fillers
-    var morphCount = 0; // Track how many times formation has morphed
-    var fillersAllowed = false; // Only true after 4 morphs
+    // Barrier reinforcement tracking
+    var morphCount = 0;
+    var barrierSpawned = false;
+    var barrierEnemies = []; // Track barrier enemies separately
 
     function startWave(waveNum) {
       var levelData = LEVEL_WAVES[level];
@@ -1059,42 +1157,58 @@
       morphStartTime = Date.now();
       currentMorphShape = 0;
 
-      // Reset formation rotation and morph timing for new wave
+      // Reset formation and barrier tracking
       formationRotation = 0;
       targetFormationRotation = 0;
       lastMorphTime = Date.now();
       morphCount = 0;
-      fillersAllowed = false;
+      barrierSpawned = false;
+      barrierEnemies = [];
 
       var waveData = levelData.waves[waveNum - 1];
       waveEnemiesRemaining = waveData.count;
 
       spawnMorphingFormation(waveData);
 
-      showAnnouncement("levelDisplay", "Wave " + waveNum, 1500);
+      showAnnouncement("levelDisplay", "Level " + level, 1500);
     }
+
+    // Formation center tracking - moves as a unit
+    var formationCurrentCenterY = -120;
+    var formationTargetCenterY = 160;
+    var formationEntrySpeed = 1.8;
+    var formationEntered = false;
+
+    // Shield cascade system
+    var shieldCascadeStarted = false;
+    var shieldCascadeTime = 0;
+    var shieldsDropped = 0;
+    var allShieldsDown = false;
+    var shieldRegenTime = 0;
 
     function spawnMorphingFormation(waveData) {
       var count = waveData.count;
       var kamikazeCount = waveData.kamikazes || 2;
       var centerX = canvas.width / 2;
       var targetY = 160;
-      // Larger spread to prevent overlap (60px enemy + 20px gap minimum)
-      var spreadRadius = 160;
+      var spreadRadius = 140;
 
-      // Get single enemy type for this level (all enemies in formation are the same)
+      // Reset formation center - starts above screen
+      formationCurrentCenterY = -100;
+      formationTargetCenterY = targetY;
+      formationEntered = false;
+
       var levelData = LEVEL_WAVES[level];
       var enemyType = levelData.enemyType;
 
-      // Get initial shape positions
+      // Get initial shape positions (exploded - enters spread out)
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
       var positions = shapeFunc(count);
 
-      // Randomly select which enemies will be kamikazes (pick from edges of formation)
+      // Randomly select which enemies will be kamikazes
       var kamikazeIndices = [];
       var availableIndices = [];
       for (var k = 0; k < count; k++) availableIndices.push(k);
-      // Shuffle and pick kamikazes
       for (var k = 0; k < kamikazeCount && availableIndices.length > 0; k++) {
         var randIdx = Math.floor(Math.random() * availableIndices.length);
         kamikazeIndices.push(availableIndices[randIdx]);
@@ -1102,63 +1216,63 @@
       }
 
       for (var i = 0; i < count; i++) {
-        (function(index, pos) {
-          setTimeout(function() {
-            if (gameOver) return;
+        var pos = positions[i];
+        var width = 50;
+        var height = 50;
 
-            var width = 50;
-            var height = 50;
+        if (enemyType === 'enemy2_red') {
+          width = 35;
+          height = 35;
+        }
 
-            // enemy2_red is smaller
-            if (enemyType === 'enemy2_red') {
-              width = 35;
-              height = 35;
-            }
+        var isKamikaze = kamikazeIndices.indexOf(i) !== -1;
 
-            // Check if this enemy is a kamikaze
-            var isKamikaze = kamikazeIndices.indexOf(index) !== -1;
+        // Position relative to formation center (which will move)
+        var enemy = {
+          x: centerX + pos.x * spreadRadius - width/2,
+          y: formationCurrentCenterY + pos.y * spreadRadius * 0.8 - height/2,
+          width: width,
+          height: height,
+          baseWidth: width,
+          baseHeight: height,
+          speed: formationEntrySpeed,
+          type: enemyType,
+          formation: true,
+          formationType: 'morphing',
+          targetY: targetY,
+          reachedTarget: false,
+          formationIndex: i,
+          formationCount: count,
+          waveShapes: waveData.shapes,
+          spreadRadius: spreadRadius,
+          centerX: centerX,
+          centerY: targetY,
+          isKamikaze: isKamikaze,
+          kamikazeTriggered: false,
+          kamikazeTriggerMorph: isKamikaze ? (2 + Math.floor(Math.random() * 3)) : 0,
+          breathPhase: i * 0.12,
+          startPos: { x: pos.x, y: pos.y },
+          currentPos: { x: pos.x, y: pos.y },
+          targetPos: { x: pos.x, y: pos.y },
+          shielded: true,  // Start with shield
+          shieldOrder: i   // Order for cascade (lower = drops first)
+        };
 
-            var enemy = {
-              x: centerX + pos.x * spreadRadius - width/2,
-              y: -50 - (index * 25),
-              width: width,
-              height: height,
-              baseWidth: width,
-              baseHeight: height,
-              speed: 2.5,
-              type: enemyType,
-              formation: true,
-              formationType: 'morphing',
-              targetY: targetY,
-              reachedTarget: false,
-              formationIndex: index,
-              formationCount: count,
-              waveShapes: waveData.shapes,
-              spreadRadius: spreadRadius,
-              centerX: centerX,
-              centerY: targetY,
-              // Kamikaze properties
-              isKamikaze: isKamikaze,
-              kamikazeTriggered: false,
-              kamikazeTriggerMorph: isKamikaze ? (1 + Math.floor(Math.random() * 3)) : 0, // Break off after 1-3 morphs
-              // For breathing effect - phase offset based on position
-              breathPhase: index * 0.12,
-              // Morphing position tracking (start and current same initially)
-              startPos: { x: pos.x, y: pos.y },
-              currentPos: { x: pos.x, y: pos.y },
-              targetPos: { x: pos.x, y: pos.y }
-            };
-
-            enemies.push(enemy);
-          }, index * 60);
-        })(i, positions[i]);
+        enemies.push(enemy);
       }
+
+      // Reset shield cascade tracking
+      shieldCascadeStarted = false;
+      shieldCascadeTime = 0;
+      shieldsDropped = 0;
+      allShieldsDown = false;
+      shieldRegenTime = 0;
     }
 
-    // Track formation rotation for smooth transitions
+    // Track formation for simple dance
     var formationRotation = 0;
     var targetFormationRotation = 0;
-    var lastMorphTime = 0; // Track when last morph started for easing
+    var lastMorphTime = 0;
 
     // Ease-in-out function for smooth, natural movement
     function easeInOutCubic(t) {
@@ -1166,8 +1280,8 @@
     }
 
     function updateMorphingFormation(time) {
-      // Check for morph every 8 beats (~4 seconds at 123 BPM)
-      var morphInterval = BPM_INTERVAL * 8;
+      // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
+      var morphInterval = BPM_INTERVAL * 6;
       var timeSinceStart = time - morphStartTime;
       var newShapeIndex = Math.floor(timeSinceStart / morphInterval);
 
@@ -1178,18 +1292,27 @@
       var waveShapes = formationEnemies[0].waveShapes;
       if (!waveShapes) return;
 
-      // Cycle through shapes
+      // Cycle through shapes (tightGrid -> exploded -> tightGrid -> exploded...)
       newShapeIndex = newShapeIndex % waveShapes.length;
 
-      // If shape changed, update target positions and add rotation
+      // If shape changed, update target positions
       if (newShapeIndex !== currentMorphShape) {
         currentMorphShape = newShapeIndex;
-        morphCount++; // Track total morphs
-        lastMorphTime = time; // Record when this morph started
+        morphCount++;
+        lastMorphTime = time;
 
-        // Enable fillers after 4 morphs
-        if (morphCount >= 4 && !fillersAllowed) {
-          fillersAllowed = true;
+        // Hide shield warning after 3 morphs (enemies now vulnerable)
+        if (morphCount === 3) {
+          document.getElementById("warningDisplay").style.display = "none";
+        }
+
+        // Spawn barrier after first collapse (morphCount 1 = collapsed state)
+        if (morphCount === 1 && !barrierSpawned) {
+          var levelData = LEVEL_WAVES[level];
+          var waveData = levelData.waves[currentWave - 1];
+          if (waveData.barrier) {
+            spawnBarrier(waveData.barrier, waveData.barrierCount || 5);
+          }
         }
 
         var shapeName = waveShapes[newShapeIndex];
@@ -1197,14 +1320,9 @@
         var count = formationEnemies[0].formationCount;
         var newPositions = shapeFunc(count);
 
-        // Add rotation for visual interest (rotate 15-30 degrees on each morph)
-        targetFormationRotation += (Math.PI / 12) + Math.random() * (Math.PI / 12);
-
-        // Store starting positions and update targets for smooth easing
-        // Also trigger kamikazes if it's their time
+        // Store starting positions and update targets
         formationEnemies.forEach(function(enemy, idx) {
           if (newPositions[idx]) {
-            // Save current position as start for easing
             enemy.startPos = { x: enemy.currentPos.x, y: enemy.currentPos.y };
             enemy.targetPos = { x: newPositions[idx].x, y: newPositions[idx].y };
           }
@@ -1212,10 +1330,10 @@
           // Trigger kamikaze if it's their morph count
           if (enemy.isKamikaze && !enemy.kamikazeTriggered && morphCount >= enemy.kamikazeTriggerMorph) {
             enemy.kamikazeTriggered = true;
-            enemy.formation = false; // Leave formation
-            enemy.kamikaze = true; // Start kamikaze dive
-            enemy.kamikazeSpeed = 4 + Math.random() * 2; // Variable dive speed
-            // Calculate angle toward player
+            enemy.formation = false;
+            enemy.kamikaze = true;
+            enemy.shielded = false; // Kamikazes lose shield when breaking off
+            enemy.kamikazeSpeed = 4 + Math.random() * 2;
             var dx = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
             var dy = player.y + player.height / 2 - (enemy.y + enemy.height / 2);
             var dist = Math.sqrt(dx * dx + dy * dy);
@@ -1225,46 +1343,32 @@
         });
       }
 
-      // Calculate eased progress through current morph (use 60% of interval for transition)
-      var morphDuration = morphInterval * 0.6; // Take 60% of the time to morph, rest is hold
+      // Calculate eased progress (use 70% of interval for transition, hold for rest)
+      var morphDuration = morphInterval * 0.7;
       var timeSinceMorph = time - lastMorphTime;
       var morphProgress = Math.min(timeSinceMorph / morphDuration, 1);
       var easedProgress = easeInOutCubic(morphProgress);
 
-      // Smoothly rotate formation toward target rotation with easing
-      var rotationProgress = Math.min(timeSinceMorph / (morphDuration * 0.8), 1);
-      var easedRotation = easeInOutCubic(rotationProgress);
-      var targetRotationDelta = targetFormationRotation - formationRotation;
-      // Only apply eased rotation during active morph
-      if (rotationProgress < 1) {
-        formationRotation += targetRotationDelta * 0.03;
-      }
-
       formationEnemies.forEach(function(enemy) {
         if (!enemy.reachedTarget) return;
 
-        // Use eased interpolation for smooth, natural movement
+        // Smooth interpolation between positions
         if (enemy.startPos) {
           enemy.currentPos.x = enemy.startPos.x + (enemy.targetPos.x - enemy.startPos.x) * easedProgress;
           enemy.currentPos.y = enemy.startPos.y + (enemy.targetPos.y - enemy.startPos.y) * easedProgress;
         } else {
-          // Fallback for first frame
           enemy.currentPos.x = enemy.targetPos.x;
           enemy.currentPos.y = enemy.targetPos.y;
         }
 
-        // Apply formation rotation to the position
-        var rotatedX = enemy.currentPos.x * Math.cos(formationRotation) - enemy.currentPos.y * Math.sin(formationRotation);
-        var rotatedY = enemy.currentPos.x * Math.sin(formationRotation) + enemy.currentPos.y * Math.cos(formationRotation);
-
-        // Calculate actual position with larger vertical spread
-        var baseX = enemy.centerX + rotatedX * enemy.spreadRadius;
-        var baseY = enemy.centerY + rotatedY * enemy.spreadRadius * 0.7;
+        // Calculate actual position (no rotation - clean dance)
+        var baseX = enemy.centerX + enemy.currentPos.x * enemy.spreadRadius;
+        var baseY = enemy.centerY + enemy.currentPos.y * enemy.spreadRadius * 0.8;
 
         enemy.x = baseX - enemy.width / 2;
         enemy.y = baseY - enemy.height / 2;
 
-        // Keep in bounds with padding
+        // Keep in bounds
         if (enemy.x < 20) enemy.x = 20;
         if (enemy.x > canvas.width - enemy.width - 20) enemy.x = canvas.width - enemy.width - 20;
         if (enemy.y < 30) enemy.y = 30;
@@ -1272,118 +1376,244 @@
       });
     }
 
-    function spawnFillerEnemy() {
-      // Only spawn fillers after 4 morphs to let player enjoy formations
-      if (!fillersAllowed) return;
+    // Shield cascade system - shields drop 2 at a time, then regenerate
+    function updateShieldCascade() {
+      var formationEnemies = enemies.filter(function(e) {
+        return e.formation && e.formationType === 'morphing';
+      });
+      if (formationEnemies.length === 0) return;
 
-      if (Date.now() - lastFillerTime < fillerCooldown) return;
-      if (Math.random() > 0.25) return; // 25% chance each frame when cooldown is up
+      var now = Date.now();
 
-      lastFillerTime = Date.now();
-
-      // Use the same enemy type as the current level's formation
-      var levelData = LEVEL_WAVES[level];
-      var enemyType = levelData ? levelData.enemyType : getEnemyType();
-      var width = 50;
-      var height = 50;
-
-      if (enemyType === 'enemy2_red') {
-        width = 35;
-        height = 35;
+      // Start cascade after 3 morphs
+      if (morphCount >= 3 && !shieldCascadeStarted) {
+        shieldCascadeStarted = true;
+        shieldCascadeTime = now;
+        shieldsDropped = 0;
+        allShieldsDown = false;
       }
 
-      // Check if formations are active - if so, only spawn from sides/corners
-      var hasFormation = enemies.some(function(e) { return e.formation; });
+      if (!shieldCascadeStarted) return;
 
-      var enemy;
-      if (hasFormation) {
-        // Spawn from sides or corners only (avoid center where formations are)
-        var spawnType = Math.random();
+      // If all shields are down, check for regeneration
+      if (allShieldsDown) {
+        if (now - shieldRegenTime >= 5000) {
+          // Regenerate all shields
+          formationEnemies.forEach(function(e) {
+            e.shielded = true;
+          });
+          // Reset cascade
+          shieldCascadeStarted = true;
+          shieldCascadeTime = now;
+          shieldsDropped = 0;
+          allShieldsDown = false;
+          // Show brief warning for shield regen
+          var warningEl = document.getElementById("warningDisplay");
+          warningEl.style.display = "block";
+          setTimeout(function() {
+            warningEl.style.display = "none";
+          }, 1500);
+        }
+        return;
+      }
 
-        if (spawnType < 0.5) {
-          // Side entry (left or right) - upper half only, away from player
-          var fromLeft = Math.random() < 0.5;
-          enemy = {
-            x: fromLeft ? -width : canvas.width,
-            y: 100 + Math.random() * 150, // Upper half (100-250), halfway down canvas max
+      // Drop shields every 2 seconds (2 enemies at a time)
+      var timeSinceCascadeStart = now - shieldCascadeTime;
+      var shouldHaveDropped = Math.floor(timeSinceCascadeStart / 2000) * 2;
+
+      if (shouldHaveDropped > shieldsDropped) {
+        // Find shielded enemies sorted by shieldOrder
+        var shieldedEnemies = formationEnemies
+          .filter(function(e) { return e.shielded; })
+          .sort(function(a, b) { return a.shieldOrder - b.shieldOrder; });
+
+        // Drop shields from next 2 enemies
+        var toDrop = Math.min(2, shieldedEnemies.length);
+        for (var i = 0; i < toDrop; i++) {
+          shieldedEnemies[i].shielded = false;
+        }
+        shieldsDropped += toDrop;
+
+        // Check if all shields are now down
+        var remainingShielded = formationEnemies.filter(function(e) { return e.shielded; });
+        if (remainingShielded.length === 0) {
+          allShieldsDown = true;
+          shieldRegenTime = now;
+        }
+      }
+    }
+
+    // Spawn barrier reinforcements (4-8 enemies forming a protective barrier)
+    // Barriers stay between player and formation, no further than halfway down screen
+    function spawnBarrier(barrierType, count) {
+      if (barrierSpawned) return;
+      barrierSpawned = true;
+
+      var levelData = LEVEL_WAVES[level];
+      var enemyType = levelData ? levelData.enemyType : 'enemy1';
+      var width = 50;
+      var height = 50;
+      if (enemyType === 'enemy2_red') { width = 35; height = 35; }
+
+      var centerX = canvas.width / 2;
+      var barrierY = canvas.height * 0.45; // Halfway down screen max
+
+      if (barrierType === 'circle' || barrierType === 'orbitingShield') {
+        // Circle/orbiting barrier around formation
+        var radius = 180;
+        var orbitSpeed = barrierType === 'orbitingShield' ? 0.015 : 0.01;
+        for (var i = 0; i < count; i++) {
+          var angle = (i / count) * Math.PI * 2;
+          var enemy = {
+            x: centerX + Math.cos(angle) * radius - width/2,
+            y: 160 + Math.sin(angle) * radius * 0.6 - height/2,
             width: width,
             height: height,
             baseWidth: width,
             baseHeight: height,
             speed: 0,
-            horizontalSpeed: CONFIG.enemyBaseSpeed + 0.8,
-            horizontalDirection: fromLeft ? 1 : -1,
             type: enemyType,
             formation: false,
-            filler: true,
-            sideEntry: true,
-            breathPhase: Math.random()
+            barrier: true,
+            barrierType: 'orbit',
+            orbitAngle: angle,
+            orbitRadius: radius,
+            orbitSpeed: orbitSpeed,
+            orbitCenterX: centerX,
+            orbitCenterY: 160,
+            breathPhase: i * 0.3
           };
-        } else {
-          // Corner entry (top-left or top-right corners)
-          var fromLeftCorner = Math.random() < 0.5;
-          enemy = {
-            x: fromLeftCorner ? Math.random() * 100 : canvas.width - 100 - width + Math.random() * 100,
-            y: -height,
+          enemies.push(enemy);
+          barrierEnemies.push(enemy);
+        }
+      } else if (barrierType === 'horizontalLine') {
+        // Horizontal line that moves side to side
+        var lineWidth = (count - 1) * 70;
+        var startX = centerX - lineWidth / 2;
+        for (var i = 0; i < count; i++) {
+          var enemy = {
+            x: startX + i * 70 - width/2,
+            y: -height, // Enter from top
+            targetY: barrierY,
             width: width,
             height: height,
             baseWidth: width,
             baseHeight: height,
-            speed: CONFIG.enemyBaseSpeed + 0.5,
+            speed: 2.5,
             type: enemyType,
             formation: false,
-            filler: true,
-            breathPhase: Math.random()
+            barrier: true,
+            barrierType: 'horizontalLine',
+            lineIndex: i,
+            lineDirection: 1,
+            lineSpeed: 1.5,
+            breathPhase: i * 0.2
           };
-
-          // Add movement behaviors
-          if (CONFIG.zigzagEnemies.indexOf(enemyType) !== -1) {
-            enemy.zigzag = true;
-            enemy.zigzagDirection = fromLeftCorner ? 1 : -1;
-            enemy.zigzagSpeed = 2;
-            enemy.zigzagTimer = 0;
-            enemy.zigzagInterval = 30;
-          }
-          if (CONFIG.sideToSideEnemies.indexOf(enemyType) !== -1) {
-            enemy.sideToSide = true;
-            enemy.horizontalDirection = fromLeftCorner ? 1 : -1;
-            enemy.horizontalSpeed = 2;
-          }
+          enemies.push(enemy);
+          barrierEnemies.push(enemy);
         }
-      } else {
-        // No formation - can spawn anywhere from top
-        enemy = {
-          x: Math.random() * (canvas.width - width),
-          y: -height,
-          width: width,
-          height: height,
-          baseWidth: width,
-          baseHeight: height,
-          speed: CONFIG.enemyBaseSpeed + Math.random() * 0.5,
-          type: enemyType,
-          formation: false,
-          filler: true,
-          breathPhase: Math.random()
-        };
-
-        // Add zigzag for appropriate enemies
-        if (CONFIG.zigzagEnemies.indexOf(enemyType) !== -1) {
-          enemy.zigzag = true;
-          enemy.zigzagDirection = Math.random() < 0.5 ? 1 : -1;
-          enemy.zigzagSpeed = 2;
-          enemy.zigzagTimer = 0;
-          enemy.zigzagInterval = 30;
+      } else if (barrierType === 'arrow') {
+        // Arrow/V formation entering from top
+        var spacing = 55;
+        var half = Math.floor(count / 2);
+        for (var i = 0; i < count; i++) {
+          var xOffset, yOffset;
+          if (i === 0) {
+            xOffset = 0; yOffset = 0; // Tip
+          } else if (i <= half) {
+            xOffset = -spacing * i;
+            yOffset = -spacing * i * 0.6;
+          } else {
+            xOffset = spacing * (i - half);
+            yOffset = -spacing * (i - half) * 0.6;
+          }
+          var enemy = {
+            x: centerX + xOffset - width/2,
+            y: -height - Math.abs(yOffset), // Stagger entry
+            targetY: barrierY + yOffset,
+            width: width,
+            height: height,
+            baseWidth: width,
+            baseHeight: height,
+            speed: 2.0,
+            type: enemyType,
+            formation: false,
+            barrier: true,
+            barrierType: 'arrow',
+            arrowOffset: xOffset,
+            breathPhase: i * 0.25
+          };
+          enemies.push(enemy);
+          barrierEnemies.push(enemy);
         }
-
-        // Add side-to-side for enemy2_red
-        if (CONFIG.sideToSideEnemies.indexOf(enemyType) !== -1) {
-          enemy.sideToSide = true;
-          enemy.horizontalDirection = Math.random() < 0.5 ? 1 : -1;
-          enemy.horizontalSpeed = 2;
+      } else if (barrierType === 'dualLines') {
+        // Two horizontal lines
+        var lineCount = Math.floor(count / 2);
+        var lineWidth = (lineCount - 1) * 70;
+        var startX = centerX - lineWidth / 2;
+        for (var line = 0; line < 2; line++) {
+          var lineY = barrierY - 40 + line * 80;
+          for (var i = 0; i < lineCount; i++) {
+            if (enemies.filter(function(e) { return e.barrier; }).length >= count) break;
+            var enemy = {
+              x: startX + i * 70 - width/2,
+              y: -height - line * 50,
+              targetY: lineY,
+              width: width,
+              height: height,
+              baseWidth: width,
+              baseHeight: height,
+              speed: 2.5,
+              type: enemyType,
+              formation: false,
+              barrier: true,
+              barrierType: 'horizontalLine',
+              lineIndex: i,
+              lineDirection: line === 0 ? 1 : -1,
+              lineSpeed: 1.2,
+              breathPhase: (line * lineCount + i) * 0.15
+            };
+            enemies.push(enemy);
+            barrierEnemies.push(enemy);
+          }
         }
       }
+    }
 
-      enemies.push(enemy);
+    // Update barrier enemy positions
+    function updateBarriers() {
+      enemies.forEach(function(enemy) {
+        if (!enemy.barrier) return;
+
+        if (enemy.barrierType === 'orbit') {
+          // Orbit around formation center
+          enemy.orbitAngle += enemy.orbitSpeed;
+          enemy.x = enemy.orbitCenterX + Math.cos(enemy.orbitAngle) * enemy.orbitRadius - enemy.width/2;
+          enemy.y = enemy.orbitCenterY + Math.sin(enemy.orbitAngle) * enemy.orbitRadius * 0.6 - enemy.height/2;
+        } else if (enemy.barrierType === 'horizontalLine') {
+          // Move down to target then oscillate side to side
+          if (enemy.y < enemy.targetY) {
+            enemy.y += enemy.speed;
+          } else {
+            enemy.y = enemy.targetY;
+            enemy.x += enemy.lineDirection * enemy.lineSpeed;
+            // Bounce off screen edges
+            if (enemy.x < 30 || enemy.x > canvas.width - enemy.width - 30) {
+              enemy.lineDirection *= -1;
+            }
+          }
+        } else if (enemy.barrierType === 'arrow') {
+          // Move down to target position
+          if (enemy.y < enemy.targetY) {
+            enemy.y += enemy.speed;
+          }
+        }
+
+        // Keep barriers in upper half of screen
+        if (enemy.y > canvas.height * 0.5) {
+          enemy.y = canvas.height * 0.5;
+        }
+      });
     }
 
     function checkWaveCompletion() {
@@ -1446,6 +1676,7 @@
       level = nextLevel;
       currentWave = 0;
       powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+      lastPowerupSpawnTime = 0; // Reset power-up cooldown for new level
       updateUI();
       showAnnouncement("levelDisplay", "Level " + level, 2000);
 
@@ -1622,15 +1853,21 @@
       var drawX = cx - drawWidth / 2;
       var drawY = cy - drawHeight / 2;
 
+      // Check if enemy is shielded (formation enemy before 3 morphs)
+      var isShielded = enemy.shielded === true;
+
       // Draw ripple effect for all enemies at 123 BPM
       var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
-      var maxRipple = enemy.width * 1.0;
+      var maxRipple = enemy.width * (isShielded ? 1.4 : 1.0); // Larger ripple when shielded
       var rippleRadius = beatPhase * maxRipple;
       var rippleAlpha = 1 - beatPhase;
 
-      // Different colors based on enemy type
+      // Different colors based on enemy type (golden shield color when protected)
       var rippleColor;
-      if (enemy.type.indexOf('_red') !== -1) {
+      if (isShielded) {
+        // Golden/yellow shield ripple - more visible
+        rippleColor = 'rgba(255, 215, 0, ' + (rippleAlpha * 0.7) + ')';
+      } else if (enemy.type.indexOf('_red') !== -1) {
         rippleColor = 'rgba(255, 80, 80, ' + (rippleAlpha * 0.4) + ')';
       } else if (enemy.type === 'enemy1') {
         rippleColor = 'rgba(100, 255, 100, ' + (rippleAlpha * 0.4) + ')';
@@ -1646,8 +1883,18 @@
       ctx.beginPath();
       ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
       ctx.strokeStyle = rippleColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = isShielded ? 5 : 2; // Thicker line when shielded
       ctx.stroke();
+
+      // Draw second inner ripple for shielded enemies
+      if (isShielded) {
+        var innerRippleRadius = rippleRadius * 0.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerRippleRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (rippleAlpha * 0.5) + ')';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
       ctx.restore();
 
       // Draw enemy
@@ -1678,6 +1925,7 @@
       showAnnouncement("levelDisplay", "BOSS!", 2000);
       startBossMusic();
 
+      var isRedBoss = (currentBoss === 2);
       boss = {
         x: canvas.width / 2 - 75,
         y: -150,
@@ -1689,7 +1937,13 @@
         direction: 1,
         verticalDirection: 1, // For red boss vertical movement
         entering: true,
-        isRedBoss: (currentBoss === 2) // Track which boss type
+        isRedBoss: isRedBoss,
+        // Boss shield system
+        shielded: true, // Start with shield
+        shieldStartTime: Date.now(),
+        shieldDuration: 5000, // 5 seconds on
+        shieldCooldown: 5000, // 5 seconds off (only for red boss)
+        shieldCycling: isRedBoss // Only red boss cycles shields
       };
     }
 
@@ -1996,6 +2250,25 @@
     function updateBoss() {
       if (!boss) return;
 
+      // Update boss shield
+      var now = Date.now();
+      var timeSinceShieldStart = now - boss.shieldStartTime;
+
+      if (boss.shielded) {
+        // Check if shield duration expired
+        if (timeSinceShieldStart >= boss.shieldDuration) {
+          boss.shielded = false;
+          boss.shieldStartTime = now; // Reset timer for cooldown
+        }
+      } else if (boss.shieldCycling) {
+        // Red boss: check if cooldown expired to regenerate shield
+        if (timeSinceShieldStart >= boss.shieldCooldown) {
+          boss.shielded = true;
+          boss.shieldStartTime = now;
+        }
+      }
+      // Green boss: once shield is down, it stays down (shieldCycling = false)
+
       // Update boss blink effect
       updateBossBlink();
 
@@ -2070,6 +2343,24 @@
       ctx.strokeStyle = bossRippleColor2;
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      // Draw golden shield ripple when boss is shielded
+      if (boss.shielded) {
+        var shieldRippleRadius = beatPhase * maxBossRipple * 1.3;
+        ctx.beginPath();
+        ctx.arc(bossCx, bossCy, shieldRippleRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 215, 0, ' + (bossRippleAlpha * 0.7) + ')';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+
+        // Inner shield ripple
+        var innerShieldRadius = shieldRippleRadius * 0.6;
+        ctx.beginPath();
+        ctx.arc(bossCx, bossCy, innerShieldRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (bossRippleAlpha * 0.5) + ')';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
       ctx.restore();
 
       // Draw boss (only if visible during blink)
@@ -2088,6 +2379,12 @@
 
     function damageBoss() {
       if (!boss) return;
+
+      // Check if boss is shielded
+      if (boss.shielded) {
+        return; // No damage when shielded
+      }
+
       boss.health--;
 
       // Start boss blinking effect
@@ -2131,6 +2428,7 @@
             waveInProgress = false;
             waveCooldown = false;
             powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+            lastPowerupSpawnTime = 0;
             updateUI();
             showAnnouncement("levelDisplay", "Level 5", 2000);
           }, 3000);
@@ -2140,7 +2438,11 @@
           bossDefeated = true;
           score += 100;
           updateUI();
-          showVictory();
+          // Show victory announcement, then thank you screen
+          showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
+          setTimeout(function() {
+            showVictory();
+          }, 3500);
         }
       }
     }
@@ -2159,7 +2461,7 @@
     function showVictory() {
       gameOver = true;
       stopBossMusic();
-      stopBackgroundMusic();
+      // Keep background music playing - don't stop it
 
       // Clear all game objects from screen
       enemies = [];
@@ -2191,12 +2493,33 @@
       html += "Please submit your email to subscribe and download our music:<br>";
       html += "<input type='email' id='emailInput' placeholder='your@email.com' style='padding: 6px; font-size: 14px; width: 180px; border-radius: 4px; border: none; margin-top: 5px;'>";
       html += "<button onclick='submitEmail()' style='padding: 6px 12px; font-size: 14px; margin-left: 5px; border-radius: 4px; border: none; background: #FFD700; cursor: pointer;'>Submit</button>";
+      html += "<br><br>";
+      html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
       html += "<br><br>&copy; 2026";
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
+      document.getElementById("startButton").style.display = "none";
+    }
+
+    function returnToHomeScreen() {
+      // Stop the in-game music
+      stopBackgroundMusic();
+
+      // Hide victory/game over screens
+      document.getElementById("victory").style.display = "none";
+      document.getElementById("gameOver").style.display = "none";
+
+      // Show start button
+      document.getElementById("startButton").style.display = "block";
       document.getElementById("startButton").innerText = "Start Game";
-      startCreditsMusic();
+
+      // Reset game state
+      gameOver = true;
+      paused = false;
+
+      // Clear the canvas and show a blank screen
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     // ============================================
@@ -2291,7 +2614,7 @@
         gameOver = true;
         playSound('playerDead');
         stopBossMusic();
-        stopBackgroundMusic();
+        // Keep background music playing - don't stop it
 
         // Check if top 10 score and save
         var madeTopTen = isTopTenScore(score);
@@ -2306,9 +2629,11 @@
         if (madeTopTen) {
           html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
         }
+        html += "<br><br>";
+        html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
-        document.getElementById("startButton").innerText = "Start Game";
+        document.getElementById("startButton").style.display = "none";
       } else {
         playSound('playerHit');
       }
@@ -2439,14 +2764,24 @@
 
         // Check collision with enemies
         for (var j = enemies.length - 1; j >= 0; j--) {
-          if (isColliding(bullet, enemies[j])) {
-            playerBullets.splice(i, 1);
-            enemies.splice(j, 1);
-            score += 10;
-            updateUI();
-            playSound('enemyDead');
-            checkLevelUp();
-            break;
+          var enemy = enemies[j];
+          if (isColliding(bullet, enemy)) {
+            // Check if enemy is shielded
+            if (enemy.shielded) {
+              // Bullet stops at shield - destroy bullet but enemy survives
+              playerBullets.splice(i, 1);
+              // Optional: play shield hit sound here later
+              break;
+            } else {
+              // No shield - destroy both bullet and enemy
+              playerBullets.splice(i, 1);
+              enemies.splice(j, 1);
+              score += 10;
+              updateUI();
+              playSound('enemyDead');
+              checkLevelUp();
+              break;
+            }
           }
         }
       }
@@ -2613,26 +2948,50 @@
 
         // Update morphing formations
         if (waveInProgress) {
+          // Move formation center smoothly as a unit
+          if (!formationEntered) {
+            formationCurrentCenterY += formationEntrySpeed;
+            if (formationCurrentCenterY >= formationTargetCenterY) {
+              formationCurrentCenterY = formationTargetCenterY;
+              formationEntered = true;
+              // Show shield warning (brief after level 1 - players already know)
+              var warningEl = document.getElementById("warningDisplay");
+              warningEl.style.display = "block";
+              if (level > 1) {
+                // Brief 2-second warning for experienced players
+                setTimeout(function() {
+                  warningEl.style.display = "none";
+                }, 2000);
+              }
+              // Mark all formation enemies as reached
+              enemies.forEach(function(e) {
+                if (e.formation && e.formationType === 'morphing') {
+                  e.reachedTarget = true;
+                  e.centerY = formationCurrentCenterY;
+                }
+              });
+            }
+          }
           updateMorphingFormation(time);
+          updateShieldCascade();
         }
 
-        // Spawn filler enemies for variety (between waves or during)
-        spawnFillerEnemy();
+        // Update barrier reinforcements
+        updateBarriers();
 
         for (var i = enemies.length - 1; i >= 0; i--) {
           var enemy = enemies[i];
 
           drawEnemy(enemy);
 
-          // Formation enemies (morphing type handled by updateMorphingFormation)
+          // Formation enemies - position relative to formation center
           if (enemy.formation) {
-            // Move down until reaching target
-            if (!enemy.reachedTarget) {
-              enemy.y += enemy.speed;
-              if (enemy.y >= enemy.targetY) {
-                enemy.y = enemy.targetY;
-                enemy.reachedTarget = true;
-              }
+            // During entry, update position based on moving formation center
+            if (!formationEntered && enemy.formationType === 'morphing') {
+              var baseX = enemy.centerX + enemy.currentPos.x * enemy.spreadRadius;
+              var baseY = formationCurrentCenterY + enemy.currentPos.y * enemy.spreadRadius * 0.8;
+              enemy.x = baseX - enemy.width / 2;
+              enemy.y = baseY - enemy.height / 2;
             }
 
             // Legacy formation types (spiral, pincer, sineWave) for variety
@@ -2742,14 +3101,19 @@
             continue;
           }
 
-          // Remove filler enemies if off screen (formations stay)
+          // Remove non-formation enemies (barriers, kamikazes) if off screen
           if (!enemy.formation && enemy.y > canvas.height) {
             enemies.splice(i, 1);
             continue;
           }
 
           // Enemy shooting (level 2+)
-          if (level >= 2 && enemy.reachedTarget !== false) {
+          // Shielded enemies don't shoot
+          var canShoot = level >= 2 && enemy.reachedTarget !== false;
+          if (enemy.shielded) {
+            canShoot = false;
+          }
+          if (canShoot) {
             var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
             if (Math.random() < shootChance) {
               shootEnemyBullet(enemy);
@@ -2786,6 +3150,7 @@
         hasShield = false;
         shieldHitsRemaining = 0;
         powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+        lastPowerupSpawnTime = 0;
         playerBlinking = false;
         playerVisible = true;
         bossActive = false;
@@ -2809,12 +3174,19 @@
         lastWaveEndTime = 0;
         morphStartTime = 0;
         currentMorphShape = 0;
-        lastFillerTime = 0;
         formationRotation = 0;
         targetFormationRotation = 0;
         lastMorphTime = 0;
         morphCount = 0;
-        fillersAllowed = false;
+        barrierSpawned = false;
+        barrierEnemies = [];
+        formationEntered = false;
+        formationCurrentCenterY = -100;
+        shieldCascadeStarted = false;
+        shieldCascadeTime = 0;
+        shieldsDropped = 0;
+        allShieldsDown = false;
+        shieldRegenTime = 0;
 
         player.x = canvas.width / 2;
         enemies = [];
@@ -2832,6 +3204,7 @@
         document.getElementById("levelDisplay").style.display = "none";
         document.getElementById("powerupDisplay").style.display = "none";
         document.getElementById("bonusDisplay").style.display = "none";
+        document.getElementById("warningDisplay").style.display = "none";
         document.getElementById("pauseDisplay").style.display = "none";
         document.getElementById("gameOver").style.display = "none";
         document.getElementById("victory").style.display = "none";
