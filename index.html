@@ -14,21 +14,33 @@
       font-family: Arial, sans-serif;
     }
 
+    /* Desktop: fixed 800px canvas centered on page */
     #container {
       position: relative;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
+      width: 800px;
+      margin: 0 auto;
     }
 
     canvas {
-      position: absolute;
       display: block;
-      background-color: rgb(0, 0, 0);
+      background-color: #000;
       touch-action: none;
     }
 
+    /* Mobile: canvas absolutely positioned and scaled to fit screen */
     @media (max-width: 820px) {
+      #container {
+        position: fixed;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        top: 0;
+        left: 0;
+        overflow: hidden;
+      }
+      canvas {
+        position: absolute;
+      }
       #score, #levelIndicator, #health {
         font-size: 14px;
       }
@@ -3203,17 +3215,24 @@
     // MOBILE CANVAS SCALING
     // ============================================
     function resizeCanvas() {
+      var isMob = ('ontouchstart' in window) || window.innerWidth <= 820;
+      if (!isMob) {
+        // Desktop: restore natural canvas size, no positioning needed
+        canvas.style.width  = '';
+        canvas.style.height = '';
+        canvas.style.left   = '';
+        canvas.style.top    = '';
+        return;
+      }
       var vw = window.innerWidth;
       var vh = window.innerHeight;
-      var isMob = ('ontouchstart' in window) || vw <= 820;
-      var scale = isMob ? Math.min(vw / canvas.width, vh / canvas.height) : 1;
+      var scale = Math.min(vw / canvas.width, vh / canvas.height);
       var displayW = Math.round(canvas.width * scale);
       var displayH = Math.round(canvas.height * scale);
       canvas.style.width  = displayW + 'px';
       canvas.style.height = displayH + 'px';
-      canvas.style.transform = '';
-      canvas.style.left = Math.round((vw - displayW) / 2) + 'px';
-      canvas.style.top  = Math.round((vh - displayH) / 2) + 'px';
+      canvas.style.left   = Math.round((vw - displayW) / 2) + 'px';
+      canvas.style.top    = Math.round((vh - displayH) / 2) + 'px';
     }
 
     resizeCanvas();
