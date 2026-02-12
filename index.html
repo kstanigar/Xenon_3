@@ -30,14 +30,45 @@
       body {
         overflow: hidden;
         background: #000;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
       }
       #container {
+        position: relative;
         width: 100vw;
         height: 100vh;
         overflow: hidden;
         margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
       }
-      /* UI overlays stay readable on mobile */
+      canvas {
+        flex-shrink: 0;
+      }
+      /* Start button: big and centered before game starts */
+      #startButton {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 22px;
+        padding: 16px 40px;
+        z-index: 10;
+      }
+      #startButton.game-active {
+        top: 12px;
+        left: 12px;
+        transform: none;
+        font-size: 18px;
+        padding: 12px 24px;
+      }
+      /* UI overlays readable on mobile */
       #score, #levelIndicator, #health {
         font-size: 14px;
       }
@@ -499,10 +530,10 @@
     var touchTargetX = 0;           // canvas-space x the player should follow
     var touchShootActive = false;   // currently in shoot window
     var touchShootCycleStart = 0;   // when the current cycle began
-    var TOUCH_SHOOT_DURATION = 5000;  // 5 seconds shooting
-    var TOUCH_SHOOT_COOLDOWN = 1500;  // 1.5 seconds cooldown
+    var TOUCH_SHOOT_DURATION = 1800;  // 1.8 seconds shooting
+    var TOUCH_SHOOT_COOLDOWN = 400;   // 0.4 second reload
     var touchLastShot = 0;
-    var TOUCH_SHOOT_INTERVAL = 150;   // fire every 150ms while active
+    var TOUCH_SHOOT_INTERVAL = 130;   // fire every 130ms while active
 
     // Power-up state
     var hasDoubleLaser = false;
@@ -3150,24 +3181,15 @@
       var isMobile = ('ontouchstart' in window) || window.innerWidth <= 820;
       if (!isMobile) {
         canvas.style.transform = '';
-        canvas.style.position = '';
-        canvas.style.left = '';
-        canvas.style.top = '';
+        canvas.style.transformOrigin = '';
         return;
       }
       var vw = window.innerWidth;
       var vh = window.innerHeight;
-      // Cover: fill entire viewport, center canvas, slight edge clipping if aspect differs
+      // Cover: fill entire viewport (slight horizontal clipping on portrait is acceptable)
       var scale = Math.max(vw / canvas.width, vh / canvas.height);
-      var scaledW = canvas.width * scale;
-      var scaledH = canvas.height * scale;
-      var offsetX = (vw - scaledW) / 2;
-      var offsetY = (vh - scaledH) / 2;
-      canvas.style.transformOrigin = '0 0';
+      canvas.style.transformOrigin = 'center center';
       canvas.style.transform = 'scale(' + scale + ')';
-      canvas.style.position = 'absolute';
-      canvas.style.left = offsetX + 'px';
-      canvas.style.top = offsetY + 'px';
     }
 
     resizeCanvas();
@@ -3292,6 +3314,21 @@
         ctx.beginPath();
         ctx.arc(playerCx, playerCy, shieldRippleRadius2, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha2 * 0.4) + ')';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw joystick circle behind player on mobile
+      if (('ontouchstart' in window) || window.innerWidth <= 820) {
+        var jx = player.x + player.width / 2;
+        var jy = player.y + player.height / 2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(jx, jy, 56, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(220, 220, 220, 0.18)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
@@ -3815,8 +3852,9 @@
         document.getElementById("victory").style.display = "none";
         paused = false;
 
-        // Change button to Pause
+        // Change button to Pause and move to corner on mobile
         startButton.innerText = "Pause";
+        startButton.classList.add('game-active');
 
         showAnnouncement("levelDisplay", "Level 1", 2000);
         startBackgroundMusic();
