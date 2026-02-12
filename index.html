@@ -654,11 +654,22 @@
       var width = 40;
       var height = 40;
 
+      // On mobile with cover scaling, clamp spawn x to the visible canvas strip
+      var spawnMinX = 0;
+      var spawnMaxX = canvas.width - width;
+      var isMob = ('ontouchstart' in window) || window.innerWidth <= 820;
+      if (isMob) {
+        var scale = Math.max(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
+        var visibleHalf = (window.innerWidth / scale) / 2;
+        spawnMinX = Math.max(0, canvas.width / 2 - visibleHalf);
+        spawnMaxX = Math.min(canvas.width - width, canvas.width / 2 + visibleHalf - width);
+      }
+
       // Find a non-overlapping spawn position (try up to 10 times)
       var x, y = 0;
       var attempts = 0;
       do {
-        x = Math.random() * (canvas.width - width);
+        x = spawnMinX + Math.random() * (spawnMaxX - spawnMinX);
         attempts++;
       } while (isOverlappingEnemy(x, y, width, height) && attempts < 10);
 
@@ -2942,9 +2953,11 @@
       document.getElementById("victory").style.display = "none";
       document.getElementById("gameOver").style.display = "none";
 
-      // Show start button
-      document.getElementById("startButton").style.display = "block";
-      document.getElementById("startButton").innerText = "Start Game";
+      // Show start button (reset to centered state on mobile)
+      var sb = document.getElementById("startButton");
+      sb.style.display = "block";
+      sb.innerText = "Start Game";
+      sb.classList.remove('game-active');
 
       // Reset game state
       gameOver = true;
@@ -3325,13 +3338,13 @@
       // Draw joystick base below player on mobile
       if (('ontouchstart' in window) || window.innerWidth <= 820) {
         var jx = player.x + player.width / 2;
-        var jRadius = 55;
+        var jRadius = 42;
         var jy = player.y + player.height + jRadius;
         ctx.save();
-        // Grey base circle
+        // Joystick base circle
         ctx.beginPath();
         ctx.arc(jx, jy, jRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(200, 200, 200, 0.45)';
+        ctx.fillStyle = 'rgba(80, 160, 255, 0.45)';
         ctx.fill();
         ctx.restore();
       }
