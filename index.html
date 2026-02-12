@@ -654,22 +654,11 @@
       var width = 40;
       var height = 40;
 
-      // On mobile with cover scaling, clamp spawn x to the visible canvas strip
-      var spawnMinX = 0;
-      var spawnMaxX = canvas.width - width;
-      var isMob = ('ontouchstart' in window) || window.innerWidth <= 820;
-      if (isMob) {
-        var scale = Math.max(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
-        var visibleHalf = (window.innerWidth / scale) / 2;
-        spawnMinX = Math.max(0, canvas.width / 2 - visibleHalf);
-        spawnMaxX = Math.min(canvas.width - width, canvas.width / 2 + visibleHalf - width);
-      }
-
       // Find a non-overlapping spawn position (try up to 10 times)
       var x, y = 0;
       var attempts = 0;
       do {
-        x = spawnMinX + Math.random() * (spawnMaxX - spawnMinX);
+        x = Math.random() * (canvas.width - width);
         attempts++;
       } while (isOverlappingEnemy(x, y, width, height) && attempts < 10);
 
@@ -3202,8 +3191,8 @@
       }
       var vw = window.innerWidth;
       var vh = window.innerHeight;
-      // Cover: fill entire viewport (slight horizontal clipping on portrait is acceptable)
-      var scale = Math.max(vw / canvas.width, vh / canvas.height);
+      // Contain: fit entire canvas on screen so nothing is clipped
+      var scale = Math.min(vw / canvas.width, vh / canvas.height);
       canvas.style.transformOrigin = 'center center';
       canvas.style.transform = 'scale(' + scale + ')';
     }
