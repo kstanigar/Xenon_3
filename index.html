@@ -485,9 +485,10 @@
     // ============================================
     // GAME STATE
     // ============================================
+    var isMobile = ('ontouchstart' in window) || window.innerWidth <= 820;
     var player = {
       x: canvas.width / 2,
-      y: canvas.height - 80,
+      y: isMobile ? canvas.height - 200 : canvas.height - 80,
       width: 75,
       height: 75
     };
@@ -3319,18 +3320,16 @@
         ctx.restore();
       }
 
-      // Draw joystick circle behind player on mobile
+      // Draw joystick base below player on mobile
       if (('ontouchstart' in window) || window.innerWidth <= 820) {
         var jx = player.x + player.width / 2;
-        var jy = player.y + player.height / 2;
+        var jRadius = 55;
+        var jy = player.y + player.height + jRadius;
         ctx.save();
         ctx.beginPath();
-        ctx.arc(jx, jy, 56, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(220, 220, 220, 0.18)';
+        ctx.arc(jx, jy, jRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(200, 200, 200, 0.45)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
         ctx.restore();
       }
 
@@ -3831,6 +3830,7 @@
         shieldRegenTime = 0;
 
         player.x = canvas.width / 2;
+        player.y = (('ontouchstart' in window) || window.innerWidth <= 820) ? canvas.height - 200 : canvas.height - 80;
         enemies = [];
         playerBullets = [];
         enemyBullets = [];
