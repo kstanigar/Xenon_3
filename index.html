@@ -23,6 +23,17 @@
       border: 1px solid black;
       display: block;
       background-color: rgb(0, 0, 0);
+      touch-action: none;
+    }
+
+    @media (max-width: 820px) {
+      #container {
+        width: 100vw;
+      }
+      canvas {
+        width: 100vw !important;
+        height: auto !important;
+      }
     }
 
     #startButton {
@@ -199,7 +210,7 @@
   <div id="container">
 
     <button id="startButton">Start Game</button>
-    <div id="intro">Use Left/Right Arrows and Spacebar to Shoot</div>
+    <div id="intro">Arrow Keys + Spacebar &nbsp;|&nbsp; Mobile: Touch &amp; Drag</div>
     <div id="score">Score: 0</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <div id="levelIndicator">Level: 1</div>
@@ -486,6 +497,16 @@
     }
     var rightPressed = false;
     var leftPressed = false;
+
+    // Mobile touch state
+    var touchActive = false;
+    var touchTargetX = 0;           // canvas-space x the player should follow
+    var touchShootActive = false;   // currently in shoot window
+    var touchShootCycleStart = 0;   // when the current cycle began
+    var TOUCH_SHOOT_DURATION = 5000;  // 5 seconds shooting
+    var TOUCH_SHOOT_COOLDOWN = 1500;  // 1.5 seconds cooldown
+    var touchLastShot = 0;
+    var TOUCH_SHOOT_INTERVAL = 150;   // fire every 150ms while active
 
     // Power-up state
     var hasDoubleLaser = false;
@@ -3127,6 +3148,81 @@
     });
 
     // ============================================
+    // TOUCH CONTROLS
+    // ============================================
+    function getTouchCanvasX(touch) {
+      var rect = canvas.getBoundingClientRect();
+      // Scale from CSS pixels to canvas pixels
+      var scaleX = canvas.width / rect.width;
+      return (touch.clientX - rect.left) * scaleX;
+    }
+
+    canvas.addEventListener("touchstart", function (e) {
+      e.preventDefault();
+      if (gameOver || paused) return;
+      var touch = e.touches[0];
+      touchActive = true;
+      touchTargetX = getTouchCanvasX(touch);
+      // Begin shoot cycle on first touch
+      touchShootCycleStart = Date.now();
+      touchShootActive = true;
+      touchLastShot = 0;
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", function (e) {
+      e.preventDefault();
+      if (!touchActive) return;
+      var touch = e.touches[0];
+      touchTargetX = getTouchCanvasX(touch);
+    }, { passive: false });
+
+    canvas.addEventListener("touchend", function (e) {
+      e.preventDefault();
+      if (e.touches.length === 0) {
+        touchActive = false;
+        touchShootActive = false;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchcancel", function (e) {
+      touchActive = false;
+      touchShootActive = false;
+    }, { passive: false });
+
+    function updateTouchControls() {
+      if (!touchActive) return;
+      var now = Date.now();
+
+      // Move player toward touch x (snap directly — finger IS the ship)
+      var targetCenterX = touchTargetX;
+      var playerCenterX = player.x + player.width / 2;
+      var diff = targetCenterX - playerCenterX;
+      // Move up to 10px/frame, but snap if very close
+      if (Math.abs(diff) > 10) {
+        player.x += (diff / Math.abs(diff)) * Math.min(Math.abs(diff), 10);
+      } else {
+        player.x += diff;
+      }
+      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+      // Shoot cycle: 5s on, 1.5s cooldown, repeat
+      var elapsed = now - touchShootCycleStart;
+      if (elapsed >= TOUCH_SHOOT_DURATION + TOUCH_SHOOT_COOLDOWN) {
+        // Start a new cycle
+        touchShootCycleStart = now;
+        elapsed = 0;
+        touchShootActive = true;
+      }
+      touchShootActive = elapsed < TOUCH_SHOOT_DURATION;
+
+      // Fire at interval during active window
+      if (touchShootActive && now - touchLastShot >= TOUCH_SHOOT_INTERVAL) {
+        shootBullet();
+        touchLastShot = now;
+      }
+    }
+
+    // ============================================
     // MAIN GAME LOOP
     // ============================================
     function draw() {
@@ -3179,10 +3275,15 @@
       if (playerVisible) {
         ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
       }
-      if (rightPressed && player.x < canvas.width - player.width) {
-        player.x += CONFIG.playerSpeed;
-      } else if (leftPressed && player.x > 0) {
-        player.x -= CONFIG.playerSpeed;
+      // Touch movement + auto-shoot cycle
+      updateTouchControls();
+      // Keyboard movement (only applies when touch is not active)
+      if (!touchActive) {
+        if (rightPressed && player.x < canvas.width - player.width) {
+          player.x += CONFIG.playerSpeed;
+        } else if (leftPressed && player.x > 0) {
+          player.x -= CONFIG.playerSpeed;
+        }
       }
 
       // Update player bullets
@@ -3622,6 +3723,8 @@
         lastPowerupSpawnTime = 0;
         playerBlinking = false;
         playerVisible = true;
+        touchActive = false;
+        touchShootActive = false;
         bossActive = false;
         bossDefeated = false;
         boss = null;
