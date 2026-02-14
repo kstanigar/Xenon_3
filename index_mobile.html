@@ -3,47 +3,44 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Top-Scrolling Flying Game - Responsive</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Top-Scrolling Flying Game - Mobile</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
       padding: 0;
       overflow: hidden;
       background: #000;
       font-family: Arial, sans-serif;
-      touch-action: none;
-    }
-
-    #container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      background: #000;
+      width: 100vw;
+      height: 100vh;
     }
 
-    #gameWrapper {
+    #container {
       position: relative;
-      display: inline-block;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
     canvas {
+      border: none;
       display: block;
-      background-color: #000;
+      background-color: rgb(0, 0, 0);
       touch-action: none;
-      image-rendering: crisp-edges;
-      image-rendering: pixelated;
+      flex-shrink: 0;
+    }
+
+    /* UI overlays */
+    #score, #levelIndicator, #health {
+      font-size: 14px;
     }
 
     #startButton {
@@ -51,78 +48,46 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      padding: 16px 40px;
       font-size: 22px;
+      padding: 16px 40px;
       z-index: 10;
       cursor: pointer;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     }
 
     #startButton.game-active {
       top: 12px;
       left: 12px;
       transform: none;
-      font-size: 16px;
-      padding: 10px 20px;
-    }
-
-    #score,
-    #levelIndicator,
-    #health,
-    #gameOver,
-    #levelDisplay,
-    #powerupDisplay,
-    #bonusDisplay,
-    #warningDisplay,
-    #pauseDisplay,
-    #victory {
-      position: absolute;
-      z-index: 2;
+      font-size: 18px;
+      padding: 12px 24px;
     }
 
     #score {
       color: white;
+      position: absolute;
       top: 10px;
       right: 10px;
       font-size: 18px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-    }
-
-    #levelIndicator {
-      color: white;
-      top: 60px;
-      right: 10px;
-      font-size: 16px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-    }
-
-    #health {
-      color: white;
-      top: 60px;
-      left: 10px;
-      font-size: 16px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      z-index: 2;
     }
 
     #gameOver {
       display: none;
+      position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 24px;
       color: red;
       text-shadow: 0 0 10px red;
+      z-index: 2;
       text-align: center;
       line-height: 1.6;
     }
 
     #levelDisplay {
       display: none;
+      position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -150,8 +115,27 @@
       }
     }
 
+    #levelIndicator {
+      color: white;
+      position: absolute;
+      top: 60px;
+      right: 10px;
+      font-size: 16px;
+      z-index: 2;
+    }
+
+    #health {
+      color: white;
+      position: absolute;
+      top: 60px;
+      left: 10px;
+      font-size: 16px;
+      z-index: 2;
+    }
+
     #powerupDisplay {
       display: none;
+      position: absolute;
       top: 40%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -163,6 +147,7 @@
 
     #bonusDisplay {
       display: none;
+      position: absolute;
       top: 65%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -174,6 +159,7 @@
 
     #warningDisplay {
       display: none;
+      position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -181,8 +167,6 @@
       color: #FF3333;
       text-shadow: 0 0 10px #FF0000, 0 0 20px #FF0000;
       z-index: 3;
-      text-align: center;
-      line-height: 1.5;
       animation: warningPulse 0.5s ease-in-out infinite;
     }
 
@@ -200,6 +184,7 @@
 
     #pauseDisplay {
       display: none;
+      position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -211,6 +196,7 @@
 
     #victory {
       display: none;
+      position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -220,94 +206,31 @@
       z-index: 3;
       text-align: center;
       line-height: 1.4;
-      max-width: 90%;
-      padding: 20px;
-    }
-
-    @media (max-width: 768px) {
-
-      #score,
-      #levelIndicator,
-      #health {
-        font-size: 14px;
-      }
-
-      #levelDisplay {
-        font-size: 36px;
-      }
-
-      #gameOver,
-      #victory {
-        font-size: 18px;
-      }
+      max-width: 700px;
+      width: 90%;
     }
   </style>
 </head>
 
 <body>
   <div id="container">
-    <div id="gameWrapper">
-      <button id="startButton">Start Game</button>
-      <div id="score">Score: 0</div>
-      <canvas id="gameCanvas" width="800" height="600"></canvas>
-      <div id="levelIndicator">Level: 1</div>
-      <div id="health">Health: 50</div>
-      <div id="levelDisplay">Level 1</div>
-      <div id="powerupDisplay"></div>
-      <div id="bonusDisplay"></div>
-      <div id="warningDisplay">Warning!<br>Shielded Enemy!</div>
-      <div id="pauseDisplay">PAUSED</div>
-      <div id="victory">Thank you for playing!<br><br>Special thanks to Modmotif for the music.<br><br>Please submit
-        your email to download the song for remix.<br><br>&copy; 2026</div>
-      <div id="gameOver">Game Over!</div>
-    </div>
+
+    <button id="startButton">Start Game</button>
+    <div id="score">Score: 0</div>
+    <canvas id="gameCanvas" width="480" height="1040"></canvas>
+    <div id="levelIndicator">Level: 1</div>
+    <div id="health">Health: 50</div>
+    <div id="levelDisplay">Level 1</div>
+    <div id="powerupDisplay"></div>
+    <div id="bonusDisplay"></div>
+    <div id="warningDisplay">Warning! Shielded Enemy!</div>
+    <div id="pauseDisplay">PAUSED</div>
+    <div id="victory">Thank you for playing!<br><br>Special thanks to Modmotif for the music.<br><br>Please submit your
+      email to download the song for remix.<br><br>&copy; 2026</div>
+    <div id="gameOver">Game Over!</div>
   </div>
 
   <script>
-    // ============================================
-    // CANVAS SETUP
-    // ============================================
-    var canvas = document.getElementById("gameCanvas");
-    var ctx = canvas.getContext("2d");
-
-    // ============================================
-    // RESPONSIVE CANVAS SETUP
-    // ============================================
-    function resizeGame() {
-      var gameWrapper = document.getElementById('gameWrapper');
-      var windowWidth = window.innerWidth;
-      var windowHeight = window.innerHeight;
-
-      // Game's native resolution
-      var gameWidth = 800;
-      var gameHeight = 600;
-      var gameAspect = gameWidth / gameHeight;
-      var windowAspect = windowWidth / windowHeight;
-
-      var scale;
-      if (windowAspect > gameAspect) {
-        // Window is wider - fit to height
-        scale = windowHeight / gameHeight;
-      } else {
-        // Window is taller - fit to width
-        scale = windowWidth / gameWidth;
-      }
-
-      // Apply CSS transform to scale the entire game wrapper
-      gameWrapper.style.transform = 'scale(' + scale + ')';
-      gameWrapper.style.transformOrigin = 'center center';
-      gameWrapper.style.width = gameWidth + 'px';
-      gameWrapper.style.height = gameHeight + 'px';
-    }
-
-    // Initialize and handle resize
-    window.addEventListener('resize', resizeGame);
-
-    // Prevent scrolling on mobile
-    document.addEventListener('touchmove', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-
     // ============================================
     // GAME CONFIGURATION - Easy to modify values
     // ============================================
@@ -384,8 +307,11 @@
     };
 
     // ============================================
-    // IMAGE SETUP
+    // CANVAS AND IMAGE SETUP
     // ============================================
+    var canvas = document.getElementById("gameCanvas");
+    var ctx = canvas.getContext("2d");
+
     var playerImg = new Image();
     playerImg.src = "/Xenon_3/player.png";
 
@@ -536,12 +462,18 @@
     // ============================================
     // GAME STATE
     // ============================================
-    var isMobile = ('ontouchstart' in window) || window.innerWidth <= 820;
+    // ── MOBILE TUNING ───────────────────────────────────────────────
+    // Adjust these after reviewing on a real device
+    var PLAYER_START_Y_OFFSET = 220;  // px from bottom of canvas
+    var PLAYER_SPRITE_W = 75;         // player sprite width
+    var PLAYER_SPRITE_H = 75;         // player sprite height
+    // ────────────────────────────────────────────────────────────────
+
     var player = {
       x: canvas.width / 2,
-      y: canvas.height - 200,
-      width: 75,
-      height: 75
+      y: canvas.height - PLAYER_START_Y_OFFSET,
+      width: PLAYER_SPRITE_W,
+      height: PLAYER_SPRITE_H
     };
 
     var playerBullets = [];
@@ -703,11 +635,19 @@
       var width = 40;
       var height = 40;
 
+      // Clamp spawn x to the visible canvas strip (cover-scaled)
+      var spawnMinX = 0;
+      var spawnMaxX = canvas.width - width;
+      var scale = Math.max(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
+      var visibleHalf = (window.innerWidth / scale) / 2;
+      spawnMinX = Math.max(0, canvas.width / 2 - visibleHalf);
+      spawnMaxX = Math.min(canvas.width - width, canvas.width / 2 + visibleHalf - width);
+
       // Find a non-overlapping spawn position (try up to 10 times)
       var x, y = 0;
       var attempts = 0;
       do {
-        x = Math.random() * (canvas.width - width);
+        x = spawnMinX + Math.random() * (spawnMaxX - spawnMinX);
         attempts++;
       } while (isOverlappingEnemy(x, y, width, height) && attempts < 10);
 
@@ -853,8 +793,6 @@
 
     function collectPowerup(powerup) {
       playSound('powerUp');
-      score += 5;
-      updateUI();
       if (powerup.type === POWERUP_TYPES.HEALTH) {
         health = Math.min(health + CONFIG.healthPowerupAmount, CONFIG.maxHealth);
         updateUI();
@@ -1306,13 +1244,13 @@
         // Offset rows to form hex grid
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0], [0.5, 0],
-          [-1, 0.5], [0, 0.5], [1, 0.5],
+          [-0.5, 0],  [0.5, 0],
+          [-1, 0.5],  [0, 0.5],  [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1], [0.5, 1],
-          [0, -1.5], [0, 1.5],
+          [-0.5, 1],  [0.5, 1],
+          [0, -1.5],  [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5], [1, 1.5]
+          [-1, 1.5],  [1, 1.5]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           positions.push({ x: layout[i][0] * spacing, y: layout[i][1] * spacing });
@@ -1326,13 +1264,13 @@
         var explode = 2.8;
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0], [0.5, 0],
-          [-1, 0.5], [0, 0.5], [1, 0.5],
+          [-0.5, 0],  [0.5, 0],
+          [-1, 0.5],  [0, 0.5],  [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1], [0.5, 1],
-          [0, -1.5], [0, 1.5],
+          [-0.5, 1],  [0.5, 1],
+          [0, -1.5],  [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5], [1, 1.5]
+          [-1, 1.5],  [1, 1.5]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           var x = layout[i][0] * spacing;
@@ -2674,10 +2612,6 @@
             score += 10;
             updateUI();
             playSound('enemyDead');
-            // Minion kill chips boss for 1 HP
-            if (boss && !boss.shielded) {
-              boss.health = Math.max(0, boss.health - 1);
-            }
             break;
           }
         }
@@ -2828,55 +2762,20 @@
         ctx.drawImage(bossImage, boss.x, boss.y, boss.width, boss.height);
       }
 
-      // Boss health bar - fixed at top of canvas
+      // Draw health bar (always visible)
       var healthPercent = boss.health / boss.maxHealth;
-      var barW = 400;
-      var barH = 14;
-      var barX = (canvas.width - barW) / 2;
-      var barY = 22;
-      var bossColor = currentBoss === 3 ? '#CC55FF' : currentBoss === 2 ? '#FF4444' : '#4499FF';
-
-      // Dark panel behind bar
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-      ctx.fillRect(barX - 10, barY - 20, barW + 20, barH + 28);
-
-      // Boss label
-      var bossLabel = currentBoss === 1 ? 'BOSS I' : currentBoss === 2 ? 'BOSS II' : 'BOSS III';
-      ctx.fillStyle = bossColor;
-      ctx.font = 'bold 11px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(bossLabel, canvas.width / 2, barY - 6);
-
-      // Bar background
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(barX, barY, barW, barH);
-
-      // Bar fill — orange at 50%, pulsing red at 25%
-      var fillColor = bossColor;
-      if (healthPercent < 0.25) {
-        fillColor = (Math.sin(Date.now() / 120) > 0) ? '#FF2222' : '#FF7777';
-      } else if (healthPercent < 0.5) {
-        fillColor = '#FF8800';
-      }
-      ctx.fillStyle = fillColor;
-      ctx.fillRect(barX, barY, barW * healthPercent, barH);
-
-      // Border
-      ctx.strokeStyle = bossColor;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(barX, barY, barW, barH);
-      ctx.textAlign = 'left';
+      ctx.fillStyle = "#333";
+      ctx.fillRect(boss.x, boss.y - 15, boss.width, 10);
+      ctx.fillStyle = healthPercent > 0.3 ? "#00FF00" : "#FF0000";
+      ctx.fillRect(boss.x, boss.y - 15, boss.width * healthPercent, 10);
     }
 
     function damageBoss() {
       if (!boss) return;
 
-      // Check if boss is shielded — chip damage still gets through
+      // Check if boss is shielded
       if (boss.shielded) {
-        boss.health -= 0.5;
-        bossBlinking = true;
-        bossBlinkTimer = 6;
-        return;
+        return; // No damage when shielded
       }
 
       boss.health--;
@@ -3275,7 +3174,7 @@
     function resizeCanvas() {
       var vw = window.innerWidth;
       var vh = window.innerHeight;
-      var scale = Math.min(vw / canvas.width, vh / canvas.height);
+      var scale = Math.max(vw / canvas.width, vh / canvas.height);
       canvas.style.transformOrigin = 'center center';
       canvas.style.transform = 'scale(' + scale + ')';
     }
@@ -3407,8 +3306,8 @@
         ctx.restore();
       }
 
-      // Draw joystick base below player on mobile
-      if (('ontouchstart' in window) || window.innerWidth <= 820) {
+      // Draw joystick base below player
+      {
         var jx = player.x + player.width / 2;
         var jRadius = 42;
         var jy = player.y + player.height + jRadius;
@@ -3918,7 +3817,9 @@
         shieldRegenTime = 0;
 
         player.x = canvas.width / 2;
-        player.y = canvas.height - 200;
+        player.y = canvas.height - PLAYER_START_Y_OFFSET;
+        player.width = PLAYER_SPRITE_W;
+        player.height = PLAYER_SPRITE_H;
         enemies = [];
         playerBullets = [];
         enemyBullets = [];
@@ -3959,9 +3860,6 @@
         }
       }
     });
-
-    // Initialize responsive canvas after all elements are loaded
-    resizeGame();
   </script>
 </body>
 
