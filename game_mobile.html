@@ -2790,7 +2790,7 @@
       // Boss entrance animation
       if (boss.entering) {
         boss.y += 1;
-        if (boss.y >= 30) {
+        if (boss.y >= 245) {
           boss.entering = false;
         }
       } else {
@@ -2803,9 +2803,9 @@
         // Red/purple boss also moves north/south
         if (boss.isRedBoss || boss.isPurpleBoss) {
           boss.y += boss.speed * 0.6 * boss.verticalDirection;
-          if (boss.y <= 20) {
+          if (boss.y <= 205) {
             boss.verticalDirection = 1;
-          } else if (boss.y >= 100) {
+          } else if (boss.y >= 285) {
             boss.verticalDirection = -1;
           }
         }
