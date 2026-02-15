@@ -18,7 +18,6 @@
       overflow: hidden;
       background: #000;
       font-family: Arial, sans-serif;
-      touch-action: none;
     }
 
     #container {
@@ -41,7 +40,6 @@
     canvas {
       display: block;
       background-color: #000;
-      touch-action: none;
       image-rendering: crisp-edges;
       image-rendering: pixelated;
     }
@@ -63,15 +61,7 @@
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     }
 
-    #startButton.game-active {
-      top: 12px;
-      left: 12px;
-      transform: none;
-      font-size: 16px;
-      padding: 10px 20px;
-    }
-
-    #score,
+#score,
     #levelIndicator,
     #health,
     #gameOver,
@@ -224,23 +214,6 @@
       padding: 20px;
     }
 
-    @media (max-width: 768px) {
-
-      #score,
-      #levelIndicator,
-      #health {
-        font-size: 14px;
-      }
-
-      #levelDisplay {
-        font-size: 36px;
-      }
-
-      #gameOver,
-      #victory {
-        font-size: 18px;
-      }
-    }
   </style>
 </head>
 
@@ -269,44 +242,6 @@
     // ============================================
     var canvas = document.getElementById("gameCanvas");
     var ctx = canvas.getContext("2d");
-
-    // ============================================
-    // RESPONSIVE CANVAS SETUP
-    // ============================================
-    function resizeGame() {
-      var gameWrapper = document.getElementById('gameWrapper');
-      var windowWidth = window.innerWidth;
-      var windowHeight = window.innerHeight;
-
-      // Game's native resolution
-      var gameWidth = 800;
-      var gameHeight = 600;
-      var gameAspect = gameWidth / gameHeight;
-      var windowAspect = windowWidth / windowHeight;
-
-      var scale;
-      if (windowAspect > gameAspect) {
-        // Window is wider - fit to height
-        scale = windowHeight / gameHeight;
-      } else {
-        // Window is taller - fit to width
-        scale = windowWidth / gameWidth;
-      }
-
-      // Apply CSS transform to scale the entire game wrapper
-      gameWrapper.style.transform = 'scale(' + scale + ')';
-      gameWrapper.style.transformOrigin = 'center center';
-      gameWrapper.style.width = gameWidth + 'px';
-      gameWrapper.style.height = gameHeight + 'px';
-    }
-
-    // Initialize and handle resize
-    window.addEventListener('resize', resizeGame);
-
-    // Prevent scrolling on mobile
-    document.addEventListener('touchmove', function (e) {
-      e.preventDefault();
-    }, { passive: false });
 
     // ============================================
     // GAME CONFIGURATION - Easy to modify values
@@ -536,10 +471,9 @@
     // ============================================
     // GAME STATE
     // ============================================
-    var isMobile = ('ontouchstart' in window) || window.innerWidth <= 820;
     var player = {
       x: canvas.width / 2,
-      y: canvas.height - 200,
+      y: canvas.height - 180,
       width: 75,
       height: 75
     };
@@ -576,16 +510,6 @@
     }
     var rightPressed = false;
     var leftPressed = false;
-
-    // Mobile touch state
-    var touchActive = false;
-    var touchTargetX = 0;           // canvas-space x the player should follow
-    var touchShootActive = false;   // currently in shoot window
-    var touchShootCycleStart = 0;   // when the current cycle began
-    var TOUCH_SHOOT_DURATION = 1800;  // 1.8 seconds shooting
-    var TOUCH_SHOOT_COOLDOWN = 400;   // 0.4 second reload
-    var touchLastShot = 0;
-    var TOUCH_SHOOT_INTERVAL = 130;   // fire every 130ms while active
 
     // Power-up state
     var hasDoubleLaser = false;
@@ -3255,95 +3179,6 @@
     });
 
     // ============================================
-    // MOBILE CANVAS SCALING
-    // ============================================
-    function resizeCanvas() {
-      var vw = window.innerWidth;
-      var vh = window.innerHeight;
-      var scale = Math.min(vw / canvas.width, vh / canvas.height);
-      canvas.style.transformOrigin = 'center center';
-      canvas.style.transform = 'scale(' + scale + ')';
-    }
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    // ============================================
-    // TOUCH CONTROLS
-    // ============================================
-    function getTouchCanvasX(touch) {
-      var rect = canvas.getBoundingClientRect();
-      // Scale from CSS pixels to canvas pixels
-      var scaleX = canvas.width / rect.width;
-      return (touch.clientX - rect.left) * scaleX;
-    }
-
-    canvas.addEventListener("touchstart", function (e) {
-      e.preventDefault();
-      if (gameOver || paused) return;
-      var touch = e.touches[0];
-      touchActive = true;
-      touchTargetX = getTouchCanvasX(touch);
-      // Begin shoot cycle on first touch
-      touchShootCycleStart = Date.now();
-      touchShootActive = true;
-      touchLastShot = 0;
-    }, { passive: false });
-
-    canvas.addEventListener("touchmove", function (e) {
-      e.preventDefault();
-      if (!touchActive) return;
-      var touch = e.touches[0];
-      touchTargetX = getTouchCanvasX(touch);
-    }, { passive: false });
-
-    canvas.addEventListener("touchend", function (e) {
-      e.preventDefault();
-      if (e.touches.length === 0) {
-        touchActive = false;
-        touchShootActive = false;
-      }
-    }, { passive: false });
-
-    canvas.addEventListener("touchcancel", function (e) {
-      touchActive = false;
-      touchShootActive = false;
-    }, { passive: false });
-
-    function updateTouchControls() {
-      if (!touchActive) return;
-      var now = Date.now();
-
-      // Move player toward touch x (snap directly — finger IS the ship)
-      var targetCenterX = touchTargetX;
-      var playerCenterX = player.x + player.width / 2;
-      var diff = targetCenterX - playerCenterX;
-      // Move up to 10px/frame, but snap if very close
-      if (Math.abs(diff) > 10) {
-        player.x += (diff / Math.abs(diff)) * Math.min(Math.abs(diff), 10);
-      } else {
-        player.x += diff;
-      }
-      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
-
-      // Shoot cycle: 5s on, 1.5s cooldown, repeat
-      var elapsed = now - touchShootCycleStart;
-      if (elapsed >= TOUCH_SHOOT_DURATION + TOUCH_SHOOT_COOLDOWN) {
-        // Start a new cycle
-        touchShootCycleStart = now;
-        elapsed = 0;
-        touchShootActive = true;
-      }
-      touchShootActive = elapsed < TOUCH_SHOOT_DURATION;
-
-      // Fire at interval during active window
-      if (touchShootActive && now - touchLastShot >= TOUCH_SHOOT_INTERVAL) {
-        shootBullet();
-        touchLastShot = now;
-      }
-    }
-
-    // ============================================
     // MAIN GAME LOOP
     // ============================================
     function draw() {
@@ -3392,33 +3227,15 @@
         ctx.restore();
       }
 
-      // Draw joystick base below player on mobile
-      if (('ontouchstart' in window) || window.innerWidth <= 820) {
-        var jx = player.x + player.width / 2;
-        var jRadius = 42;
-        var jy = player.y + player.height + jRadius;
-        ctx.save();
-        // Joystick base circle
-        ctx.beginPath();
-        ctx.arc(jx, jy, jRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(80, 160, 255, 0.45)';
-        ctx.fill();
-        ctx.restore();
-      }
-
       // Draw and move player (only if visible during blink)
       if (playerVisible) {
         ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
       }
-      // Touch movement + auto-shoot cycle
-      updateTouchControls();
-      // Keyboard movement (only applies when touch is not active)
-      if (!touchActive) {
-        if (rightPressed && player.x < canvas.width - player.width) {
-          player.x += CONFIG.playerSpeed;
-        } else if (leftPressed && player.x > 0) {
-          player.x -= CONFIG.playerSpeed;
-        }
+      // Keyboard movement
+      if (rightPressed && player.x < canvas.width - player.width) {
+        player.x += CONFIG.playerSpeed;
+      } else if (leftPressed && player.x > 0) {
+        player.x -= CONFIG.playerSpeed;
       }
 
       // Update player bullets
@@ -3858,8 +3675,6 @@
         lastPowerupSpawnTime = 0;
         playerBlinking = false;
         playerVisible = true;
-        touchActive = false;
-        touchShootActive = false;
         bossActive = false;
         bossDefeated = false;
         boss = null;
@@ -3903,7 +3718,7 @@
         shieldRegenTime = 0;
 
         player.x = canvas.width / 2;
-        player.y = canvas.height - 200;
+        player.y = canvas.height - 180;
         enemies = [];
         playerBullets = [];
         enemyBullets = [];
@@ -3925,9 +3740,7 @@
         document.getElementById("victory").style.display = "none";
         paused = false;
 
-        // Change button to Pause and move to corner on mobile
         startButton.innerText = "Pause";
-        startButton.classList.add('game-active');
 
         showAnnouncement("levelDisplay", "Level 1", 2000);
         startBackgroundMusic();
@@ -3945,8 +3758,6 @@
       }
     });
 
-    // Initialize responsive canvas after all elements are loaded
-    resizeGame();
   </script>
 </body>
 
