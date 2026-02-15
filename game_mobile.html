@@ -47,21 +47,86 @@
 
     #startButton {
       position: absolute;
+      top: 12px;
+      left: 12px;
+      padding: 10px 20px;
+      font-size: 16px;
+      z-index: 10;
+      cursor: pointer;
+      background: #00FFFF;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      display: none;
+    }
+
+    #introCard {
+      position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 22px;
-      padding: 16px 40px;
       z-index: 10;
-      cursor: pointer;
+      background: rgba(0, 0, 0, 0.88);
+      border: 1px solid #00FFFF;
+      border-radius: 12px;
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.25);
+      padding: 28px 30px;
+      width: 340px;
+      color: #ccc;
+      font-family: Arial, sans-serif;
+      text-align: left;
     }
 
-    #startButton.game-active {
-      top: 12px;
-      left: 12px;
-      transform: none;
+    #introCard h2 {
+      color: #00FFFF;
+      font-size: 20px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: center;
+      margin-bottom: 24px;
+      text-shadow: 0 0 10px #00FFFF;
+    }
+
+    #introCard h3 {
+      color: #fff;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      margin-top: 18px;
+    }
+
+    #introCard ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.9;
+      color: #bbb;
+    }
+
+    #introCard ul li::before {
+      content: "— ";
+      color: #00FFFF;
+    }
+
+    #introCard .card-start-btn {
+      display: block;
+      width: 100%;
+      margin-top: 26px;
+      padding: 14px 0;
       font-size: 18px;
-      padding: 12px 24px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: #00FFFF;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
     }
 
     #score {
@@ -217,7 +282,29 @@
 <body>
   <div id="container">
 
-    <button id="startButton">Start Game</button>
+    <button id="startButton">Pause</button>
+
+    <div id="introCard">
+      <h2>Nonex</h2>
+
+      <h3>Controls</h3>
+      <ul>
+        <li>Drag to move your ship</li>
+        <li>Auto-fire enabled</li>
+        <li>Tap Pause to pause</li>
+      </ul>
+
+      <h3>Power-ups</h3>
+      <ul>
+        <li>Health — restores 10 HP</li>
+        <li>Double Laser — dual shots</li>
+        <li>Shield — absorbs hits</li>
+        <li>Quad Laser — four simultaneous shots</li>
+      </ul>
+
+      <button class="card-start-btn" onclick="startFromCard()">Start Game</button>
+    </div>
+
     <div id="score">Score: 0</div>
     <canvas id="gameCanvas" width="480" height="1040"></canvas>
     <div id="levelIndicator">Level: 1</div>
@@ -3739,6 +3826,15 @@
     // ============================================
     // GAME START
     // ============================================
+    function startFromCard() {
+      document.getElementById('introCard').style.display = 'none';
+      var sb = document.getElementById('startButton');
+      sb.style.display = 'block';
+      sb.innerText = 'Pause';
+      sb.classList.add('game-active');
+      sb.click();
+    }
+
     var startButton = document.getElementById("startButton");
     startButton.addEventListener("click", function () {
       this.blur();
