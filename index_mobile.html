@@ -2924,25 +2924,10 @@
     }
 
     function returnToHomeScreen() {
-      // Stop the in-game music
       stopBackgroundMusic();
-
-      // Hide victory/game over screens
-      document.getElementById("victory").style.display = "none";
-      document.getElementById("gameOver").style.display = "none";
-
-      // Show start button (reset to centered state on mobile)
-      var sb = document.getElementById("startButton");
-      sb.style.display = "block";
-      sb.innerText = "Start Game";
-      sb.classList.remove('game-active');
-
-      // Reset game state
-      gameOver = true;
-      paused = false;
-
-      // Clear the canvas and show a blank screen
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      stopBossMusic();
+      stopCreditsMusic();
+      window.location.href = '/Xenon_3/menu.html';
     }
 
     // ============================================
