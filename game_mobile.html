@@ -39,7 +39,9 @@
     }
 
     /* UI overlays */
-    #score, #levelIndicator, #health {
+    #score,
+    #levelIndicator,
+    #health {
       font-size: 14px;
     }
 
@@ -464,7 +466,7 @@
     // ============================================
     // ── MOBILE TUNING ───────────────────────────────────────────────
     // Adjust these after reviewing on a real device
-    var PLAYER_START_Y_OFFSET = 320;  // px from bottom of canvas
+    var PLAYER_START_Y_OFFSET = 350;  // px from bottom of canvas
     var PLAYER_SPRITE_W = 75;         // player sprite width
     var PLAYER_SPRITE_H = 75;         // player sprite height
     // ────────────────────────────────────────────────────────────────
@@ -1244,13 +1246,13 @@
         // Offset rows to form hex grid
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0],  [0.5, 0],
-          [-1, 0.5],  [0, 0.5],  [1, 0.5],
+          [-0.5, 0], [0.5, 0],
+          [-1, 0.5], [0, 0.5], [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1],  [0.5, 1],
-          [0, -1.5],  [0, 1.5],
+          [-0.5, 1], [0.5, 1],
+          [0, -1.5], [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5],  [1, 1.5]
+          [-1, 1.5], [1, 1.5]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           positions.push({ x: layout[i][0] * spacing, y: layout[i][1] * spacing });
@@ -1264,13 +1266,13 @@
         var explode = 2.8;
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0],  [0.5, 0],
-          [-1, 0.5],  [0, 0.5],  [1, 0.5],
+          [-0.5, 0], [0.5, 0],
+          [-1, 0.5], [0, 0.5], [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1],  [0.5, 1],
-          [0, -1.5],  [0, 1.5],
+          [-0.5, 1], [0.5, 1],
+          [0, -1.5], [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5],  [1, 1.5]
+          [-1, 1.5], [1, 1.5]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           var x = layout[i][0] * spacing;
