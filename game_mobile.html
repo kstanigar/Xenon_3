@@ -464,7 +464,7 @@
     // ============================================
     // ── MOBILE TUNING ───────────────────────────────────────────────
     // Adjust these after reviewing on a real device
-    var PLAYER_START_Y_OFFSET = 270;  // px from bottom of canvas
+    var PLAYER_START_Y_OFFSET = 320;  // px from bottom of canvas
     var PLAYER_SPRITE_W = 75;         // player sprite width
     var PLAYER_SPRITE_H = 75;         // player sprite height
     // ────────────────────────────────────────────────────────────────
@@ -1482,7 +1482,7 @@
     function spawnMorphingFormation(waveData) {
       var count = waveData.count;
       var centerX = canvas.width / 2;
-      var targetY = 160;
+      var targetY = 190;
       var spreadRadius = purplePhase ? 175 : 140;
 
       // Store kamikaze count to be launched separately after formation settles
