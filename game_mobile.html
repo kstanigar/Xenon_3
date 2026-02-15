@@ -1462,8 +1462,8 @@
     }
 
     // Formation center tracking - moves as a unit
-    var formationCurrentCenterY = -120;
-    var formationTargetCenterY = 160;
+    var formationCurrentCenterY = -200;
+    var formationTargetCenterY = 320;
     var formationEntrySpeed = 1.8;
     var formationEntered = false;
 
@@ -1471,7 +1471,7 @@
     var pendingKamikazeCount = 0;
     var kamikazesLaunched = false;
     var kamikazeCenterY = -80;
-    var kamikazeCenterTargetY = 120;
+    var kamikazeCenterTargetY = 320;
     var kamikazeCenterActive = false;
 
     // Shield cascade system
@@ -1484,7 +1484,7 @@
     function spawnMorphingFormation(waveData) {
       var count = waveData.count;
       var centerX = canvas.width / 2;
-      var targetY = 190;
+      var targetY = 320;
       var spreadRadius = purplePhase ? 175 : 140;
 
       // Store kamikaze count to be launched separately after formation settles
@@ -1561,7 +1561,7 @@
 
       // Set up center that will scroll down, all kamikazes follow it
       kamikazeCenterY = -80;
-      kamikazeCenterTargetY = 120;
+      kamikazeCenterTargetY = 320;
       kamikazeCenterActive = true;
 
       // Spread evenly across screen width, with slight random jitter
@@ -1590,9 +1590,9 @@
     function updateKamikazeEntry() {
       if (!kamikazeCenterActive) return;
 
-      kamikazeCenterY += formationEntrySpeed;
+      kamikazeCenterY += (kamikazeCenterTargetY - kamikazeCenterY) * 0.045;
 
-      if (kamikazeCenterY >= kamikazeCenterTargetY) {
+      if (kamikazeCenterTargetY - kamikazeCenterY < 1) {
         kamikazeCenterY = kamikazeCenterTargetY;
         kamikazeCenterActive = false;
 
@@ -3541,10 +3541,10 @@
 
         // Update morphing formations
         if (waveInProgress) {
-          // Move formation center smoothly as a unit
+          // Move formation center smoothly as a unit (ease-out lerp)
           if (!formationEntered) {
-            formationCurrentCenterY += formationEntrySpeed;
-            if (formationCurrentCenterY >= formationTargetCenterY) {
+            formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * 0.045;
+            if (formationTargetCenterY - formationCurrentCenterY < 1) {
               formationCurrentCenterY = formationTargetCenterY;
               formationEntered = true;
               // Show shield warning (brief after level 1 - players already know)
