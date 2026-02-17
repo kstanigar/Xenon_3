@@ -1,3 +1,42 @@
+<!--
+  ============================================================
+  game.html — Nonex Desktop Game
+  ============================================================
+  Desktop build of the Nonex top-scrolling space shooter.
+  Targets a fixed 4:3 canvas (800×600 px) centered in the
+  viewport. Scaled up via CSS transform to fill the screen
+  while preserving the intended aspect ratio.
+
+  Controls:
+    Arrow Keys / WASD — Move player ship
+    Spacebar          — Fire
+
+  Game Structure:
+    • 12 levels split across 3 phases (Original / Red / Purple)
+    • Wave-based formation system: enemies enter in morphing
+      formations that cycle through multiple shapes
+    • 3 boss encounters triggered by score thresholds:
+        Boss 1 at score 400  (end of level 4)
+        Boss 2 at score 1200 (end of level 8, red phase)
+        Boss 3 at score 2000 (end of level 12, purple phase)
+    • Power-up drops: Health (+10 HP), Double Laser, Shield,
+      Quad Shot
+    • High score leaderboard stored in localStorage (top 10)
+
+  Image Assets (all in project root, paths use /Xenon_3/ prefix):
+    player.png, enemy.png, enemy2–4.png, Boss.png,
+    enemy1–4_Red.png, boss_Red.png, boss_aRed.png,
+    enemy1–4_purple.png, boss_purple.png
+
+  Audio Assets (in /Xenon_3/sfx/):
+    background.mp3, boss.mp3, credits.mp3,
+    shoot.mp3, enemyDead.mp3, playerDead.mp3,
+    bossIntro.mp3, powerup.mp3, shieldHit.mp3
+
+  Dependencies: None (no external libraries or frameworks).
+  Entry point: index.html → launchGame() → game.html
+  ============================================================
+-->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -6,17 +45,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Top-Scrolling Flying Game - Responsive</title>
   <style>
+    /* Reset — consistent box model */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
+    /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
     html, body {
       overscroll-behavior: none;
       touch-action: none;
     }
 
+    /* Full-screen black background; overflow hidden prevents any scroll */
     body {
       margin: 0;
       padding: 0;
@@ -25,6 +67,7 @@
       font-family: Arial, sans-serif;
     }
 
+    /* Centers the game canvas in the viewport */
     #container {
       position: fixed;
       top: 0;
@@ -37,11 +80,13 @@
       background: #000;
     }
 
+    /* Wrapper sized to the canvas — positions HUD overlays absolutely */
     #gameWrapper {
       position: relative;
       display: inline-block;
     }
 
+    /* Pixel-perfect rendering for the sprite-based game canvas */
     canvas {
       display: block;
       background-color: #000;
@@ -375,58 +420,62 @@
     var ctx = canvas.getContext("2d");
 
     // ============================================
-    // GAME CONFIGURATION - Easy to modify values
+    // GAME CONFIGURATION
     // ============================================
+    // Central tuning object. All gameplay-affecting numbers live here
+    // so difficulty, feel, and balance can be adjusted in one place.
     var CONFIG = {
-      // Player settings
-      playerSpeed: 5,
-      bulletSpeed: 12,
-      startingHealth: 100,
-      maxHealth: 250,
+      // ── Player ──────────────────────────────────────────────────
+      playerSpeed: 5,           // Movement speed in px/frame
+      bulletSpeed: 12,          // Player bullet speed in px/frame (upward)
+      startingHealth: 100,      // HP at game start
+      maxHealth: 250,           // HP cap (cannot exceed this via pickups)
 
-      // Damage values
-      enemyBulletDamage: 10,
-      enemyCollisionDamage: 20,
-      bossDamage: 25,
-      healthPowerupAmount: 10,
+      // ── Damage ──────────────────────────────────────────────────
+      enemyBulletDamage: 10,    // HP lost per enemy bullet hit
+      enemyCollisionDamage: 20, // HP lost when an enemy physically collides with player
+      bossDamage: 25,           // HP lost per boss bullet or boss body collision
+      healthPowerupAmount: 10,  // HP restored by a health pickup
 
-      // Enemy settings
-      enemyBaseSpeed: 1.5,
-      enemySpeedIncrease: 0.3,
-      enemySpawnRate: 0.01,
-      enemySpawnIncrease: 0.005,
+      // ── Enemy movement ──────────────────────────────────────────
+      enemyBaseSpeed: 1.5,      // Base downward speed in px/frame at level 1
+      enemySpeedIncrease: 0.3,  // Additional px/frame added per level
+      enemySpawnRate: 0.01,     // Probability per frame of spawning an enemy (non-wave mode)
+      enemySpawnIncrease: 0.005,// Spawn rate increase per level
 
-      // Enemy shooting (starts at level 2)
-      enemyShootChance: 0.005,
-      enemyShootIncrease: 0.002,
-      enemyBulletSpeed: 5,
+      // ── Enemy shooting (unlocked at level 2) ────────────────────
+      enemyShootChance: 0.005,  // Per-frame probability an individual enemy fires
+      enemyShootIncrease: 0.002,// Shoot chance increase per level above 2
+      enemyBulletSpeed: 5,      // Enemy bullet speed in px/frame (downward)
 
-      // Boss settings
-      boss1ScoreThreshold: 400,
-      boss2ScoreThreshold: 1200,
-      boss3ScoreThreshold: 2000,
-      bossHealth: 50,
-      bossSpeed: 1,
-      bossShootChance: 0.02,
+      // ── Boss triggers (score thresholds) ────────────────────────
+      boss1ScoreThreshold: 400, // Boss 1 spawns when score reaches this value
+      boss2ScoreThreshold: 1200,// Boss 2 spawns (red phase, post-Boss 1)
+      boss3ScoreThreshold: 2000,// Boss 3 spawns (purple phase, post-Boss 2)
+      bossHealth: 50,           // Hits required to defeat each boss
+      bossSpeed: 1,             // Boss horizontal drift speed in px/frame
+      bossShootChance: 0.02,    // Per-frame probability the boss fires a bullet
 
-      // Level thresholds
-      // Levels 1-4: original enemies, Boss 1 at 400
-      // Levels 5-8: red enemies (start after Boss 1 defeated)
-      // Level thresholds are calculated dynamically after Boss 1
-      levelThresholds: [0, 100, 200, 300],
+      // ── Level progression ────────────────────────────────────────
+      // Phases: levels 1–4 (standard), 5–8 (red), 9–12 (purple).
+      // Boss encounters separate the phases; thresholds below apply
+      // within each phase and are recalculated after each boss defeat.
+      levelThresholds: [0, 100, 200, 300], // Score required for levels 1–4
 
-      // Red level speed multiplier (faster than original)
+      // Red-phase enemies move faster than the standard phase
       redLevelSpeedMultiplier: 1.3,
 
-      // Power-up settings
-      powerupSpeed: 4,  // Twice as fast as enemies
-      powerupSpawnChance: 0.003,
+      // ── Power-ups ────────────────────────────────────────────────
+      powerupSpeed: 4,          // Pickup fall speed in px/frame
+      powerupSpawnChance: 0.003,// Per-frame probability of a power-up spawning
 
-      // Boss minion settings
-      bossMinionSpeed: 2,
-      bossMinionSpawnChance: 0.015,
+      // ── Boss minions (spawn during boss fights) ──────────────────
+      bossMinionSpeed: 2,           // Minion horizontal scroll speed in px/frame
+      bossMinionSpawnChance: 0.015, // Per-frame probability of a minion spawning
 
-      // Enemy types per level (each level adds a new enemy)
+      // ── Enemy roster per level ───────────────────────────────────
+      // Each level unlocks an additional enemy type. Wave formations
+      // randomly select from all types available at the current level.
       levelEnemyTypes: {
         1: ['enemy1'],
         2: ['enemy1', 'enemy2'],
@@ -442,10 +491,10 @@
         12: ['enemy1_purple', 'enemy2_purple', 'enemy3_purple', 'enemy4_purple']
       },
 
-      // Enemies that zigzag
+      // Enemy types that move in a diagonal zigzag pattern
       zigzagEnemies: ['enemy3', 'enemy3_red', 'enemy4_red', 'enemy3_purple', 'enemy4_purple'],
 
-      // Enemies that move side to side (horizontal)
+      // Enemy types that sweep horizontally across the screen
       sideToSideEnemies: ['enemy2_red', 'enemy2_purple']
     };
 
@@ -533,6 +582,11 @@
 
     var bossIntroInterval = null;
 
+    /**
+     * Plays a one-shot sound effect by resetting its playback position and
+     * calling play(). Autoplay errors are silently ignored (browser policy).
+     * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
+     */
     function playSound(soundName) {
       var sound = sounds[soundName];
       if (sound) {
@@ -543,6 +597,10 @@
       }
     }
 
+    /**
+     * Starts the boss intro sting and sets a repeating interval so it plays
+     * every 10 seconds for as long as a boss fight is active.
+     */
     function startBossMusic() {
       playSound('bossIntro');
       // Repeat every 10 seconds
@@ -553,6 +611,7 @@
       }, 10000);
     }
 
+    /** Clears the boss music interval and resets the audio element to the start. */
     function stopBossMusic() {
       if (bossIntroInterval) {
         clearInterval(bossIntroInterval);
@@ -562,17 +621,23 @@
       sounds.bossIntro.currentTime = 0;
     }
 
+    /**
+     * Starts looping background music from the beginning, unless the player
+     * has disabled music (localStorage key `nonex_music` === 'off').
+     */
     function startBackgroundMusic() {
       if (localStorage.getItem('nonex_music') === 'off') return;
       bgMusic.currentTime = 0;
       bgMusic.play().catch(function (e) { });
     }
 
+    /** Pauses and resets the background music track. */
     function stopBackgroundMusic() {
       bgMusic.pause();
       bgMusic.currentTime = 0;
     }
 
+    /** Plays the credits music track from the beginning (used on victory screen). */
     function startCreditsMusic() {
       creditsMusic.currentTime = 0;
       creditsMusic.play().catch(function (e) {
@@ -580,11 +645,17 @@
       });
     }
 
+    /** Pauses and resets the credits music track. */
     function stopCreditsMusic() {
       creditsMusic.pause();
       creditsMusic.currentTime = 0;
     }
 
+    /**
+     * Validates and saves the email address entered in the victory screen input.
+     * Emails are stored in `localStorage` under the key `xenonEmails` (JSON array).
+     * A basic '@' check is the only validation applied.
+     */
     function submitEmail() {
       var email = document.getElementById('emailInput').value;
       if (email && email.includes('@')) {
@@ -621,6 +692,11 @@
     // Load top 10 high scores from localStorage
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
 
+    /**
+     * Inserts a score into the top-10 leaderboard, sorts descending, trims to
+     * 10 entries, and persists to `localStorage` under `xenonHighScores`.
+     * @param {number} newScore - The score to add.
+     */
     function addHighScore(newScore) {
       highScores.push(newScore);
       highScores.sort(function (a, b) { return b - a; }); // Sort descending
@@ -628,11 +704,23 @@
       localStorage.setItem('xenonHighScores', JSON.stringify(highScores));
     }
 
+    /**
+     * Returns true if `newScore` would make it into the current top-10 list.
+     * Always returns true when fewer than 10 scores have been recorded.
+     * @param {number} newScore
+     * @returns {boolean}
+     */
     function isTopTenScore(newScore) {
       if (highScores.length < 10) return true;
       return newScore > highScores[highScores.length - 1];
     }
 
+    /**
+     * Returns the 1-based rank position that `newScore` would occupy in the
+     * existing sorted leaderboard (lower rank = better).
+     * @param {number} newScore
+     * @returns {number} Rank, from 1 (best) to highScores.length + 1 (last).
+     */
     function getScoreRank(newScore) {
       for (var i = 0; i < highScores.length; i++) {
         if (newScore >= highScores[i]) return i + 1;
@@ -693,12 +781,23 @@
     // ============================================
     // UI UPDATES
     // ============================================
+    /**
+     * Syncs the score, level, and health DOM elements with current game state.
+     * Called after any change to those values.
+     */
     function updateUI() {
       document.getElementById("score").innerText = "Score: " + score;
       document.getElementById("levelIndicator").innerText = "Level: " + level;
       document.getElementById("health").innerText = "Health: " + health;
     }
 
+    /**
+     * Briefly shows a HUD overlay element with the given text, then hides it
+     * after `duration` milliseconds (default 2000 ms).
+     * @param {string} element  - DOM element ID (e.g. 'levelDisplay').
+     * @param {string} text     - Text to display.
+     * @param {number} [duration=2000] - Display duration in milliseconds.
+     */
     function showAnnouncement(element, text, duration) {
       var el = document.getElementById(element);
       el.innerText = text;
@@ -708,7 +807,12 @@
       }, duration || 2000);
     }
 
-    // Screen shake effect
+    /**
+     * Initiates a screen-shake effect by translating the canvas element with
+     * random offsets that decay over the specified duration.
+     * @param {number} [intensity=10] - Maximum pixel offset in each direction.
+     * @param {number} [duration=500] - Total shake duration in milliseconds.
+     */
     function triggerScreenShake(intensity, duration) {
       screenShakeActive = true;
       screenShakeIntensity = intensity || 10;
@@ -716,6 +820,10 @@
       screenShakeTimer = Date.now();
     }
 
+    /**
+     * Called every frame. Applies or clears the CSS transform that produces
+     * the screen-shake effect, with intensity decaying linearly over time.
+     */
     function updateScreenShake() {
       if (!screenShakeActive) {
         canvas.style.transform = '';
@@ -743,6 +851,10 @@
     // ============================================
     // LEVEL MANAGEMENT
     // ============================================
+    /**
+     * Refreshes UI after each enemy kill. Level progression itself is handled
+     * by the wave system (see `advanceLevel`); this is purely a UI sync hook.
+     */
     function checkLevelUp() {
       // Wave-based system handles level progression via advanceLevel()
       // This function is only used for additional score tracking
@@ -752,6 +864,13 @@
     // ============================================
     // POWER-UP SYSTEM
     // ============================================
+    /**
+     * Spawns a power-up of the specified type at a random horizontal position
+     * along the top of the canvas, avoiding collision with existing enemies.
+     * Up to 10 placement attempts are made; returns false if no safe spot found.
+     * @param {string} type - One of POWERUP_TYPES (HEALTH, DOUBLE_LASER, SHIELD).
+     * @returns {boolean} True if the power-up was successfully added.
+     */
     function createPowerup(type) {
       // Double laser moves slightly slower (3.5) than health powerup (4)
       var speed = (type === POWERUP_TYPES.DOUBLE_LASER) ? 3.5 : CONFIG.powerupSpeed;
@@ -785,6 +904,14 @@
     // 123 BPM = 488ms per beat
     var BPM_INTERVAL = 60000 / 123; // ~488ms
 
+    /**
+     * Renders a single power-up to the canvas with a BPM-synced breathing scale
+     * and two expanding ripple rings. Each type has a distinct shape and color:
+     *   HEALTH      → red diamond with white plus
+     *   DOUBLE_LASER → purple hexagon with double bars
+     *   SHIELD      → aqua triangle with inner circle
+     * @param {Object} powerup - Power-up object from the `powerups` array.
+     */
     function drawPowerup(powerup) {
       var time = Date.now();
 
@@ -906,6 +1033,11 @@
       }
     }
 
+    /**
+     * Applies the effect of a collected power-up to the player and shows the
+     * appropriate HUD announcement. Collecting any power-up also awards 5 pts.
+     * @param {Object} powerup - The power-up object being collected.
+     */
     function collectPowerup(powerup) {
       playSound('powerUp');
       score += 5;
@@ -930,6 +1062,11 @@
       }
     }
 
+    /**
+     * Attempts to spawn a power-up based on random chance, respecting a 5-second
+     * minimum cooldown between drops and a per-level one-of-each limit.
+     * Priority: health (40%) → double laser (70%) → shield (level 3+) → health fallback.
+     */
     function trySpawnPowerup() {
       // Stagger power-ups - minimum 5 seconds between spawns
       var now = Date.now();
@@ -972,12 +1109,26 @@
     // ============================================
     // ENEMY CREATION AND DRAWING
     // ============================================
+    /**
+     * Randomly selects an enemy sprite type from the roster unlocked for the
+     * current level (defined in `CONFIG.levelEnemyTypes`).
+     * @returns {string} Enemy type key (e.g. 'enemy1', 'enemy3_red').
+     */
     function getEnemyType() {
       var availableTypes = CONFIG.levelEnemyTypes[level] || CONFIG.levelEnemyTypes[4];
       var randomIndex = Math.floor(Math.random() * availableTypes.length);
       return availableTypes[randomIndex];
     }
 
+    /**
+     * AABB overlap test between a candidate rect and all current enemies.
+     * Used to find non-colliding spawn positions for enemies and power-ups.
+     * @param {number} x      - Candidate rect left edge.
+     * @param {number} y      - Candidate rect top edge.
+     * @param {number} width  - Candidate rect width.
+     * @param {number} height - Candidate rect height.
+     * @returns {boolean} True if the rect overlaps any existing enemy.
+     */
     function isOverlappingEnemy(x, y, width, height) {
       for (var i = 0; i < enemies.length; i++) {
         var e = enemies[i];
@@ -991,6 +1142,13 @@
       return false;
     }
 
+    /**
+     * Creates a single freeform (non-formation) enemy at a random top-edge x
+     * position, with speed, type, and movement behaviour determined by the
+     * current level and phase. Zigzag and side-to-side behaviours are assigned
+     * based on `CONFIG.zigzagEnemies` / `CONFIG.sideToSideEnemies`.
+     * Returns early (no-op) if no non-overlapping position is found in 10 tries.
+     */
     function createEnemy() {
       var speedVariation = 1;
       var effectiveLevel = redPhase ? (level - 4) : level; // Levels 5-8 map to 1-4 for speed calc
@@ -1548,6 +1706,12 @@
     var barrierSpawned = false;
     var barrierEnemies = []; // Track barrier enemies separately
 
+    /**
+     * Initialises and begins a numbered wave for the current level. Resets all
+     * formation and barrier tracking state, then delegates to
+     * `spawnMorphingFormation()` to create the enemy group.
+     * @param {number} waveNum - 1-based wave index within the current level.
+     */
     function startWave(waveNum) {
       var levelData = LEVEL_WAVES[level];
       if (!levelData || waveNum > levelData.waves.length) return;
@@ -1596,6 +1760,14 @@
     var allShieldsDown = false;
     var shieldRegenTime = 0;
 
+    /**
+     * Instantiates all formation enemies for the current wave. Enemies enter
+     * from above the canvas in the first (exploded) shape and are marked
+     * `formation: true`. Each enemy carries its `waveShapes` list so
+     * `updateMorphingFormation()` knows what to cycle through. All formation
+     * enemies start shielded.
+     * @param {Object} waveData - Wave descriptor from `LEVEL_WAVES[level].waves`.
+     */
     function spawnMorphingFormation(waveData) {
       var count = waveData.count;
       var centerX = canvas.width / 2;
@@ -1668,6 +1840,12 @@
       shieldRegenTime = 0;
     }
 
+    /**
+     * Spawns a group of kamikaze enemies that first enter from the top in a
+     * horizontal spread, then dive toward the player's position once the group
+     * center has reached its target Y (handled by `updateKamikazeEntry`).
+     * @param {number} count - Number of kamikaze enemies to spawn.
+     */
     function spawnKamikazeWave(count) {
       var levelData = LEVEL_WAVES[level];
       var enemyType = levelData ? levelData.enemyType : 'enemy1';
@@ -1702,6 +1880,11 @@
       }
     }
 
+    /**
+     * Moves the invisible kamikaze group center downward each frame. Once it
+     * reaches its target Y, all kamikazes are given a velocity vector aimed at
+     * the player's current position and begin their dive.
+     */
     function updateKamikazeEntry() {
       if (!kamikazeCenterActive) return;
 
@@ -1742,11 +1925,23 @@
     var targetFormationRotation = 0;
     var lastMorphTime = 0;
 
-    // Ease-in-out function for smooth, natural movement
+    /**
+     * Cubic ease-in-out interpolation for smooth, natural formation movement.
+     * @param {number} t - Progress from 0.0 (start) to 1.0 (end).
+     * @returns {number} Eased value in the same 0–1 range.
+     */
     function easeInOutCubic(t) {
       return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
+    /**
+     * Drives the formation dance cycle. Every 6 BPM beats (~3 s) the formation
+     * switches to the next shape in `waveShapes`, updating each enemy's
+     * `targetPos`. Enemy positions are smoothly lerped using `easeInOutCubic`
+     * over 70% of the morph interval, then held. Also triggers kamikaze launch
+     * after the second morph and shield cascade after the third.
+     * @param {number} time - Current timestamp from `Date.now()`.
+     */
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
       var morphInterval = BPM_INTERVAL * 6;
@@ -1836,7 +2031,12 @@
       });
     }
 
-    // Shield cascade system - shields drop 2 at a time, then regenerate
+    /**
+     * Manages the rolling shield cascade for formation enemies. After 3 morphs,
+     * shields drop 2-at-a-time every 2 seconds (ordered by `shieldOrder`).
+     * Once all shields are down they regenerate after 5 seconds. Shields
+     * permanently broken by 15+ hits (25+ at level 9+) are excluded from regen.
+     */
     function updateShieldCascade() {
       var formationEnemies = enemies.filter(function (e) {
         return e.formation && e.formationType === 'morphing';
@@ -2093,6 +2293,11 @@
       });
     }
 
+    /**
+     * Polls whether all formation enemies have been destroyed. When the wave
+     * is cleared, either starts the next wave within the level (after 3 s) or
+     * calls `advanceLevel()` to move to the next level (after 2 s).
+     */
     function checkWaveCompletion() {
       if (!waveInProgress) return;
 
@@ -2123,6 +2328,12 @@
       }
     }
 
+    /**
+     * Progresses the game to the next level or triggers a boss encounter.
+     * Boss checks happen at level/score thresholds; phase caps prevent
+     * skipping to a phase whose boss hasn't been defeated yet. Resets per-level
+     * power-up tracking and starts the first wave of the new level.
+     */
     function advanceLevel() {
       // Check for boss triggers
       if (!redPhase && level >= 4 && score >= CONFIG.boss1ScoreThreshold && !boss1Defeated) {
@@ -2176,6 +2387,12 @@
     }
 
     // Legacy formation functions (kept for boss fight variety)
+    // Note: spawnSpiralFormation, spawnPincerFormation, spawnSineWaveFormation
+    // are defined here but currently unused in the live wave system.
+    // They are available for future boss-fight scripted sequences.
+
+    /** Spawns 6 enemies at staggered intervals, each entering at the top center
+     *  and then orbiting in a circular formation around y=150. */
     function spawnSpiralFormation() {
       var enemyType = getEnemyType();
       var count = 6;
@@ -2212,6 +2429,11 @@
       }
     }
 
+    /**
+     * Spawns a 3+3 pincer: three enemies enter from the left and three from the
+     * right, sliding to fixed x targets then bouncing rhythmically in time with
+     * the beat.
+     */
     function spawnPincerFormation() {
       var enemyType = getEnemyType();
       var count = 3;
@@ -2272,6 +2494,11 @@
       }
     }
 
+    /**
+     * Spawns 8 enemies evenly spread across the screen width that descend to
+     * y=100, then undulate horizontally in a sine-wave pattern synced to the
+     * background music BPM.
+     */
     function spawnSineWaveFormation() {
       var enemyType = getEnemyType();
       var count = 8;
@@ -2306,6 +2533,13 @@
       }
     }
 
+    /**
+     * Renders a single enemy sprite with an optional BPM-synced breathing scale
+     * (enemy2 variants only) and a colour-coded ripple ring that expands at
+     * 123 BPM. Shielded enemies show a brighter, wider gold ripple with an
+     * additional inner ring. The ripple colour reflects the enemy's type/phase.
+     * @param {Object} enemy - Enemy object from the `enemies` array.
+     */
     function drawEnemy(enemy) {
       var img;
       switch (enemy.type) {
@@ -2413,6 +2647,11 @@
     var lastBossFillerBeat = 0;
     var bossFillerBeatInterval = 4; // Spawn every 4 beats
 
+    /**
+     * Activates a boss encounter matching `currentBoss` (1 = green, 2 = red,
+     * 3 = purple). Clears all existing enemies and minions, plays the boss sting,
+     * and creates the boss object with a shield that is always active at the start.
+     */
     function spawnBoss() {
       bossActive = true;
       enemies = []; // Clear regular enemies
@@ -2446,6 +2685,11 @@
       };
     }
 
+    /**
+     * One-time initialisation of the orbiting escort satellites once the boss
+     * has finished its entrance animation. Orbiter count: 4 (green), 6 (red),
+     * or 8 (purple) based on boss difficulty.
+     */
     function initBossOrbiters() {
       if (orbitersInitialized) return;
       orbitersInitialized = true;
@@ -2458,6 +2702,13 @@
       }
     }
 
+    /**
+     * Creates one orbiter satellite at the given angular slot and pushes it
+     * into `bossOrbiters`. Orbiters use the same enemy sprite as the current
+     * boss phase (enemy1 / enemy1_red / enemy1_purple).
+     * @param {number} index - Angular slot (0..total-1).
+     * @param {number} total - Total number of orbiters in the ring.
+     */
     function spawnOrbiter(index, total) {
       var angle = (index / total) * Math.PI * 2;
       var enemyType = boss.isPurpleBoss ? 'enemy1_purple' : (boss.isRedBoss ? 'enemy1_red' : 'enemy1');
@@ -2477,6 +2728,13 @@
       });
     }
 
+    /**
+     * Each frame: rotates all living orbiters around the boss centre with a
+     * BPM-pulsing radius, draws them with a ripple ring, handles bullet and
+     * player collision, and respawns destroyed orbiters after a 3-second delay.
+     * Returns true if a collision killed the player (signals game loop to stop).
+     * @returns {boolean}
+     */
     function updateBossOrbiters() {
       if (!boss || boss.entering) return;
 
@@ -2600,6 +2858,12 @@
       return false;
     }
 
+    /**
+     * Beat-synced filler enemy spawner active during boss fights. Spawns up to
+     * `maxBossFillers` additional enemies (mix of side-entry and top-entry)
+     * every 4 beats. The spawn chance scales inversely with the current filler
+     * count so the field self-regulates to a comfortable density.
+     */
     function spawnBossFiller() {
       var time = Date.now();
 
@@ -2686,6 +2950,11 @@
       enemies.push(enemy);
     }
 
+    /**
+     * Spawns a single side-scrolling minion that enters from a random edge and
+     * travels across the screen. Minions are distinct from `bossOrbiters` and
+     * `enemies`; they are tracked in the `bossMinions` array.
+     */
     function createBossMinion() {
       // Spawn from left or right side randomly
       var fromLeft = Math.random() < 0.5;
@@ -2703,6 +2972,14 @@
       });
     }
 
+    /**
+     * Per-frame update for all boss minions: draws, moves, checks off-screen
+     * removal, handles bullet collisions (minion kills chip 1 HP off the boss
+     * if the boss is unshielded), and checks player collision. New minions spawn
+     * at the rate defined by `CONFIG.bossMinionSpawnChance`.
+     * Returns true if a collision resulted in player death.
+     * @returns {boolean}
+     */
     function updateBossMinions() {
       for (var i = bossMinions.length - 1; i >= 0; i--) {
         var minion = bossMinions[i];
@@ -2755,6 +3032,12 @@
       return false; // Game continues
     }
 
+    /**
+     * Main boss update called every frame. Manages the shield cycle (on/off
+     * timer; green boss never regains it), entrance animation, horizontal and
+     * optional vertical drift, bullet firing, BPM-synced ripple rendering,
+     * golden shield ripple overlay, and the health bar HUD element.
+     */
     function updateBoss() {
       if (!boss) return;
 
@@ -2923,6 +3206,14 @@
       ctx.textAlign = 'left';
     }
 
+    /**
+     * Registers one player-bullet hit on the boss. Shielded hits deal 0.5 chip
+     * damage; unshielded hits deal 1 HP. At 0 HP, triggers screen shake, clears
+     * all boss entities, awards a score bonus, and advances the game phase:
+     *   Boss 1 → red phase (level 5, score set to 800)
+     *   Boss 2 → purple phase (level 9, score set to 2000)
+     *   Boss 3 → victory screen
+     */
     function damageBoss() {
       if (!boss) return;
 
@@ -3024,6 +3315,10 @@
       }
     }
 
+    /**
+     * Handles the boss hit-flash animation. Decrements `bossBlinkTimer` each
+     * frame and toggles `bossVisible` to create a rapid strobe effect.
+     */
     function updateBossBlink() {
       if (bossBlinking) {
         bossBlinkTimer--;
@@ -3035,6 +3330,11 @@
       }
     }
 
+    /**
+     * Ends the game in a victory state. Clears all game objects, checks for a
+     * top-10 score, builds the victory HTML (score, optional rank badge, email
+     * subscription form, return button), and displays the #victory overlay.
+     */
     function showVictory() {
       gameOver = true;
       stopBossMusic();
@@ -3079,6 +3379,7 @@
       document.getElementById("startButton").style.display = "none";
     }
 
+    /** Stops all audio and navigates back to `index.html`. */
     function returnToHomeScreen() {
       stopBackgroundMusic();
       stopBossMusic();
@@ -3089,6 +3390,13 @@
     // ============================================
     // BULLETS
     // ============================================
+    /**
+     * Fires one or more player bullets from the ship's current position,
+     * based on the active laser level:
+     *   1 → single centre bullet
+     *   2 → dual side-by-side bullets (double laser)
+     *   4 → four evenly spread bullets (quad laser, purple phase only)
+     */
     function shootBullet() {
       playSound('playerBullet');
       if (laserLevel >= 4) {
@@ -3131,6 +3439,11 @@
       }
     }
 
+    /**
+     * Fires one bullet downward from the bottom-centre of the given enemy.
+     * Bullet speed scales with the current game phase (red: +40%, purple: +65%).
+     * @param {Object} enemy - The firing enemy object.
+     */
     function shootEnemyBullet(enemy) {
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       if (purplePhase) {
@@ -3150,6 +3463,12 @@
     // ============================================
     // COLLISION DETECTION
     // ============================================
+    /**
+     * Axis-Aligned Bounding Box (AABB) collision test between two rect objects.
+     * @param {{x:number, y:number, width:number, height:number}} a
+     * @param {{x:number, y:number, width:number, height:number}} b
+     * @returns {boolean} True when the two rects overlap.
+     */
     function isColliding(a, b) {
       return a.x < b.x + b.width &&
         a.x + a.width > b.x &&
@@ -3160,6 +3479,16 @@
     // ============================================
     // PLAYER DAMAGE
     // ============================================
+    /**
+     * Applies damage to the player, accounting for the shield power-up:
+     *   • Purple phase with shield: damage fully blocked.
+     *   • Earlier phases with shield: damage reduced to 5; absorbed entirely
+     *     when health ≤ 15.
+     *   • No shield in red/purple phase: downgrades laser level on hit.
+     * Triggers the player blink effect, updates the HUD, and ends the game
+     * (showing the Game Over overlay) if health reaches 0.
+     * @param {number} damage - HP to subtract before shield mitigation.
+     */
     function playerTakeDamage(damage) {
       if (hasShield) {
         shieldHitsRemaining--;
@@ -3230,6 +3559,11 @@
       }
     }
 
+    /**
+     * Handles the player hit-flash animation. Decrements `playerBlinkTimer`
+     * each frame and toggles `playerVisible` every 3 frames to create a
+     * strobe effect lasting ~0.5 s (30 frames).
+     */
     function updatePlayerBlink() {
       if (playerBlinking) {
         playerBlinkTimer--;
@@ -3312,6 +3646,18 @@
     // ============================================
     // MAIN GAME LOOP
     // ============================================
+    /**
+     * Main game loop, called via `requestAnimationFrame`. Each frame:
+     *   1. Early-returns if game is over; keeps rAF alive while paused.
+     *   2. Clears the canvas and updates screen shake.
+     *   3. Draws the player ship (with blink) and processes keyboard movement.
+     *   4. Updates player bullets (upward movement, off-screen removal, collision
+     *      with boss/enemies, shield interaction).
+     *   5. Updates enemy bullets (downward, player collision, damage application).
+     *   6. Updates power-ups (fall, player collection).
+     *   7. Delegates to the boss subsystem or the wave-formation subsystem.
+     *   8. Schedules the next frame with requestAnimationFrame.
+     */
     function draw() {
       if (gameOver) return;
 
@@ -3786,6 +4132,11 @@
     // ============================================
     // GAME START
     // ============================================
+    /**
+     * Renders the four power-up icon previews into the intro card's small
+     * `<canvas>` elements using the same shapes as the in-game pickups.
+     * Called once at page load so the icons are visible before any game starts.
+     */
     function drawCardPowerupIcons() {
       // Health — red diamond with white plus
       (function () {
@@ -3850,6 +4201,11 @@
 
     drawCardPowerupIcons();
 
+    /**
+     * Called by the intro card's "Start Game" button. Hides the card, shows the
+     * Pause button in game-active state, then programmatically clicks the start
+     * button to begin the first game session.
+     */
     function startFromCard() {
       document.getElementById('introCard').style.display = 'none';
       var sb = document.getElementById('startButton');
@@ -3860,6 +4216,11 @@
       sb.click();
     }
 
+    // ── Start / Pause button listener ────────────────────────────────────────
+    // Dual-purpose: when `gameOver` is true it fully resets and starts a new
+    // game session; otherwise it toggles the pause state. All mutable game
+    // state variables are explicitly reset here to avoid leftover values from
+    // the previous run affecting the new session.
     var startButton = document.getElementById("startButton");
     startButton.addEventListener("click", function () {
       this.blur();

@@ -1,17 +1,57 @@
+<!--
+  ============================================================
+  index.html — Nonex Main Menu
+  ============================================================
+  Entry point for the Nonex web game. Presents the player with
+  platform selection (Computer / Mobile), settings toggles, and
+  a Play button that navigates to the appropriate game file.
+
+  Navigation targets:
+    • game.html        — Desktop build (800×600, keyboard controls)
+    • game_mobile.html — Mobile build (480×1040, touch controls)
+
+  Persistent state (localStorage keys):
+    • nonex_platform   — Last selected platform ('computer' | 'mobile')
+    • nonex_music      — Background music preference ('on' | 'off')
+    • nonex_analytics  — Analytics consent ('on' | 'off')
+    • nonex_event_queue — Buffered analytics events (JSON array, max 200)
+
+  Session state (sessionStorage keys):
+    • nonex_session    — Unique ID for the current browser tab session
+
+  Analytics:
+    Set ANALYTICS_ENDPOINT to a POST-accepting URL to stream events.
+    Leave as '' to buffer locally only (useful for debugging via
+    localStorage.getItem('nonex_event_queue')).
+
+  Dependencies: None (no external libraries or frameworks).
+  ============================================================
+-->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nonex</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Reset — consistent box model across all elements */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-    html, body {
+    /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
+    html,
+    body {
       overscroll-behavior: none;
       touch-action: none;
     }
 
+    /* Full-screen centered layout; overflow hidden to prevent any scroll */
     body {
       background: #000;
       color: #fff;
@@ -26,16 +66,23 @@
       gap: 36px;
     }
 
-    /* ── Starfield ── */
+    /* ── Starfield ──────────────────────────────────────────────────────────
+       Full-screen canvas rendered behind all menu content.
+       Animated via requestAnimationFrame in the Starfield IIFE below.       */
     #starfield {
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       z-index: 0;
+      /* Behind menu content */
       pointer-events: none;
+      /* Never intercepts clicks */
     }
 
-    /* ── Content wrapper ── */
+    /* ── Content wrapper ────────────────────────────────────────────────────
+       Sits above the starfield canvas via z-index.                          */
     .menu-wrap {
       position: relative;
       z-index: 1;
@@ -45,7 +92,9 @@
       gap: 36px;
     }
 
-    /* ── Title ── */
+    /* ── Title ──────────────────────────────────────────────────────────────
+       Fluid font size: clamp ensures readability from mobile to large screens.
+       Cyan glow pulses via CSS animation for visual depth.                  */
     .title {
       font-size: clamp(52px, 12vw, 96px);
       font-weight: bold;
@@ -55,16 +104,26 @@
       text-shadow:
         0 0 18px #00FFFF,
         0 0 40px #00FFFF,
-        0 0 80px rgba(0,255,255,0.4);
+        0 0 80px rgba(0, 255, 255, 0.4);
       animation: titlePulse 3s ease-in-out infinite;
     }
 
+    /* Subtle pulsing glow — breathes between two intensity levels */
     @keyframes titlePulse {
-      0%, 100% { text-shadow: 0 0 18px #00FFFF, 0 0 40px #00FFFF, 0 0 80px rgba(0,255,255,0.4); }
-      50%       { text-shadow: 0 0 28px #00FFFF, 0 0 60px #00FFFF, 0 0 110px rgba(0,255,255,0.6); }
+
+      0%,
+      100% {
+        text-shadow: 0 0 18px #00FFFF, 0 0 40px #00FFFF, 0 0 80px rgba(0, 255, 255, 0.4);
+      }
+
+      50% {
+        text-shadow: 0 0 28px #00FFFF, 0 0 60px #00FFFF, 0 0 110px rgba(0, 255, 255, 0.6);
+      }
     }
 
-    /* ── Platform buttons ── */
+    /* ── Platform buttons ───────────────────────────────────────────────────
+       Two-button group for selecting Computer vs Mobile build.
+       Active selection indicated by the .selected class.                    */
     .platform-group {
       display: flex;
       gap: 20px;
@@ -88,6 +147,7 @@
       line-height: 1.4;
     }
 
+    /* Sub-label text inside each platform button */
     .platform-btn span {
       display: block;
       font-size: 12px;
@@ -98,21 +158,23 @@
       transition: color 0.2s;
     }
 
+    /* Hover and selected state share the same cyan highlight style */
     .platform-btn:hover,
     .platform-btn.selected {
       border-color: #00FFFF;
       color: #00FFFF;
-      background: rgba(0,255,255,0.08);
+      background: rgba(0, 255, 255, 0.08);
       text-shadow: 0 0 8px #00FFFF;
-      box-shadow: 0 0 16px rgba(0,255,255,0.25);
+      box-shadow: 0 0 16px rgba(0, 255, 255, 0.25);
     }
 
     .platform-btn.selected span,
     .platform-btn:hover span {
-      color: rgba(0,255,255,0.7);
+      color: rgba(0, 255, 255, 0.7);
     }
 
-    /* ── Toggle rows ── */
+    /* ── Toggle rows ────────────────────────────────────────────────────────
+       Container for the Music and Analytics toggle settings.                */
     .toggles {
       display: flex;
       flex-direction: column;
@@ -121,6 +183,8 @@
       width: 260px;
     }
 
+    /* Each toggle row is a <label> wrapping the text and the pill switch.
+       Using <label> makes the entire row clickable for accessibility.       */
     .toggle-row {
       display: flex;
       justify-content: space-between;
@@ -128,7 +192,7 @@
       padding: 14px 18px;
       border: 1px solid #2a2a2a;
       border-radius: 8px;
-      background: rgba(255,255,255,0.03);
+      background: rgba(255, 255, 255, 0.03);
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
       user-select: none;
@@ -136,7 +200,7 @@
 
     .toggle-row:hover {
       border-color: #555;
-      background: rgba(255,255,255,0.06);
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .toggle-label {
@@ -144,6 +208,7 @@
       color: #ccc;
     }
 
+    /* Descriptive sub-text below each toggle label */
     .toggle-label small {
       display: block;
       font-size: 11px;
@@ -151,7 +216,9 @@
       margin-top: 2px;
     }
 
-    /* Pill switch */
+    /* ── Pill switch ────────────────────────────────────────────────────────
+       Custom checkbox styled as a sliding pill toggle.
+       The hidden <input> drives state; the .slider is the visual element.   */
     .switch {
       position: relative;
       width: 46px;
@@ -159,8 +226,12 @@
       flex-shrink: 0;
     }
 
-    .switch input { display: none; }
+    /* Hide the native checkbox — interaction handled by the parent <label> */
+    .switch input {
+      display: none;
+    }
 
+    /* The pill track */
     .slider {
       position: absolute;
       inset: 0;
@@ -170,24 +241,33 @@
       cursor: pointer;
     }
 
+    /* The sliding knob inside the pill */
     .slider::before {
       content: '';
       position: absolute;
-      width: 20px; height: 20px;
-      left: 3px; top: 3px;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      top: 3px;
       border-radius: 50%;
       background: #888;
       transition: transform 0.2s, background 0.2s;
     }
 
-    input:checked + .slider { background: rgba(0,255,136,0.25); }
-    input:checked + .slider::before {
+    /* Checked state: track turns translucent green */
+    input:checked+.slider {
+      background: rgba(0, 255, 136, 0.25);
+    }
+
+    /* Checked state: knob slides right and glows green */
+    input:checked+.slider::before {
       transform: translateX(20px);
       background: #00FF88;
       box-shadow: 0 0 8px #00FF88;
     }
 
-    /* ── Play button ── */
+    /* ── Play button ────────────────────────────────────────────────────────
+       Primary CTA. Navigates to the selected game file on click.            */
     #playBtn {
       padding: 18px 80px;
       font-size: 20px;
@@ -200,30 +280,35 @@
       border: none;
       border-radius: 10px;
       cursor: pointer;
-      box-shadow: 0 0 24px rgba(0,255,255,0.5);
+      box-shadow: 0 0 24px rgba(0, 255, 255, 0.5);
       transition: all 0.2s;
     }
 
     #playBtn:hover {
       background: #fff;
-      box-shadow: 0 0 40px rgba(0,255,255,0.9);
+      box-shadow: 0 0 40px rgba(0, 255, 255, 0.9);
       transform: scale(1.04);
     }
 
     #playBtn:active {
       transform: scale(0.98);
+      /* Tactile press feedback */
     }
   </style>
 </head>
+
 <body>
 
+  <!-- Starfield background canvas — drawn behind all menu elements -->
   <canvas id="starfield"></canvas>
 
+  <!-- Main menu content — layered above the starfield via z-index -->
   <div class="menu-wrap">
 
+    <!-- Game title -->
     <div class="title">Nonex</div>
 
-    <!-- Platform select -->
+    <!-- Platform selector: determines which game file is loaded on Play -->
     <div class="platform-group">
       <button class="platform-btn selected" id="btnComputer" onclick="selectPlatform('computer')">
         Computer
@@ -233,9 +318,10 @@
       </button>
     </div>
 
-    <!-- Toggles -->
+    <!-- Settings toggles: Music and Anonymous Analytics -->
     <div class="toggles">
 
+      <!-- Music toggle: controls whether bgMusic plays during gameplay -->
       <label class="toggle-row" for="musicSwitch">
         <div class="toggle-label">
           Music
@@ -247,6 +333,7 @@
         </div>
       </label>
 
+      <!-- Analytics toggle: opt-in consent gate for event tracking -->
       <label class="toggle-row" for="analyticsSwitch">
         <div class="toggle-label">
           Anonymous Data
@@ -260,42 +347,60 @@
 
     </div>
 
-    <!-- Play -->
+    <!-- Play button: saves prefs, fires analytics event, navigates to game -->
     <button id="playBtn" onclick="launchGame()">Play</button>
 
   </div>
 
   <script>
-    // ── Starfield ────────────────────────────────────────────────────────
+    // ============================================================
+    // STARFIELD
+    // ============================================================
+    // Self-contained IIFE so starfield variables don't pollute
+    // the global scope. Runs its own requestAnimationFrame loop
+    // independently of the game loop.
     (function () {
       var c = document.getElementById('starfield');
       var ctx = c.getContext('2d');
       var stars = [];
-      var NUM_STARS = 160;
+      var NUM_STARS = 160; // Total number of particles in the field
 
+      /**
+       * Resizes the canvas to fill the viewport.
+       * Called on init and whenever the window is resized.
+       */
       function resize() {
         c.width = window.innerWidth;
         c.height = window.innerHeight;
       }
 
+      /**
+       * Populates the stars array with randomly distributed particles.
+       * Each star has a position (x, y), radius (r), fall speed, and opacity (alpha).
+       */
       function initStars() {
         stars = [];
         for (var i = 0; i < NUM_STARS; i++) {
           stars.push({
             x: Math.random() * c.width,
             y: Math.random() * c.height,
-            r: Math.random() * 1.5 + 0.3,
-            speed: Math.random() * 0.4 + 0.1,
-            alpha: Math.random() * 0.6 + 0.3
+            r: Math.random() * 1.5 + 0.3,   // Radius: 0.3–1.8px
+            speed: Math.random() * 0.4 + 0.1,   // Fall speed: 0.1–0.5px per frame
+            alpha: Math.random() * 0.6 + 0.3    // Opacity: 0.3–0.9
           });
         }
       }
 
+      /**
+       * Main animation loop. Clears the canvas and redraws all stars each frame.
+       * Stars that fall off the bottom are recycled to a random position at the top.
+       */
       function tick() {
         ctx.clearRect(0, 0, c.width, c.height);
         for (var i = 0; i < stars.length; i++) {
           var s = stars[i];
           s.y += s.speed;
+          // Recycle star to the top when it exits the bottom edge
           if (s.y > c.height) { s.y = 0; s.x = Math.random() * c.width; }
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
@@ -305,64 +410,98 @@
         requestAnimationFrame(tick);
       }
 
+      // Re-init on resize to avoid stretched/clipped stars
       window.addEventListener('resize', function () { resize(); initStars(); });
       resize();
       initStars();
       tick();
     })();
 
-    // ── Analytics ────────────────────────────────────────────────────────
-    // Set ANALYTICS_ENDPOINT to your server URL to start receiving events.
-    // Leave as '' to buffer locally in localStorage only.
-    var ANALYTICS_ENDPOINT = '';
+    // ============================================================
+    // ANALYTICS
+    // ============================================================
+    // Lightweight event tracking system. Events are always buffered
+    // to localStorage for offline access/debugging. If ANALYTICS_ENDPOINT
+    // is set, events are also POSTed to that URL in real time.
+    //
+    // To enable: set ANALYTICS_ENDPOINT to your server's POST URL.
+    // To inspect buffered events locally:
+    //   JSON.parse(localStorage.getItem('nonex_event_queue'))
+    var ANALYTICS_ENDPOINT = ''; // e.g. 'https://your-server.com/events'
 
+    /**
+     * Generates a unique ID from the current timestamp and random entropy.
+     * Used for session IDs. Format: base36(timestamp) + random suffix.
+     * @returns {string} A short unique identifier string.
+     */
     function generateId() {
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     }
 
-    // One session ID per browser tab, persists until tab is closed
+    // Unique session ID scoped to the current browser tab.
+    // Persists across page reloads within the tab but resets on tab close.
     var sessionId = sessionStorage.getItem('nonex_session');
     if (!sessionId) {
       sessionId = generateId();
       sessionStorage.setItem('nonex_session', sessionId);
     }
 
+    /**
+     * Records a named analytics event with optional metadata.
+     * Requires user consent (nonex_analytics === 'on') for all events
+     * except 'analytics_toggled', which is always recorded so the
+     * opt-in moment itself can be captured.
+     *
+     * @param {string} name - The event name (e.g. 'play_clicked').
+     * @param {Object} [data] - Optional key/value metadata for the event.
+     */
     function trackEvent(name, data) {
-      // Always allow the consent-change event itself so we capture the opt-in moment.
-      // All other events require analytics consent.
+      // Gate on consent — except for the consent-change event itself
       var hasConsent = localStorage.getItem('nonex_analytics') === 'on';
       if (!hasConsent && name !== 'analytics_toggled') return;
 
       var event = {
-        event:   name,
+        event: name,
         session: sessionId,
-        ts:      new Date().toISOString(),
-        data:    data || {}
+        ts: new Date().toISOString(),
+        data: data || {}
       };
 
-      // Buffer in localStorage (useful for later batch-upload or debugging)
+      // Buffer event locally — capped at 200 entries to prevent unbounded growth
       try {
         var queue = JSON.parse(localStorage.getItem('nonex_event_queue') || '[]');
         queue.push(event);
-        // Keep last 200 events to avoid unbounded growth
         if (queue.length > 200) queue = queue.slice(-200);
         localStorage.setItem('nonex_event_queue', JSON.stringify(queue));
-      } catch (e) { /* storage full — skip buffering */ }
+      } catch (e) { /* Silently skip if localStorage is full or unavailable */ }
 
-      // POST to endpoint if configured
+      // Fire-and-forget POST to the analytics endpoint if configured
       if (ANALYTICS_ENDPOINT) {
         fetch(ANALYTICS_ENDPOINT, {
-          method:    'POST',
-          headers:   { 'Content-Type': 'application/json' },
-          body:      JSON.stringify(event),
-          keepalive: true   // fires even if user navigates away
-        }).catch(function () { /* silently ignore network errors */ });
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(event),
+          keepalive: true // Ensures the request fires even if the user navigates away
+        }).catch(function () { /* Silently ignore network errors */ });
       }
     }
 
-    // ── Preferences ─────────────────────────────────────────────────────
+    // ============================================================
+    // PREFERENCES
+    // ============================================================
+    // User preferences are persisted to localStorage so they are
+    // restored on the next visit. Defaults: Computer platform, music on,
+    // analytics off (opt-in only).
+
+    /** Currently selected platform ('computer' | 'mobile'). */
     var selectedPlatform = 'computer';
 
+    /**
+     * Updates the active platform selection and persists the preference.
+     * Fires a 'platform_selected' analytics event when the value changes.
+     *
+     * @param {string} p - Platform identifier: 'computer' or 'mobile'.
+     */
     function selectPlatform(p) {
       var prev = selectedPlatform;
       selectedPlatform = p;
@@ -374,49 +513,73 @@
       }
     }
 
+    /**
+     * Writes all current preference values to localStorage.
+     * Called after any preference changes to ensure persistence.
+     */
     function savePrefs() {
-      localStorage.setItem('nonex_music',     document.getElementById('musicSwitch').checked     ? 'on' : 'off');
+      localStorage.setItem('nonex_music', document.getElementById('musicSwitch').checked ? 'on' : 'off');
       localStorage.setItem('nonex_analytics', document.getElementById('analyticsSwitch').checked ? 'on' : 'off');
-      localStorage.setItem('nonex_platform',  selectedPlatform);
+      localStorage.setItem('nonex_platform', selectedPlatform);
     }
 
+    /**
+     * Handles the Music toggle change event.
+     * Saves the updated preference and records an analytics event.
+     */
     function onMusicToggle() {
       var val = document.getElementById('musicSwitch').checked ? 'on' : 'off';
       savePrefs();
       trackEvent('music_toggled', { value: val });
     }
 
+    /**
+     * Handles the Analytics toggle change event.
+     * Saves consent to localStorage before calling trackEvent, so the
+     * consent status is already correct when trackEvent reads it.
+     */
     function onAnalyticsToggle() {
       var val = document.getElementById('analyticsSwitch').checked ? 'on' : 'off';
       savePrefs();
-      // trackEvent reads the updated localStorage value, so consent is already saved
       trackEvent('analytics_toggled', { value: val });
     }
 
+    /**
+     * Restores saved preferences from localStorage on page load.
+     * Falls back to defaults if no saved values exist.
+     */
     function loadPrefs() {
-      var music     = localStorage.getItem('nonex_music');
+      var music = localStorage.getItem('nonex_music');
       var analytics = localStorage.getItem('nonex_analytics');
-      var platform  = localStorage.getItem('nonex_platform');
+      var platform = localStorage.getItem('nonex_platform');
 
-      if (music !== null)     document.getElementById('musicSwitch').checked     = (music === 'on');
+      if (music !== null) document.getElementById('musicSwitch').checked = (music === 'on');
       if (analytics !== null) document.getElementById('analyticsSwitch').checked = (analytics === 'on');
-      if (platform)           selectPlatform(platform);
+      if (platform) selectPlatform(platform);
     }
 
+    /**
+     * Saves current preferences, fires the 'play_clicked' analytics event,
+     * and navigates to the appropriate game file based on the selected platform.
+     * A short delay is added when an analytics endpoint is configured so the
+     * fetch request has time to fire before the page unloads.
+     */
     function launchGame() {
       savePrefs();
       trackEvent('play_clicked', {
-        platform:  selectedPlatform,
-        music:     localStorage.getItem('nonex_music'),
+        platform: selectedPlatform,
+        music: localStorage.getItem('nonex_music'),
         analytics: localStorage.getItem('nonex_analytics')
       });
       var dest = selectedPlatform === 'mobile' ? 'game_mobile.html' : 'game.html';
-      // Small delay so the fetch can fire before navigation
+      // Delay navigation slightly so the analytics fetch can fire before unload
       setTimeout(function () { window.location.href = dest; }, ANALYTICS_ENDPOINT ? 120 : 0);
     }
 
+    // Restore saved preferences and log the menu view on page load
     loadPrefs();
     trackEvent('menu_view', { referrer: document.referrer || 'direct' });
   </script>
 </body>
+
 </html>
