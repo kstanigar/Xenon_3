@@ -4054,6 +4054,10 @@
             if (formationTargetCenterY - formationCurrentCenterY < 1) {
               formationCurrentCenterY = formationTargetCenterY;
               formationEntered = true;
+              // Reset morph clock so the first exploded→collapsed transition
+              // starts fresh from this moment rather than snapping instantly.
+              morphStartTime = Date.now();
+              lastMorphTime = Date.now();
               // Show shield warning (brief after level 1 - players already know)
               var warningEl = document.getElementById("warningDisplay");
               warningEl.style.display = "block";
