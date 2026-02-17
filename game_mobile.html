@@ -1065,6 +1065,8 @@
      */
     function collectPowerup(powerup) {
       playSound('powerUp');
+      score += 5;
+      updateUI();
       if (powerup.type === POWERUP_TYPES.HEALTH) {
         health = Math.min(health + CONFIG.healthPowerupAmount, CONFIG.maxHealth);
         updateUI();
