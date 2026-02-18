@@ -963,38 +963,42 @@
       var rippleAlpha = 1 - beatPhase; // Fade out as it expands
 
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
-      var rippleColor;
-      if (powerup.type === POWERUP_TYPES.HEALTH) {
-        rippleColor = 'rgba(255, 50, 50, ' + (rippleAlpha * 0.5) + ')';
-      } else if (powerup.type === POWERUP_TYPES.SHIELD) {
-        rippleColor = 'rgba(0, 255, 255, ' + (rippleAlpha * 0.5) + ')';
-      } else {
-        rippleColor = 'rgba(153, 50, 255, ' + (rippleAlpha * 0.5) + ')';
+      if (rippleAlpha > 0.05) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
+        var rippleColor;
+        if (powerup.type === POWERUP_TYPES.HEALTH) {
+          rippleColor = 'rgba(255, 50, 50, ' + (rippleAlpha * 0.5) + ')';
+        } else if (powerup.type === POWERUP_TYPES.SHIELD) {
+          rippleColor = 'rgba(0, 255, 255, ' + (rippleAlpha * 0.5) + ')';
+        } else {
+          rippleColor = 'rgba(153, 50, 255, ' + (rippleAlpha * 0.5) + ')';
+        }
+        ctx.strokeStyle = rippleColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
       }
-      ctx.strokeStyle = rippleColor;
-      ctx.lineWidth = 3;
-      ctx.stroke();
 
       // Second ripple (offset by half beat)
       var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
       var rippleRadius2 = beatPhase2 * maxRippleRadius;
       var rippleAlpha2 = 1 - beatPhase2;
 
-      ctx.beginPath();
-      ctx.arc(cx, cy, rippleRadius2, 0, Math.PI * 2);
-      var rippleColor2;
-      if (powerup.type === POWERUP_TYPES.HEALTH) {
-        rippleColor2 = 'rgba(255, 50, 50, ' + (rippleAlpha2 * 0.3) + ')';
-      } else if (powerup.type === POWERUP_TYPES.SHIELD) {
-        rippleColor2 = 'rgba(0, 255, 255, ' + (rippleAlpha2 * 0.3) + ')';
-      } else {
-        rippleColor2 = 'rgba(153, 50, 255, ' + (rippleAlpha2 * 0.3) + ')';
+      if (rippleAlpha2 > 0.05) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rippleRadius2, 0, Math.PI * 2);
+        var rippleColor2;
+        if (powerup.type === POWERUP_TYPES.HEALTH) {
+          rippleColor2 = 'rgba(255, 50, 50, ' + (rippleAlpha2 * 0.3) + ')';
+        } else if (powerup.type === POWERUP_TYPES.SHIELD) {
+          rippleColor2 = 'rgba(0, 255, 255, ' + (rippleAlpha2 * 0.3) + ')';
+        } else {
+          rippleColor2 = 'rgba(153, 50, 255, ' + (rippleAlpha2 * 0.3) + ')';
+        }
+        ctx.strokeStyle = rippleColor2;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-      ctx.strokeStyle = rippleColor2;
-      ctx.lineWidth = 2;
-      ctx.stroke();
       ctx.restore();
 
       if (powerup.type === POWERUP_TYPES.HEALTH) {
@@ -2636,23 +2640,25 @@
         rippleColor = 'rgba(200, 100, 255, ' + (rippleAlpha * 0.4) + ')';
       }
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = rippleColor;
-      ctx.lineWidth = isShielded ? 5 : 2; // Thicker line when shielded
-      ctx.stroke();
-
-      // Draw second inner ripple for shielded enemies
-      if (isShielded) {
-        var innerRippleRadius = rippleRadius * 0.6;
+      if (rippleAlpha > 0.05) {
+        ctx.save();
         ctx.beginPath();
-        ctx.arc(cx, cy, innerRippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (rippleAlpha * 0.5) + ')';
-        ctx.lineWidth = 3;
+        ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = rippleColor;
+        ctx.lineWidth = isShielded ? 5 : 2; // Thicker line when shielded
         ctx.stroke();
+
+        // Draw second inner ripple for shielded enemies
+        if (isShielded) {
+          var innerRippleRadius = rippleRadius * 0.6;
+          ctx.beginPath();
+          ctx.arc(cx, cy, innerRippleRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 255, 100, ' + (rippleAlpha * 0.5) + ')';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+        ctx.restore();
       }
-      ctx.restore();
 
       // Draw enemy
       ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
@@ -2808,18 +2814,20 @@
         var rippleRadius = ripplePhase * maxRipple;
         var rippleAlpha = 1 - ripplePhase;
 
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(orbiterX + orbiter.width / 2, orbiterY + orbiter.height / 2, rippleRadius, 0, Math.PI * 2);
-        var rippleColor = boss.isPurpleBoss ?
-          'rgba(180, 80, 255, ' + (rippleAlpha * 0.5) + ')' :
-          (boss.isRedBoss ?
-            'rgba(255, 100, 100, ' + (rippleAlpha * 0.5) + ')' :
-            'rgba(100, 255, 100, ' + (rippleAlpha * 0.5) + ')');
-        ctx.strokeStyle = rippleColor;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
+        if (rippleAlpha > 0.05) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(orbiterX + orbiter.width / 2, orbiterY + orbiter.height / 2, rippleRadius, 0, Math.PI * 2);
+          var rippleColor = boss.isPurpleBoss ?
+            'rgba(180, 80, 255, ' + (rippleAlpha * 0.5) + ')' :
+            (boss.isRedBoss ?
+              'rgba(255, 100, 100, ' + (rippleAlpha * 0.5) + ')' :
+              'rgba(100, 255, 100, ' + (rippleAlpha * 0.5) + ')');
+          ctx.strokeStyle = rippleColor;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
 
         // Draw orbiter image
         var img = boss.isPurpleBoss ? enemyImg1Purple : (boss.isRedBoss ? enemyImg1Red : enemyImg1);
@@ -3087,8 +3095,9 @@
 
       // Boss entrance animation
       if (boss.entering) {
-        boss.y += 1;
+        boss.y += 3;
         if (boss.y >= 245) {
+          boss.y = 245;
           boss.entering = false;
         }
       } else {
@@ -3137,34 +3146,38 @@
       var bossRippleAlpha = 1 - beatPhase;
 
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(bossCx, bossCy, bossRippleRadius, 0, Math.PI * 2);
-      var bossRippleColor = boss.isPurpleBoss ?
-        'rgba(160, 50, 255, ' + (bossRippleAlpha * 0.5) + ')' :
-        (boss.isRedBoss ?
-          'rgba(255, 50, 50, ' + (bossRippleAlpha * 0.5) + ')' :
-          'rgba(50, 255, 50, ' + (bossRippleAlpha * 0.5) + ')');
-      ctx.strokeStyle = bossRippleColor;
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      if (bossRippleAlpha > 0.05) {
+        ctx.beginPath();
+        ctx.arc(bossCx, bossCy, bossRippleRadius, 0, Math.PI * 2);
+        var bossRippleColor = boss.isPurpleBoss ?
+          'rgba(160, 50, 255, ' + (bossRippleAlpha * 0.5) + ')' :
+          (boss.isRedBoss ?
+            'rgba(255, 50, 50, ' + (bossRippleAlpha * 0.5) + ')' :
+            'rgba(50, 255, 50, ' + (bossRippleAlpha * 0.5) + ')');
+        ctx.strokeStyle = bossRippleColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
 
       // Second boss ripple
       var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
       var bossRippleRadius2 = beatPhase2 * maxBossRipple;
       var bossRippleAlpha2 = 1 - beatPhase2;
-      ctx.beginPath();
-      ctx.arc(bossCx, bossCy, bossRippleRadius2, 0, Math.PI * 2);
-      var bossRippleColor2 = boss.isPurpleBoss ?
-        'rgba(160, 50, 255, ' + (bossRippleAlpha2 * 0.3) + ')' :
-        (boss.isRedBoss ?
-          'rgba(255, 50, 50, ' + (bossRippleAlpha2 * 0.3) + ')' :
-          'rgba(50, 255, 50, ' + (bossRippleAlpha2 * 0.3) + ')');
-      ctx.strokeStyle = bossRippleColor2;
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      if (bossRippleAlpha2 > 0.05) {
+        ctx.beginPath();
+        ctx.arc(bossCx, bossCy, bossRippleRadius2, 0, Math.PI * 2);
+        var bossRippleColor2 = boss.isPurpleBoss ?
+          'rgba(160, 50, 255, ' + (bossRippleAlpha2 * 0.3) + ')' :
+          (boss.isRedBoss ?
+            'rgba(255, 50, 50, ' + (bossRippleAlpha2 * 0.3) + ')' :
+            'rgba(50, 255, 50, ' + (bossRippleAlpha2 * 0.3) + ')');
+        ctx.strokeStyle = bossRippleColor2;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
 
       // Draw golden shield ripple when boss is shielded
-      if (boss.shielded) {
+      if (boss.shielded && bossRippleAlpha > 0.05) {
         var shieldRippleRadius = beatPhase * maxBossRipple * 1.3;
         ctx.beginPath();
         ctx.arc(bossCx, bossCy, shieldRippleRadius, 0, Math.PI * 2);
@@ -3784,21 +3797,25 @@
         var shieldRippleAlpha = 1 - beatPhase;
 
         ctx.save();
-        ctx.beginPath();
-        ctx.arc(playerCx, playerCy, shieldRippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha * 0.6) + ')';
-        ctx.lineWidth = 3;
-        ctx.stroke();
+        if (shieldRippleAlpha > 0.05) {
+          ctx.beginPath();
+          ctx.arc(playerCx, playerCy, shieldRippleRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha * 0.6) + ')';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
 
         // Second ripple
         var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
         var shieldRippleRadius2 = beatPhase2 * maxShieldRipple;
         var shieldRippleAlpha2 = 1 - beatPhase2;
-        ctx.beginPath();
-        ctx.arc(playerCx, playerCy, shieldRippleRadius2, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha2 * 0.4) + ')';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        if (shieldRippleAlpha2 > 0.05) {
+          ctx.beginPath();
+          ctx.arc(playerCx, playerCy, shieldRippleRadius2, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha2 * 0.4) + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
@@ -4089,7 +4106,10 @@
         for (var i = enemies.length - 1; i >= 0; i--) {
           var enemy = enemies[i];
 
-          drawEnemy(enemy);
+          // Skip drawing enemies that are entirely above the canvas
+          if (enemy.y + enemy.height > 0) {
+            drawEnemy(enemy);
+          }
 
           // Formation enemies - position relative to formation center
           if (enemy.formation) {
