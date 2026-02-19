@@ -440,8 +440,8 @@
       enemySpawnIncrease: 0.005,
 
       // Enemy shooting (starts at level 2)
-      enemyShootChance: 0.005,
-      enemyShootIncrease: 0.002,
+      enemyShootChance: 0.003,
+      enemyShootIncrease: 0.001,
       enemyBulletSpeed: 5,
 
       // Boss settings
@@ -581,19 +581,32 @@
 
     var bossIntroInterval = null;
 
+    // Minimum ms between plays for high-frequency sounds; unlisted = no limit
+    var soundCooldowns = {
+      enemyDead: 80,   // Throttle mass formation kills
+      playerHit: 200   // Avoid rapid hit spam
+    };
+    var lastSoundTime = {};
+
     /**
      * Plays a one-shot sound effect by resetting its playback position and
-     * calling play(). Autoplay errors are silently ignored (browser policy).
+     * calling play(). Sounds listed in soundCooldowns are throttled to avoid
+     * audio congestion during mass events. Autoplay errors are silently ignored.
      * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
      */
     function playSound(soundName) {
       var sound = sounds[soundName];
-      if (sound) {
-        sound.currentTime = 0;
-        sound.play().catch(function (e) {
-          // Ignore autoplay errors
-        });
+      if (!sound) return;
+      var cooldown = soundCooldowns[soundName];
+      if (cooldown) {
+        var now = Date.now();
+        if (lastSoundTime[soundName] && now - lastSoundTime[soundName] < cooldown) return;
+        lastSoundTime[soundName] = now;
       }
+      sound.currentTime = 0;
+      sound.play().catch(function (e) {
+        // Ignore autoplay errors
+      });
     }
 
     /**
@@ -894,13 +907,14 @@
       var width = 40;
       var height = 40;
 
-      // Clamp spawn x to the visible canvas strip (cover-scaled)
-      var spawnMinX = 0;
-      var spawnMaxX = canvas.width - width;
+      // Clamp spawn x to the visible canvas strip (cover-scaled), with 20px
+      // inward margin to prevent edge-spawned powerups clipping off-screen
+      // when the breathing animation scales them up.
+      var POWERUP_MARGIN = 20;
       var scale = Math.max(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
       var visibleHalf = (window.innerWidth / scale) / 2;
-      spawnMinX = Math.max(0, canvas.width / 2 - visibleHalf);
-      spawnMaxX = Math.min(canvas.width - width, canvas.width / 2 + visibleHalf - width);
+      var spawnMinX = Math.max(0, canvas.width / 2 - visibleHalf) + POWERUP_MARGIN;
+      var spawnMaxX = Math.min(canvas.width - width, canvas.width / 2 + visibleHalf - width) - POWERUP_MARGIN;
 
       // Find a non-overlapping spawn position (try up to 10 times)
       var x, y = 0;
@@ -1659,73 +1673,73 @@
       1: {
         enemyType: 'enemy1',
         waves: [
-          { count: 9, kamikazes: 2, shapes: ['grid3x3Exploded', 'grid3x3'], barrier: 'circle', barrierCount: 5 }
+          { count: 7, kamikazes: 2, shapes: ['grid3x3Exploded', 'grid3x3'], barrier: 'circle', barrierCount: 5 }
         ]
       },
       2: {
         enemyType: 'enemy2',
         waves: [
-          { count: 9, kamikazes: 2, shapes: ['diamondExploded', 'diamond'], barrier: 'horizontalLine', barrierCount: 5 }
+          { count: 7, kamikazes: 2, shapes: ['diamondExploded', 'diamond'], barrier: 'horizontalLine', barrierCount: 5 }
         ]
       },
       3: {
         enemyType: 'enemy3',
         waves: [
-          { count: 10, kamikazes: 3, shapes: ['circleExploded', 'circle'], barrier: null }
+          { count: 8, kamikazes: 2, shapes: ['circleExploded', 'circle'], barrier: null }
         ]
       },
       4: {
         enemyType: 'enemy4',
         waves: [
-          { count: 9, kamikazes: 3, shapes: ['flyingVExploded', 'flyingV'], barrier: 'arrow', barrierCount: 5 }
+          { count: 7, kamikazes: 2, shapes: ['flyingVExploded', 'flyingV'], barrier: 'arrow', barrierCount: 5 }
         ]
       },
       5: {
         enemyType: 'enemy1_red',
         waves: [
-          { count: 16, kamikazes: 3, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
+          { count: 13, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
         ]
       },
       6: {
         enemyType: 'enemy2_red',
         waves: [
-          { count: 13, kamikazes: 3, shapes: ['doubleDiamondExploded', 'doubleDiamond'], barrier: 'orbitingShield', barrierCount: 6 }
+          { count: 10, kamikazes: 2, shapes: ['doubleDiamondExploded', 'doubleDiamond'], barrier: 'orbitingShield', barrierCount: 6 }
         ]
       },
       7: {
         enemyType: 'enemy3_red',
         waves: [
-          { count: 11, kamikazes: 4, shapes: ['doubleVExploded', 'doubleV'], barrier: null }
+          { count: 9, kamikazes: 3, shapes: ['doubleVExploded', 'doubleV'], barrier: null }
         ]
       },
       8: {
         enemyType: 'enemy4_red',
         waves: [
-          { count: 12, kamikazes: 4, shapes: ['dualSineWaveExploded', 'dualSineWave'], barrier: 'dualLines', barrierCount: 8 }
+          { count: 10, kamikazes: 3, shapes: ['dualSineWaveExploded', 'dualSineWave'], barrier: 'dualLines', barrierCount: 8 }
         ]
       },
       9: {
         enemyType: 'enemy1_purple',
         waves: [
-          { count: 18, kamikazes: 4, shapes: ['spiralExploded', 'spiral'], barrier: 'orbitingShield', barrierCount: 8 }
+          { count: 14, kamikazes: 3, shapes: ['spiralExploded', 'spiral'], barrier: 'orbitingShield', barrierCount: 8 }
         ]
       },
       10: {
         enemyType: 'enemy2_purple',
         waves: [
-          { count: 20, kamikazes: 5, shapes: ['hexGridExploded', 'hexGrid'], barrier: 'dualLines', barrierCount: 10 }
+          { count: 16, kamikazes: 4, shapes: ['hexGridExploded', 'hexGrid'], barrier: 'dualLines', barrierCount: 10 }
         ]
       },
       11: {
         enemyType: 'enemy3_purple',
         waves: [
-          { count: 22, kamikazes: 5, shapes: ['twinCirclesExploded', 'twinCircles'], barrier: 'circle', barrierCount: 8 }
+          { count: 18, kamikazes: 4, shapes: ['twinCirclesExploded', 'twinCircles'], barrier: 'circle', barrierCount: 8 }
         ]
       },
       12: {
         enemyType: 'enemy4_purple',
         waves: [
-          { count: 25, kamikazes: 6, shapes: ['arrowheadExploded', 'arrowhead'], barrier: 'arrow', barrierCount: 8 }
+          { count: 20, kamikazes: 5, shapes: ['arrowheadExploded', 'arrowhead'], barrier: 'arrow', barrierCount: 8 }
         ]
       }
     };
