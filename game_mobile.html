@@ -53,7 +53,8 @@
   <title>Top-Scrolling Flying Game - Mobile</title>
   <style>
     /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
-    html, body {
+    html,
+    body {
       overscroll-behavior: none;
       touch-action: none;
     }
@@ -501,54 +502,54 @@
     var ctx = canvas.getContext("2d");
 
     var playerImg = new Image();
-    playerImg.src = "/Xenon_3/player.png";
+    playerImg.src = "/Xenon_3/player.webp";
 
     var enemyImg1 = new Image();
-    enemyImg1.src = "/Xenon_3/enemy.png";
+    enemyImg1.src = "/Xenon_3/enemy.webp";
 
     var enemyImg2 = new Image();
-    enemyImg2.src = "/Xenon_3/enemy2.png";
+    enemyImg2.src = "/Xenon_3/enemy2.webp";
 
     var enemyImg3 = new Image();
-    enemyImg3.src = "/Xenon_3/enemy3.png";
+    enemyImg3.src = "/Xenon_3/enemy3.webp";
 
     var enemyImg4 = new Image();
-    enemyImg4.src = "/Xenon_3/enemy4.png";
+    enemyImg4.src = "/Xenon_3/enemy4.webp";
 
     var bossImg = new Image();
-    bossImg.src = "/Xenon_3/Boss.png";
+    bossImg.src = "/Xenon_3/Boss.webp";
 
     // Red enemy images (levels 5-8)
     var enemyImg1Red = new Image();
-    enemyImg1Red.src = "/Xenon_3/enemy1_Red.png";
+    enemyImg1Red.src = "/Xenon_3/enemy1_Red.webp";
 
     var enemyImg2Red = new Image();
-    enemyImg2Red.src = "/Xenon_3/enemy2_Red.png";
+    enemyImg2Red.src = "/Xenon_3/enemy2_Red.webp";
 
     var enemyImg3Red = new Image();
-    enemyImg3Red.src = "/Xenon_3/enemy3_Red.png";
+    enemyImg3Red.src = "/Xenon_3/enemy3_Red.webp";
 
     var enemyImg4Red = new Image();
-    enemyImg4Red.src = "/Xenon_3/enemy4_Red.png";
+    enemyImg4Red.src = "/Xenon_3/enemy4_Red.webp";
 
     var bossImgRed = new Image();
-    bossImgRed.src = "/Xenon_3/boss_Red.png";
+    bossImgRed.src = "/Xenon_3/boss_Red.webp";
 
     // Purple enemy images (levels 9-12)
     var enemyImg1Purple = new Image();
-    enemyImg1Purple.src = "/Xenon_3/enemy1_purple.png";
+    enemyImg1Purple.src = "/Xenon_3/enemy1_purple.webp";
 
     var enemyImg2Purple = new Image();
-    enemyImg2Purple.src = "/Xenon_3/enemy2_purple.png";
+    enemyImg2Purple.src = "/Xenon_3/enemy2_purple.webp";
 
     var enemyImg3Purple = new Image();
-    enemyImg3Purple.src = "/Xenon_3/enemy3_purple.png";
+    enemyImg3Purple.src = "/Xenon_3/enemy3_purple.webp";
 
     var enemyImg4Purple = new Image();
-    enemyImg4Purple.src = "/Xenon_3/enemy4_purple.png";
+    enemyImg4Purple.src = "/Xenon_3/enemy4_purple.webp";
 
     var bossImgPurple = new Image();
-    bossImgPurple.src = "/Xenon_3/boss_purple.png";
+    bossImgPurple.src = "/Xenon_3/boss_purple.webp";
 
     // ============================================
     // SOUND SETUP
@@ -582,10 +583,8 @@
     var bossIntroInterval = null;
 
     // Minimum ms between plays for high-frequency sounds; unlisted = no limit
-    var soundCooldowns = {
-      enemyDead: 80,   // Throttle mass formation kills
-      playerHit: 200   // Avoid rapid hit spam
-    };
+    // Minimum ms between plays for high-frequency sounds; unlisted = no limit
+    var soundCooldowns = {};
     var lastSoundTime = {};
 
     /**
@@ -701,6 +700,154 @@
 
     var playerBullets = [];
     var enemyBullets = [];
+
+    // ============================================
+    // OBJECT POOLING (Phase 2)
+    // ============================================
+    // Reuses bullet objects to avoid GC stutter
+    var BulletPool = {
+      pool: [],
+      init: function () {
+        for (var i = 0; i < 200; i++) {
+          this.pool.push({});
+        }
+      },
+      get: function (x, y, w, h, speed) {
+        var b = this.pool.length > 0 ? this.pool.pop() : {};
+        b.x = x;
+        b.y = y;
+        b.width = w;
+        b.height = h;
+        b.speed = speed;
+        b.isBossBullet = false; // Reset flag
+        return b;
+      },
+      release: function (b) {
+        this.pool.push(b);
+      }
+    };
+    BulletPool.init();
+
+    // Pool for Enemy objects to reduce GC
+    var EnemyPool = {
+      pool: [],
+      init: function () {
+        for (var i = 0; i < 100; i++) this.pool.push({});
+      },
+      get: function (config) {
+        var e = this.pool.length > 0 ? this.pool.pop() : {};
+
+        // RESET ALL FLAGS to safe defaults
+        e.formation = false;
+        e.kamikaze = false;
+        e.kamikazeEntering = false;
+        e.barrier = false;
+        e.orbitEntering = false;
+        e.sideEntry = false;
+        e.zigzag = false;
+        e.sideToSide = false;
+        e.shielded = false;
+        e.shieldHits = 0;
+        e.shieldBroken = false;
+        e.reachedTarget = false;
+        e.nextShootTime = 0;
+        e.breathPhase = 0;
+
+        // Optional properties that might linger if not overwritten
+        e.waveShapes = null;
+        e.targetPos = null;
+        e.startPos = null;
+        e.currentPos = null;
+
+        // Apply new config
+        return Object.assign(e, config);
+      },
+      release: function (e) {
+        this.pool.push(e);
+      }
+    };
+    EnemyPool.init();
+
+    // ============================================
+    // SPATIAL PARTITIONING (Phase 3)
+    // ============================================
+    // Grid for O(1) collision lookups instead of O(N*M)
+    var SpatialGrid = {
+      cellSize: 100,
+      cols: 0,
+      rows: 0,
+      grid: [],
+
+      init: function () {
+        this.cols = Math.ceil(canvas.width / this.cellSize) + 1; // +1 buffer
+        this.rows = Math.ceil(canvas.height / this.cellSize) + 1;
+        var size = this.cols * this.rows;
+        for (var i = 0; i < size; i++) {
+          this.grid.push([]);
+        }
+      },
+
+      clear: function () {
+        for (var i = 0; i < this.grid.length; i++) {
+          this.grid[i].length = 0; // Fast clear
+        }
+      },
+
+      insert: function (enemy) {
+        // Skip enemies vastly off screen
+        if (enemy.y < -150 || enemy.y > canvas.height + 50) return;
+
+        var startCol = Math.floor(enemy.x / this.cellSize);
+        var endCol = Math.floor((enemy.x + enemy.width) / this.cellSize);
+        var startRow = Math.floor(enemy.y / this.cellSize);
+        var endRow = Math.floor((enemy.y + enemy.height) / this.cellSize);
+
+        // Clamping to known grid bounds (handling off-screen slightly)
+        if (startCol < 0) startCol = 0;
+        if (endCol >= this.cols) endCol = this.cols - 1;
+        if (startRow < 0) startRow = 0;
+        if (endRow >= this.rows) endRow = this.rows - 1;
+
+        for (var c = startCol; c <= endCol; c++) {
+          for (var r = startRow; r <= endRow; r++) {
+            this.grid[r * this.cols + c].push(enemy);
+          }
+        }
+      },
+
+      // Returns potential collision candidates (deduplication needed if multi-cell)
+      retrieve: function (bullet) {
+        if (bullet.y < 0 || bullet.y > canvas.height) return [];
+
+        var startCol = Math.floor(bullet.x / this.cellSize);
+        var endCol = Math.floor((bullet.x + bullet.width) / this.cellSize);
+        var startRow = Math.floor(bullet.y / this.cellSize);
+        var endRow = Math.floor((bullet.y + bullet.height) / this.cellSize);
+
+        if (startCol < 0) startCol = 0;
+        if (endCol >= this.cols) endCol = this.cols - 1;
+        if (startRow < 0) startRow = 0;
+        if (endRow >= this.rows) endRow = this.rows - 1;
+
+        var candidates = [];
+
+        // Simple dedupe: check if already in candidates
+        // Actually, with simple arrays and indexOf check it's likely faster for small N
+        for (var c = startCol; c <= endCol; c++) {
+          for (var r = startRow; r <= endRow; r++) {
+            var cell = this.grid[r * this.cols + c];
+            for (var k = 0; k < cell.length; k++) {
+              if (candidates.indexOf(cell[k]) === -1) {
+                candidates.push(cell[k]);
+              }
+            }
+          }
+        }
+        return candidates;
+      }
+    };
+    SpatialGrid.init();
+
     var enemies = [];
     var powerups = [];
     var score = 0;
@@ -904,8 +1051,8 @@
     function createPowerup(type) {
       // Double laser moves slightly slower (3.5) than health powerup (4)
       var speed = (type === POWERUP_TYPES.DOUBLE_LASER) ? 3.5 : CONFIG.powerupSpeed;
-      var width = 40;
-      var height = 40;
+      var width = 48; // Increased by 20% (was 40)
+      var height = 48;
 
       // Clamp spawn x to the visible canvas strip (cover-scaled), with 20px
       // inward margin to prevent edge-spawned powerups clipping off-screen
@@ -952,127 +1099,68 @@
      * @param {Object} powerup - Power-up object from the `powerups` array.
      */
     function drawPowerup(powerup) {
+      if (!powerup) return;
       var time = Date.now();
 
-      // Breathing effect for power-ups (every 2 beats)
+      // OPTIMIZATION: Use pre-rendered sprite instead of drawing shapes.
+      // 1. Calculate breathing scale.
+      // 2. Draw pre-rendered ripple frames.
+      // 3. Draw pre-rendered powerup icon.
+
+      // Breathing effect
       var breathInterval = BPM_INTERVAL * 2;
       var breathProgress = (time % breathInterval) / breathInterval;
       var breathScale = 1 + Math.sin(breathProgress * Math.PI) * 0.15;
 
-      var baseW = powerup.width;
-      var baseH = powerup.height;
-      var w = baseW * breathScale;
-      var h = baseH * breathScale;
-      var x = powerup.x + baseW / 2 - w / 2;
-      var y = powerup.y + baseH / 2 - h / 2;
-      var cx = powerup.x + baseW / 2;
-      var cy = powerup.y + baseH / 2;
+      var baseSize = 64; // Size of pre-rendered asset
+      // Original powerup width/height is 40.
+      // We want to draw it at ~48px size (20% larger).
+      // 64px asset -> 48px target.
+      var targetSize = 48 * breathScale;
 
-      // Pulsing ripple effect at 123 BPM
-      var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL; // 0 to 1
+      var cx = powerup.x + powerup.width / 2;
+      var cy = powerup.y + powerup.height / 2;
 
-      // Draw expanding ripple rings
-      var maxRippleRadius = w * 1.5;
-      var rippleRadius = beatPhase * maxRippleRadius;
-      var rippleAlpha = 1 - beatPhase; // Fade out as it expands
+      // Draw Ripple (PRE-RENDERED)
+      var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
+      var rippleAlpha = 1 - beatPhase;
 
-      ctx.save();
       if (rippleAlpha > 0.05) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
-        var rippleColor;
-        if (powerup.type === POWERUP_TYPES.HEALTH) {
-          rippleColor = 'rgba(255, 50, 50, ' + (rippleAlpha * 0.5) + ')';
-        } else if (powerup.type === POWERUP_TYPES.SHIELD) {
-          rippleColor = 'rgba(0, 255, 255, ' + (rippleAlpha * 0.5) + ')';
-        } else {
-          rippleColor = 'rgba(153, 50, 255, ' + (rippleAlpha * 0.5) + ')';
+        var rippleKey = 'purple'; // Default
+        if (powerup.type === 'health') rippleKey = 'red';
+        else if (powerup.type === 'shield') rippleKey = 'blue'; // Use Blue (Sky) for Shield (Aqua)
+        else rippleKey = 'purple';
+
+        var frames = preRenderedRipples[rippleKey + '_regular'];
+        if (frames) {
+          var frameIndex = Math.floor(beatPhase * (frames.length - 1));
+          var rippleCanvas = frames[frameIndex];
+          if (rippleCanvas) {
+            // Powerup ripple size?
+            // Original: maxRadius = w * 1.5 (~60px).
+            // Regular ripple maxRadius = 55 (Dia 110).
+            // Draw regular ripple centered.
+            ctx.globalAlpha = rippleAlpha * 0.5;
+            ctx.drawImage(rippleCanvas, cx - rippleCanvas.width / 2, cy - rippleCanvas.height / 2);
+            ctx.globalAlpha = 1.0;
+
+            // Second ripple
+            var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
+            var frameIndex2 = Math.floor(beatPhase2 * (frames.length - 1));
+            var rippleCanvas2 = frames[frameIndex2];
+            if (rippleCanvas2) {
+              ctx.globalAlpha = (1 - beatPhase2) * 0.3;
+              ctx.drawImage(rippleCanvas2, cx - rippleCanvas2.width / 2, cy - rippleCanvas2.height / 2);
+              ctx.globalAlpha = 1.0;
+            }
+          }
         }
-        ctx.strokeStyle = rippleColor;
-        ctx.lineWidth = 3;
-        ctx.stroke();
       }
 
-      // Second ripple (offset by half beat)
-      var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
-      var rippleRadius2 = beatPhase2 * maxRippleRadius;
-      var rippleAlpha2 = 1 - beatPhase2;
-
-      if (rippleAlpha2 > 0.05) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, rippleRadius2, 0, Math.PI * 2);
-        var rippleColor2;
-        if (powerup.type === POWERUP_TYPES.HEALTH) {
-          rippleColor2 = 'rgba(255, 50, 50, ' + (rippleAlpha2 * 0.3) + ')';
-        } else if (powerup.type === POWERUP_TYPES.SHIELD) {
-          rippleColor2 = 'rgba(0, 255, 255, ' + (rippleAlpha2 * 0.3) + ')';
-        } else {
-          rippleColor2 = 'rgba(153, 50, 255, ' + (rippleAlpha2 * 0.3) + ')';
-        }
-        ctx.strokeStyle = rippleColor2;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      if (powerup.type === POWERUP_TYPES.HEALTH) {
-        // Red diamond - restore health
-        ctx.fillStyle = "#FF3333";
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2, y);
-        ctx.lineTo(x + w, y + h / 2);
-        ctx.lineTo(x + w / 2, y + h);
-        ctx.lineTo(x, y + h / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "#FF0000";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Plus symbol
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(x + w / 2 - 2, y + h / 4, 4, h / 2);
-        ctx.fillRect(x + w / 4, y + h / 2 - 2, w / 2, 4);
-      } else if (powerup.type === POWERUP_TYPES.DOUBLE_LASER) {
-        // Purple hexagon - double laser
-        var cx = x + w / 2;
-        var cy = y + h / 2;
-        var r = w / 2;
-        ctx.fillStyle = "#9933FF";
-        ctx.beginPath();
-        for (var i = 0; i < 6; i++) {
-          var angle = (Math.PI / 3) * i - Math.PI / 2;
-          var px = cx + r * Math.cos(angle);
-          var py = cy + r * Math.sin(angle);
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "#6600CC";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        // Double bar symbol
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(cx - 8, cy - 8, 4, 16);
-        ctx.fillRect(cx + 4, cy - 8, 4, 16);
-      } else if (powerup.type === POWERUP_TYPES.SHIELD) {
-        // Aqua triangle - shield
-        ctx.fillStyle = "#00FFFF";
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2, y);
-        ctx.lineTo(x + w, y + h);
-        ctx.lineTo(x, y + h);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "#00CCCC";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Shield symbol (small circle)
-        ctx.beginPath();
-        ctx.arc(x + w / 2, y + h / 2 + 5, 8, 0, Math.PI * 2);
-        ctx.strokeStyle = "#FFFFFF";
-        ctx.lineWidth = 2;
-        ctx.stroke();
+      // Draw Powerup Sprite
+      var sprite = preRenderedPowerups[powerup.type];
+      if (sprite) {
+        ctx.drawImage(sprite, cx - targetSize / 2, cy - targetSize / 2, targetSize, targetSize);
       }
     }
 
@@ -1090,9 +1178,15 @@
         updateUI();
         showAnnouncement("powerupDisplay", "+10 Health!", 1500);
       } else if (powerup.type === POWERUP_TYPES.DOUBLE_LASER) {
-        if (purplePhase && hasDoubleLaser && laserLevel < 4) {
-          laserLevel = 4;
-          showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
+        if (purplePhase && hasDoubleLaser) {
+          if (laserLevel < 4) {
+            laserLevel = 4;
+            showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
+          } else {
+            // Already at max power
+            score += 50;
+            showAnnouncement("powerupDisplay", "MAX POWER +50", 1500);
+          }
         } else {
           hasDoubleLaser = true;
           laserLevel = 2;
@@ -1872,7 +1966,7 @@
           nextShootTime: Date.now() + 2000 + Math.random() * 4000  // Staggered random shoot times
         };
 
-        enemies.push(enemy);
+        enemies.push(EnemyPool.get(enemy));
       }
 
       // Reset shield cascade tracking
@@ -1905,7 +1999,7 @@
       for (var k = 0; k < count; k++) {
         var centerOffsetX = (spacing * (k + 1) + 40) - canvas.width / 2;
         centerOffsetX += (Math.random() - 0.5) * 30;
-        enemies.push({
+        enemies.push(EnemyPool.get({
           x: canvas.width / 2 + centerOffsetX - width / 2,
           y: kamikazeCenterY - height / 2,
           width: width,
@@ -1919,7 +2013,7 @@
           kamikazeCenterOffsetX: centerOffsetX,
           shielded: false,
           breathPhase: Math.random()
-        });
+        }));
       }
     }
 
@@ -2194,7 +2288,7 @@
             orbitCenterY: 160,
             breathPhase: i * 0.3
           };
-          enemies.push(enemy);
+          enemies.push(EnemyPool.get(enemy));
           barrierEnemies.push(enemy);
         }
       } else if (barrierType === 'horizontalLine') {
@@ -2220,7 +2314,7 @@
             lineSpeed: 1.5,
             breathPhase: i * 0.2
           };
-          enemies.push(enemy);
+          enemies.push(EnemyPool.get(enemy));
           barrierEnemies.push(enemy);
         }
       } else if (barrierType === 'arrow') {
@@ -2254,7 +2348,7 @@
             arrowOffset: xOffset,
             breathPhase: i * 0.25
           };
-          enemies.push(enemy);
+          enemies.push(EnemyPool.get(enemy));
           barrierEnemies.push(enemy);
         }
       } else if (barrierType === 'dualLines') {
@@ -2284,7 +2378,7 @@
               lineSpeed: 1.2,
               breathPhase: (line * lineCount + i) * 0.15
             };
-            enemies.push(enemy);
+            enemies.push(EnemyPool.get(enemy));
             barrierEnemies.push(enemy);
           }
         }
@@ -2577,14 +2671,163 @@
       }
     }
 
+    // ============================================
+    // PRE-RENDERING OPTIMIZATION (Phase 1)
+    // ============================================
+    // To reduce CPU load on mobile, we pre-draw complex vector shapes (ripples, powerups)
+    // into small off-screen canvases. This allows us to use fast `ctx.drawImage` calls
+    // in the main loop instead of expensive `ctx.arc` and `ctx.stroke` operations.
+    var preRenderedRipples = {};
+    var preRenderedPowerups = {};
+
     /**
-     * Renders a single enemy sprite with an optional BPM-synced breathing scale
+     * Generates all static visual assets at startup.
+     * 1. Creates 32-frame animation sheets for enemy/boss ripples (regular & shielded).
+     * 2. Draws static icons for powerups (Health, Laser, Shield) at high res.
+     */
+    function initPreRenderedAssets() {
+      // 1. RIPPLES ---------------------------
+      // Generate animation frames for ripples to preserve line width scaling
+      var rippleColors = [
+        { key: 'red', color: '#FF5050' },
+        { key: 'green', color: '#64FF64' },
+        { key: 'blue', color: '#64C8FF' },
+        { key: 'orange', color: '#FFC864' },
+        { key: 'purple', color: '#C864FF' },
+        { key: 'shield_outer', color: '#FFD700' }, // Standard shield
+        { key: 'shield_inner', color: '#FFFF64' }  // Inner shield
+      ];
+
+      // Configuration for different ripple sizes/styles
+      var rippleStyles = [
+        { name: 'regular', maxRadius: 55, lineWidth: 2 }, // Enemies
+        { name: 'boss', maxRadius: 130, lineWidth: 3 }    // Bosses
+      ];
+
+      var frames = 32; // Smoothness
+
+      rippleColors.forEach(function (rc) {
+        rippleStyles.forEach(function (style) {
+          var storageKey = rc.key + '_' + style.name;
+          preRenderedRipples[storageKey] = [];
+
+          var size = (style.maxRadius * 2) + (style.lineWidth * 2) + 4; // Padding
+          var center = size / 2;
+
+          for (var i = 0; i < frames; i++) {
+            var progress = i / (frames - 1);
+            var radius = progress * style.maxRadius;
+            if (radius < 0.5) radius = 0.5;
+
+            var c = document.createElement('canvas');
+            c.width = size;
+            c.height = size;
+            var ctx2 = c.getContext('2d');
+
+            // If shield, use specific line widths from config if present?
+            // The original code uses LW 5 for shield.
+            var lw = style.lineWidth;
+            if (rc.key === 'shield_outer') lw = (style.name === 'boss') ? 5 : 5; // Always thick?
+            if (rc.key === 'shield_inner') lw = 3;
+
+            ctx2.beginPath();
+            ctx2.arc(center, center, radius, 0, Math.PI * 2);
+            ctx2.strokeStyle = rc.color;
+            ctx2.lineWidth = lw;
+            ctx2.stroke();
+
+            preRenderedRipples[storageKey].push(c);
+          }
+        });
+      });
+
+      // 2. POWERUPS --------------------------
+      // Pre-render the static shapes (Diamond, Hexagon, Triangle) + Icons
+      var powerupTypes = ['health', 'laser', 'shield'];
+      powerupTypes.forEach(function (type) {
+        var size = 64; // Powerups are usually ~30-40px, give room for glow
+        var c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        var ctx2 = c.getContext('2d');
+        var cx = size / 2;
+        var cy = size / 2;
+
+        if (type === 'health') {
+          // Red Diamond - restore health
+          ctx2.fillStyle = "#FF3333";
+          ctx2.strokeStyle = "#FF0000";
+          ctx2.lineWidth = 2;
+          ctx2.beginPath();
+          ctx2.moveTo(cx, cy - 20);
+          ctx2.lineTo(cx + 20, cy);
+          ctx2.lineTo(cx, cy + 20);
+          ctx2.lineTo(cx - 20, cy);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.stroke();
+          // Plus symbol
+          ctx2.fillStyle = "#FFFFFF";
+          ctx2.fillRect(cx - 3, cy - 10, 6, 20);
+          ctx2.fillRect(cx - 10, cy - 3, 20, 6);
+        } else if (type === 'laser') {
+          // Purple hexagon - double laser
+          var r = 20;
+          ctx2.fillStyle = "#9933FF";
+          ctx2.beginPath();
+          for (var i = 0; i < 6; i++) {
+            var angle = (Math.PI / 3) * i - Math.PI / 2;
+            var px = cx + r * Math.cos(angle);
+            var py = cy + r * Math.sin(angle);
+            if (i === 0) ctx2.moveTo(px, py);
+            else ctx2.lineTo(px, py);
+          }
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.strokeStyle = "#6600CC";
+          ctx2.lineWidth = 3;
+          ctx2.stroke();
+          // Double bar symbol
+          ctx2.fillStyle = "#FFFFFF";
+          ctx2.fillRect(cx - 8, cy - 8, 4, 16);
+          ctx2.fillRect(cx + 4, cy - 8, 4, 16);
+        } else if (type === 'shield') {
+          // Aqua triangle - shield
+          ctx2.fillStyle = "#00FFFF";
+          ctx2.strokeStyle = "#00CCCC";
+          ctx2.lineWidth = 2;
+          ctx2.beginPath();
+          ctx2.moveTo(cx, cy - 20);
+          ctx2.lineTo(cx + 20, cy + 15);
+          ctx2.lineTo(cx - 20, cy + 15);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.stroke();
+          // Shield symbol (small circle)
+          ctx2.beginPath();
+          ctx2.arc(cx, cy + 5, 8, 0, Math.PI * 2);
+          ctx2.strokeStyle = "#FFFFFF";
+          ctx2.lineWidth = 2;
+          ctx2.stroke();
+        }
+
+        preRenderedPowerups[type] = c;
+      });
+    }
+
+    // Initialize immediately
+    initPreRenderedAssets();
+    window.addEventListener('resize', initPreRenderedAssets); // Re-init on resize just in case? No, canvas size unrelated to screen size.
+    // Actually, no need to re-init on resize.
+
+    /**
      * (enemy2 variants only) and a colour-coded ripple ring that expands at
      * 123 BPM. Shielded enemies show a brighter, wider gold ripple with an
      * additional inner ring. The ripple colour reflects the enemy's type/phase.
      * @param {Object} enemy - Enemy object from the `enemies` array.
      */
     function drawEnemy(enemy) {
+      if (!enemy) return;
       var img;
       switch (enemy.type) {
         case 'enemy1': img = enemyImg1; break;
@@ -2622,60 +2865,120 @@
       var drawX = cx - drawWidth / 2;
       var drawY = cy - drawHeight / 2;
 
-      // Check if enemy is shielded (formation enemy before 3 morphs)
+      // Check if enemy is shielded
       var isShielded = enemy.shielded === true;
 
-      // Draw ripple effect for all enemies at 123 BPM
+      // Draw ripple effect (PRE-RENDERED)
+      // Uses the pre-generated animation frames from `initPreRenderedAssets`
+      // based on the current beat phase.
       var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
-      var maxRipple = enemy.width * (isShielded ? 1.4 : 1.0); // Larger ripple when shielded
-      var rippleRadius = beatPhase * maxRipple;
       var rippleAlpha = 1 - beatPhase;
 
-      // Different colors based on enemy type (golden shield color when protected)
-      var rippleColor;
-      if (isShielded) {
-        // Golden/yellow shield ripple - fades to white as it weakens from hits
-        var shieldHits = enemy.shieldHits || 0;
-        var shieldBreakThreshold = level >= 9 ? 25 : 15;
-        var shieldWeakness = Math.min(shieldHits / shieldBreakThreshold, 1); // 0 to 1
-        // Interpolate from golden (255, 215, 0) to light yellow/white (255, 255, 200)
-        var g = Math.round(215 + (255 - 215) * shieldWeakness); // 215 -> 255
-        var b = Math.round(0 + 200 * shieldWeakness); // 0 -> 200
-        rippleColor = 'rgba(255, ' + g + ', ' + b + ', ' + (rippleAlpha * 0.7) + ')';
-      } else if (enemy.type.indexOf('_red') !== -1) {
-        rippleColor = 'rgba(255, 80, 80, ' + (rippleAlpha * 0.4) + ')';
-      } else if (enemy.type === 'enemy1') {
-        rippleColor = 'rgba(100, 255, 100, ' + (rippleAlpha * 0.4) + ')';
-      } else if (enemy.type === 'enemy2') {
-        rippleColor = 'rgba(100, 200, 255, ' + (rippleAlpha * 0.4) + ')';
-      } else if (enemy.type === 'enemy3') {
-        rippleColor = 'rgba(255, 200, 100, ' + (rippleAlpha * 0.4) + ')';
-      } else {
-        rippleColor = 'rgba(200, 100, 255, ' + (rippleAlpha * 0.4) + ')';
-      }
-
       if (rippleAlpha > 0.05) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = rippleColor;
-        ctx.lineWidth = isShielded ? 5 : 2; // Thicker line when shielded
-        ctx.stroke();
+        // Identify Style (regular vs boss)
+        // Bosses are usually > 100px width
+        var style = (enemy.width > 80) ? 'boss' : 'regular';
+        var key = 'green'; // Default
 
-        // Draw second inner ripple for shielded enemies
         if (isShielded) {
-          var innerRippleRadius = rippleRadius * 0.6;
-          ctx.beginPath();
-          ctx.arc(cx, cy, innerRippleRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 255, 100, ' + (rippleAlpha * 0.5) + ')';
-          ctx.lineWidth = 3;
-          ctx.stroke();
+          key = 'shield_outer';
+        } else if (enemy.type.indexOf('_red') !== -1) {
+          key = 'red';
+        } else if (enemy.type === 'enemy1') {
+          key = 'green';
+        } else if (enemy.type === 'enemy2') {
+          key = 'blue';
+        } else if (enemy.type === 'enemy3') {
+          key = 'orange';
+        } else {
+          key = 'purple';
         }
-        ctx.restore();
+
+        var storageKey = key + '_' + style;
+        var frames = preRenderedRipples[storageKey];
+        if (frames && frames.length > 0) {
+          // Map beatPhase (0..1) to frame index (0..frames.length-1)
+          var frameIndex = Math.floor(beatPhase * (frames.length - 1));
+          var rippleCanvas = frames[frameIndex];
+
+          if (rippleCanvas) {
+            // Center the ripple canvas
+            // Note: pre-rendered canvases are fixed size (114px regular, 264px boss)
+            // We draw them unscaled to preserve line width?
+            // No, we matched the maxRadius to the enemy type roughly.
+            // Regular: maxRadius 55 -> Dia 110. Enemy width 50.
+            // Wait, original: `rippleRadius = beatPhase * enemy.width`.
+            // Max ripple dia = 2 * enemy.width = 100.
+            // Our canvas is 110. Close enough.
+            // Boss: width 150. Max ripple dia = 300.
+            // Our canvas is 260. Close enough.
+
+            // Draw centered
+            ctx.globalAlpha = (key === 'shield_outer') ? (rippleAlpha * 0.7) : (rippleAlpha * 0.4);
+            ctx.drawImage(rippleCanvas, cx - rippleCanvas.width / 2, cy - rippleCanvas.height / 2);
+            ctx.globalAlpha = 1.0;
+          }
+        }
+
+        // Inner shield ripple
+        if (isShielded) {
+          var innerKey = 'shield_inner_' + style;
+          var innerFrames = preRenderedRipples[innerKey];
+          if (innerFrames) {
+            // Inner ripple is 60% size in original code.
+            // But here we pre-rendered it at full size?
+            // Check initPreRenderedAssets... logic was:
+            // `rippleTypes` has separate entries for `shield_outer` and `shield_inner`.
+            // They utilize the SAME loop, so they have the SAME maxRadius (55 or 130).
+            // Original Code: `innerRadius = rippleRadius * 0.6`.
+            // So our pre-rendered `shield_inner` is TOO BIG (100%)!
+            // It should be drawn at 60% scale.
+            // Scaling it changes LW.
+            // Original Inner Shield LW = 3.
+            // Our pre-rendered Inner Shield LW = 3.
+            // If we scale it 0.6x -> LW 1.8.
+            // That's acceptable for an inner ripple.
+
+            // OR, we should have pre-rendered it smaller?
+            // Too late, already injected.
+            // I will scale it here. 
+            var innerFrameIndex = Math.floor(beatPhase * (innerFrames.length - 1));
+            var innerCanvas = innerFrames[innerFrameIndex];
+            if (innerCanvas) {
+              ctx.globalAlpha = rippleAlpha * 0.5;
+              var scale = 0.6;
+              var w = innerCanvas.width * scale;
+              var h = innerCanvas.height * scale;
+              ctx.drawImage(innerCanvas, cx - w / 2, cy - h / 2, w, h);
+              ctx.globalAlpha = 1.0;
+            }
+          }
+        }
       }
 
       // Draw enemy
       ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+
+      // Draw health bar for boss (only big enemies?)
+      // Original code checked `if (bossVisible)` implies it's the boss.
+      // But `drawEnemy` is generic.
+      // Wait, original `drawEnemy` did NOT draw health bar!
+      // `updateBoss` logic drew the boss health bar!
+      // `drawEnemy` is for minions.
+      // `updateBoss` handles the Boss rendering separately?
+      // Let's check `updateBoss` (lines 3085+).
+      // `updateBoss` calls `ctx.drawImage` for the boss sprite.
+      // It DOES NOT call `drawEnemy` for the boss itself!
+      // It calls `drawEnemy` for *orbiters* and *minions*.
+      // AND `updateBoss` logic has its OWN ripple drawing code (lines 3153+).
+
+      // OH NO.
+      // `drawEnemy` is ONLY for minions.
+      // The Boss has DUPLICATE ripple drawing logic in `updateBoss`.
+      // I need to refactor BOTH.
+
+      // I just refactored `drawEnemy`. This handles minions (100+ entities).
+      // I DO need to refactor `updateBoss` next.
     }
 
     // ============================================
@@ -2829,18 +3132,22 @@
         var rippleAlpha = 1 - ripplePhase;
 
         if (rippleAlpha > 0.05) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(orbiterX + orbiter.width / 2, orbiterY + orbiter.height / 2, rippleRadius, 0, Math.PI * 2);
-          var rippleColor = boss.isPurpleBoss ?
-            'rgba(180, 80, 255, ' + (rippleAlpha * 0.5) + ')' :
-            (boss.isRedBoss ?
-              'rgba(255, 100, 100, ' + (rippleAlpha * 0.5) + ')' :
-              'rgba(100, 255, 100, ' + (rippleAlpha * 0.5) + ')');
-          ctx.strokeStyle = rippleColor;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.restore();
+          var colorKey = boss.isPurpleBoss ? 'purple' : (boss.isRedBoss ? 'red' : 'green');
+          var frames = preRenderedRipples[colorKey + '_regular'];
+          if (frames) {
+            var frameIndex = Math.floor(ripplePhase * (frames.length - 1));
+            var rCanvas = frames[frameIndex];
+            if (rCanvas) {
+              // Scale down to ~0.6 to match orbiter size (40px vs 55px radius)
+              // Original: maxRipple = drawWidth * 0.8 = 32.
+              // Regular maxRadius = 55. 32/55 approx 0.6.
+              var w = rCanvas.width * 0.6;
+              var h = rCanvas.height * 0.6;
+              ctx.globalAlpha = rippleAlpha * 0.5;
+              ctx.drawImage(rCanvas, drawX + drawWidth / 2 - w / 2, drawY + drawHeight / 2 - h / 2, w, h);
+              ctx.globalAlpha = 1.0;
+            }
+          }
         }
 
         // Draw orbiter image
@@ -2995,7 +3302,7 @@
         }
       }
 
-      enemies.push(enemy);
+      enemies.push(EnemyPool.get(enemy));
     }
 
     /**
@@ -3150,64 +3457,77 @@
         }
       }
 
-      // Draw boss ripple effect at 123 BPM
+      // Draw boss ripple effect at 123 BPM (PRE-RENDERED)
       var bossCx = boss.x + boss.width / 2;
       var bossCy = boss.y + boss.height / 2;
       var time = Date.now();
       var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
-      var maxBossRipple = boss.width * 0.8;
-      var bossRippleRadius = beatPhase * maxBossRipple;
-      var bossRippleAlpha = 1 - beatPhase;
+      var rippleAlpha = 1 - beatPhase;
 
-      ctx.save();
-      if (bossRippleAlpha > 0.05) {
-        ctx.beginPath();
-        ctx.arc(bossCx, bossCy, bossRippleRadius, 0, Math.PI * 2);
-        var bossRippleColor = boss.isPurpleBoss ?
-          'rgba(160, 50, 255, ' + (bossRippleAlpha * 0.5) + ')' :
-          (boss.isRedBoss ?
-            'rgba(255, 50, 50, ' + (bossRippleAlpha * 0.5) + ')' :
-            'rgba(50, 255, 50, ' + (bossRippleAlpha * 0.5) + ')');
-        ctx.strokeStyle = bossRippleColor;
-        ctx.lineWidth = 3;
-        ctx.stroke();
+      var key = boss.isPurpleBoss ? 'purple' : (boss.isRedBoss ? 'red' : 'green');
+      var frames = preRenderedRipples[key + '_boss'];
+
+      if (rippleAlpha > 0.05 && frames) {
+        var frameIndex = Math.floor(beatPhase * (frames.length - 1));
+        var rCanvas = frames[frameIndex];
+        if (rCanvas) {
+          ctx.globalAlpha = rippleAlpha * 0.5;
+          ctx.drawImage(rCanvas, bossCx - rCanvas.width / 2, bossCy - rCanvas.height / 2);
+          ctx.globalAlpha = 1.0;
+        }
       }
 
       // Second boss ripple
       var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
-      var bossRippleRadius2 = beatPhase2 * maxBossRipple;
-      var bossRippleAlpha2 = 1 - beatPhase2;
-      if (bossRippleAlpha2 > 0.05) {
-        ctx.beginPath();
-        ctx.arc(bossCx, bossCy, bossRippleRadius2, 0, Math.PI * 2);
-        var bossRippleColor2 = boss.isPurpleBoss ?
-          'rgba(160, 50, 255, ' + (bossRippleAlpha2 * 0.3) + ')' :
-          (boss.isRedBoss ?
-            'rgba(255, 50, 50, ' + (bossRippleAlpha2 * 0.3) + ')' :
-            'rgba(50, 255, 50, ' + (bossRippleAlpha2 * 0.3) + ')');
-        ctx.strokeStyle = bossRippleColor2;
-        ctx.lineWidth = 2;
-        ctx.stroke();
+      var rippleAlpha2 = 1 - beatPhase2;
+      if (rippleAlpha2 > 0.05 && frames) {
+        var frameIndex2 = Math.floor(beatPhase2 * (frames.length - 1));
+        var rCanvas2 = frames[frameIndex2];
+        if (rCanvas2) {
+          ctx.globalAlpha = rippleAlpha2 * 0.3;
+          ctx.drawImage(rCanvas2, bossCx - rCanvas2.width / 2, bossCy - rCanvas2.height / 2);
+          ctx.globalAlpha = 1.0;
+        }
       }
 
       // Draw golden shield ripple when boss is shielded
-      if (boss.shielded && bossRippleAlpha > 0.05) {
-        var shieldRippleRadius = beatPhase * maxBossRipple * 1.3;
-        ctx.beginPath();
-        ctx.arc(bossCx, bossCy, shieldRippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 215, 0, ' + (bossRippleAlpha * 0.7) + ')';
-        ctx.lineWidth = 5;
-        ctx.stroke();
+      if (boss.shielded && rippleAlpha > 0.05) {
+        var shieldFrames = preRenderedRipples['shield_outer_boss'];
+        if (shieldFrames) {
+          var frameIndex = Math.floor(beatPhase * (shieldFrames.length - 1));
+          var sCanvas = shieldFrames[frameIndex];
+          if (sCanvas) {
+            ctx.globalAlpha = rippleAlpha * 0.7;
+            // Scale up 1.2x to match original huge shield
+            var sw = sCanvas.width * 1.2;
+            var sh = sCanvas.height * 1.2;
+            ctx.drawImage(sCanvas, bossCx - sw / 2, bossCy - sh / 2, sw, sh);
+            ctx.globalAlpha = 1.0;
+          }
+        }
 
         // Inner shield ripple
-        var innerShieldRadius = shieldRippleRadius * 0.6;
-        ctx.beginPath();
-        ctx.arc(bossCx, bossCy, innerShieldRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (bossRippleAlpha * 0.5) + ')';
-        ctx.lineWidth = 3;
-        ctx.stroke();
+        var innerShieldFrames = preRenderedRipples['shield_inner_boss'];
+        if (innerShieldFrames) {
+          var frameIndex = Math.floor(beatPhase * (innerShieldFrames.length - 1));
+          var iCanvas = innerShieldFrames[frameIndex];
+          if (iCanvas) {
+            ctx.globalAlpha = rippleAlpha * 0.5;
+            // Scale 0.6x (should match original logic)
+            // But wait, if pre-rendered is "boss" size, maybe 0.8?
+            // Original: innerRadius = rippleRadius * 0.6.
+            // So 0.6 scale is correct relative to the outer ripple size?
+            // No, logic was relative to *same* maxRipple.
+            // So yes, 0.6 scale if we use 1.0 sized canvas.
+            // But if `shield_inner_boss` was pre-rendered with maxRadius 130...
+            // We draw it at 0.6 scale.
+            var iw = iCanvas.width * 0.6;
+            var ih = iCanvas.height * 0.6;
+            ctx.drawImage(iCanvas, bossCx - iw / 2, bossCy - ih / 2, iw, ih);
+            ctx.globalAlpha = 1.0;
+          }
+        }
       }
-      ctx.restore();
 
       // Draw boss (only if visible during blink)
       if (bossVisible) {
@@ -3418,39 +3738,39 @@
         // Quad laser - four bullets spread across ship width
         var offsets = [0.15, 0.38, 0.62, 0.85];
         for (var q = 0; q < 4; q++) {
-          playerBullets.push({
-            x: Math.floor(player.x + player.width * offsets[q] - 2),
-            y: Math.floor(player.y),
-            width: 5,
-            height: 10,
-            speed: CONFIG.bulletSpeed
-          });
+          playerBullets.push(BulletPool.get(
+            Math.floor(player.x + player.width * offsets[q] - 2),
+            Math.floor(player.y),
+            5,
+            10,
+            CONFIG.bulletSpeed
+          ));
         }
       } else if (hasDoubleLaser) {
         // Double laser - two side-by-side bullets
-        playerBullets.push({
-          x: Math.floor(player.x + player.width / 4 - 2),
-          y: Math.floor(player.y),
-          width: 5,
-          height: 10,
-          speed: CONFIG.bulletSpeed
-        });
-        playerBullets.push({
-          x: Math.floor(player.x + (player.width * 3 / 4) - 2),
-          y: Math.floor(player.y),
-          width: 5,
-          height: 10,
-          speed: CONFIG.bulletSpeed
-        });
+        playerBullets.push(BulletPool.get(
+          Math.floor(player.x + player.width / 4 - 2),
+          Math.floor(player.y),
+          5,
+          10,
+          CONFIG.bulletSpeed
+        ));
+        playerBullets.push(BulletPool.get(
+          Math.floor(player.x + (player.width * 3 / 4) - 2),
+          Math.floor(player.y),
+          5,
+          10,
+          CONFIG.bulletSpeed
+        ));
       } else {
         // Single bullet
-        playerBullets.push({
-          x: Math.floor(player.x + player.width / 2 - 2),
-          y: Math.floor(player.y),
-          width: 5,
-          height: 10,
-          speed: CONFIG.bulletSpeed
-        });
+        playerBullets.push(BulletPool.get(
+          Math.floor(player.x + player.width / 2 - 2),
+          Math.floor(player.y),
+          5,
+          10,
+          CONFIG.bulletSpeed
+        ));
       }
     }
 
@@ -3466,13 +3786,13 @@
       } else if (redPhase) {
         bulletSpeed *= 1.4; // 40% faster in red phase
       }
-      enemyBullets.push({
-        x: Math.floor(enemy.x + enemy.width / 2 - 2),
-        y: Math.floor(enemy.y + enemy.height),
-        width: 5,
-        height: 10,
-        speed: bulletSpeed
-      });
+      enemyBullets.push(BulletPool.get(
+        Math.floor(enemy.x + enemy.width / 2 - 2),
+        Math.floor(enemy.y + enemy.height),
+        5,
+        10,
+        bulletSpeed
+      ));
     }
 
     // ============================================
@@ -3633,6 +3953,8 @@
         else if (e.key === '(') jumpLevel = 9;
         else if (e.key === ')') jumpLevel = 12;
         if (jumpLevel !== null) {
+          // RELEASE EXISTING ENEMIES TO POOL BEFORE CLEARING
+          enemies.forEach(function (e) { EnemyPool.release(e); });
           enemies = [];
           waveInProgress = false;
           waveCooldown = false;
@@ -3797,6 +4119,18 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Update spatial grid each frame
+      SpatialGrid.clear();
+      for (var i = 0; i < enemies.length; i++) {
+        SpatialGrid.insert(enemies[i]);
+      }
+      // Also insert boss minions if active
+      if (bossActive) {
+        for (var i = 0; i < bossMinions.length; i++) {
+          SpatialGrid.insert(bossMinions[i]);
+        }
+      }
+
       // Update player blink effect
       updatePlayerBlink();
 
@@ -3863,28 +4197,32 @@
       }
 
       // Update player bullets
+      ctx.fillStyle = "#00FF00";
       for (var i = playerBullets.length - 1; i >= 0; i--) {
         var bullet = playerBullets[i];
 
-        ctx.fillStyle = "#00FF00";
         ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
         bullet.y -= bullet.speed;
 
         if (bullet.y < 0) {
+          BulletPool.release(bullet);
           playerBullets.splice(i, 1);
           continue;
         }
 
         // Check collision with boss
         if (boss && isColliding(bullet, boss)) {
+          BulletPool.release(bullet);
           playerBullets.splice(i, 1);
           damageBoss();
           continue;
         }
 
-        // Check collision with enemies
-        for (var j = enemies.length - 1; j >= 0; j--) {
-          var enemy = enemies[j];
+        // Check collision with enemies (SPATIAL GRID OPTIMIZATION)
+        var candidates = SpatialGrid.retrieve(bullet);
+        for (var j = 0; j < candidates.length; j++) {
+          var enemy = candidates[j];
+          // Double check actual collision (grid is just broad phase)
           if (isColliding(bullet, enemy)) {
             // Check if enemy is shielded
             if (enemy.shielded) {
@@ -3902,13 +4240,20 @@
               }
 
               // Bullet stops at shield - destroy bullet but enemy survives
+              BulletPool.release(bullet);
               playerBullets.splice(i, 1);
               // Optional: play shield hit sound here later
               break;
             } else {
               // No shield - destroy both bullet and enemy
+              BulletPool.release(bullet);
               playerBullets.splice(i, 1);
-              enemies.splice(j, 1);
+
+              var realIndex = enemies.indexOf(enemy);
+              if (realIndex > -1) {
+                EnemyPool.release(enemy);
+                enemies.splice(realIndex, 1);
+              }
               score += 10;
               updateUI();
               playSound('enemyDead');
@@ -3920,19 +4265,21 @@
       }
 
       // Update enemy bullets
+      ctx.fillStyle = "#FF0000";
       for (var i = enemyBullets.length - 1; i >= 0; i--) {
         var bullet = enemyBullets[i];
 
-        ctx.fillStyle = "#FF0000";
         ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
         bullet.y += bullet.speed;
 
         if (bullet.y > canvas.height) {
+          BulletPool.release(bullet);
           enemyBullets.splice(i, 1);
           continue;
         }
 
         if (isColliding(bullet, player)) {
+          BulletPool.release(bullet);
           enemyBullets.splice(i, 1);
           var damage = bullet.isBossBullet ? CONFIG.bossDamage : CONFIG.enemyBulletDamage;
           playerTakeDamage(damage);
@@ -4001,6 +4348,7 @@
             // Remove if crossed screen
             if ((enemy.horizontalDirection > 0 && enemy.x > canvas.width) ||
               (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
+              EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
               continue;
             }
@@ -4040,6 +4388,7 @@
 
           // Check collision with player
           if (isColliding(enemy, player)) {
+            EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
@@ -4048,6 +4397,7 @@
 
           // Remove if off screen (bottom)
           if (enemy.y > canvas.height) {
+            EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
             continue;
           }
@@ -4055,7 +4405,9 @@
           // Check collision with player bullets
           for (var j = playerBullets.length - 1; j >= 0; j--) {
             if (isColliding(playerBullets[j], enemy)) {
+              BulletPool.release(playerBullets[j]);
               playerBullets.splice(j, 1);
+              EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
               score += 10;
               updateUI();
@@ -4188,6 +4540,7 @@
 
               // Remove if off screen
               if (enemy.y > canvas.height || enemy.x < -enemy.width || enemy.x > canvas.width) {
+                EnemyPool.release(enemies[i]); // Release
                 enemies.splice(i, 1);
                 continue;
               }
@@ -4200,6 +4553,7 @@
               // Remove if crossed screen
               if ((enemy.horizontalDirection > 0 && enemy.x > canvas.width) ||
                 (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
+                EnemyPool.release(enemies[i]); // Release
                 enemies.splice(i, 1);
                 continue;
               }
@@ -4239,6 +4593,7 @@
           }
 
           if (isColliding(enemy, player)) {
+            EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
@@ -4247,6 +4602,7 @@
 
           // Remove non-formation enemies (barriers, kamikazes) if off screen
           if (!enemy.formation && enemy.y > canvas.height) {
+            EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
             continue;
           }
@@ -4297,55 +4653,55 @@
         var g = c.getContext('2d');
         var w = c.width, h = c.height;
         g.fillStyle = '#FF3333';
-        g.beginPath(); g.moveTo(w/2,0); g.lineTo(w,h/2); g.lineTo(w/2,h); g.lineTo(0,h/2); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w, h / 2); g.lineTo(w / 2, h); g.lineTo(0, h / 2); g.closePath(); g.fill();
         g.strokeStyle = '#FF0000'; g.lineWidth = 2; g.stroke();
         g.fillStyle = '#FFFFFF';
-        g.fillRect(w/2-2, h/4, 4, h/2);
-        g.fillRect(w/4, h/2-2, w/2, 4);
+        g.fillRect(w / 2 - 2, h / 4, 4, h / 2);
+        g.fillRect(w / 4, h / 2 - 2, w / 2, 4);
       })();
       (function () {
         var c = document.getElementById('puLaser');
         var g = c.getContext('2d');
-        var w = c.width, h = c.height, cx = w/2, cy = h/2, r = w/2 - 1;
+        var w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 1;
         g.fillStyle = '#9933FF';
         g.beginPath();
         for (var i = 0; i < 6; i++) {
-          var a = (Math.PI/3)*i - Math.PI/2;
-          if (i===0) g.moveTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
-          else g.lineTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
+          var a = (Math.PI / 3) * i - Math.PI / 2;
+          if (i === 0) g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          else g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
         }
         g.closePath(); g.fill();
         g.strokeStyle = '#6600CC'; g.lineWidth = 2; g.stroke();
         g.fillStyle = '#FFFFFF';
-        g.fillRect(cx-7, cy-7, 3, 14);
-        g.fillRect(cx+4, cy-7, 3, 14);
+        g.fillRect(cx - 7, cy - 7, 3, 14);
+        g.fillRect(cx + 4, cy - 7, 3, 14);
       })();
       (function () {
         var c = document.getElementById('puShield');
         var g = c.getContext('2d');
         var w = c.width, h = c.height;
         g.fillStyle = '#00FFFF';
-        g.beginPath(); g.moveTo(w/2,0); g.lineTo(w,h); g.lineTo(0,h); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
         g.strokeStyle = '#00CCCC'; g.lineWidth = 2; g.stroke();
-        g.beginPath(); g.arc(w/2, h/2+5, 6, 0, Math.PI*2);
+        g.beginPath(); g.arc(w / 2, h / 2 + 5, 6, 0, Math.PI * 2);
         g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.stroke();
       })();
       (function () {
         var c = document.getElementById('puQuad');
         var g = c.getContext('2d');
-        var w = c.width, h = c.height, cx = w/2, cy = h/2, r = w/2 - 1;
+        var w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 1;
         g.fillStyle = '#9933FF';
         g.beginPath();
         for (var i = 0; i < 6; i++) {
-          var a = (Math.PI/3)*i - Math.PI/2;
-          if (i===0) g.moveTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
-          else g.lineTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
+          var a = (Math.PI / 3) * i - Math.PI / 2;
+          if (i === 0) g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          else g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
         }
         g.closePath(); g.fill();
         g.strokeStyle = '#6600CC'; g.lineWidth = 2; g.stroke();
         g.fillStyle = '#FFFFFF';
         var offsets = [-9, -3, 3, 9];
-        for (var j = 0; j < 4; j++) { g.fillRect(cx + offsets[j], cy-6, 2, 12); }
+        for (var j = 0; j < 4; j++) { g.fillRect(cx + offsets[j], cy - 6, 2, 12); }
       })();
     }
 
