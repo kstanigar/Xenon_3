@@ -599,6 +599,8 @@
       playerBulletPool.push(audio);
     }
     var playerBulletPoolIndex = 0;
+    var lastPlayerBulletSound = 0;
+    var PLAYER_BULLET_SOUND_COOLDOWN = 300; // Only play sound every 300ms
 
     var bossIntroInterval = null;
 
@@ -620,8 +622,13 @@
         return;
       }
 
-      // Use audio pool for playerBullet to prevent rapid fire cutoff
+      // Use audio pool for playerBullet with cooldown to prevent performance issues
       if (soundName === 'playerBullet') {
+        var now = Date.now();
+        if (now - lastPlayerBulletSound < PLAYER_BULLET_SOUND_COOLDOWN) {
+          return; // Skip sound if still in cooldown
+        }
+        lastPlayerBulletSound = now;
         var audio = playerBulletPool[playerBulletPoolIndex];
         playerBulletPoolIndex = (playerBulletPoolIndex + 1) % playerBulletPool.length;
         audio.currentTime = 0;
