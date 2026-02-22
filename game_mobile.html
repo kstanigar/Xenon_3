@@ -582,28 +582,57 @@
     sounds.bossIntro.volume = 0.4;
     sounds.powerUp.volume = 0.4;
 
-    var bossIntroInterval = null;
+    // Audio pool for enemyDead sound (allows multiple simultaneous plays)
+    var enemyDeadPool = [];
+    for (var i = 0; i < 5; i++) {
+      var audio = new Audio("/Xenon_3/sfx/enemyDead.mp3");
+      audio.volume = 0.4;
+      enemyDeadPool.push(audio);
+    }
+    var enemyDeadPoolIndex = 0;
 
-    // Minimum ms between plays for high-frequency sounds; unlisted = no limit
-    // Minimum ms between plays for high-frequency sounds; unlisted = no limit
-    var soundCooldowns = {};
-    var lastSoundTime = {};
+    // Audio pool for playerBullet sound (rapid fire support)
+    var playerBulletPool = [];
+    for (var i = 0; i < 4; i++) {
+      var audio = new Audio("/Xenon_3/sfx/playerBullet.mp3");
+      audio.volume = 0.4;
+      playerBulletPool.push(audio);
+    }
+    var playerBulletPoolIndex = 0;
+
+    var bossIntroInterval = null;
 
     /**
      * Plays a one-shot sound effect by resetting its playback position and
-     * calling play(). Sounds listed in soundCooldowns are throttled to avoid
-     * audio congestion during mass events. Autoplay errors are silently ignored.
+     * calling play(). Uses audio pooling for high-frequency sounds to allow simultaneous plays.
+     * Autoplay errors are silently ignored.
      * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
      */
     function playSound(soundName) {
+      // Use audio pool for enemyDead to allow multiple simultaneous plays
+      if (soundName === 'enemyDead') {
+        var audio = enemyDeadPool[enemyDeadPoolIndex];
+        enemyDeadPoolIndex = (enemyDeadPoolIndex + 1) % enemyDeadPool.length;
+        audio.currentTime = 0;
+        audio.play().catch(function (e) {
+          // Ignore autoplay errors
+        });
+        return;
+      }
+
+      // Use audio pool for playerBullet to prevent rapid fire cutoff
+      if (soundName === 'playerBullet') {
+        var audio = playerBulletPool[playerBulletPoolIndex];
+        playerBulletPoolIndex = (playerBulletPoolIndex + 1) % playerBulletPool.length;
+        audio.currentTime = 0;
+        audio.play().catch(function (e) {
+          // Ignore autoplay errors
+        });
+        return;
+      }
+
       var sound = sounds[soundName];
       if (!sound) return;
-      var cooldown = soundCooldowns[soundName];
-      if (cooldown) {
-        var now = Date.now();
-        if (lastSoundTime[soundName] && now - lastSoundTime[soundName] < cooldown) return;
-        lastSoundTime[soundName] = now;
-      }
       sound.currentTime = 0;
       sound.play().catch(function (e) {
         // Ignore autoplay errors
