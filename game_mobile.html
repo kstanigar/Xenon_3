@@ -600,7 +600,10 @@
     }
     var playerBulletPoolIndex = 0;
     var lastPlayerBulletSound = 0;
-    var PLAYER_BULLET_SOUND_COOLDOWN = 300; // Only play sound every 300ms
+    var PLAYER_BULLET_SOUND_COOLDOWN = 500; // Only play sound every 500ms
+
+    var lastEnemyDeadSound = 0;
+    var ENEMY_DEAD_SOUND_COOLDOWN = 100; // Limit enemy death sounds to every 100ms
 
     var bossIntroInterval = null;
 
@@ -611,8 +614,13 @@
      * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
      */
     function playSound(soundName) {
-      // Use audio pool for enemyDead to allow multiple simultaneous plays
+      // Use audio pool for enemyDead with cooldown to prevent audio spam
       if (soundName === 'enemyDead') {
+        var now = Date.now();
+        if (now - lastEnemyDeadSound < ENEMY_DEAD_SOUND_COOLDOWN) {
+          return; // Skip sound if still in cooldown
+        }
+        lastEnemyDeadSound = now;
         var audio = enemyDeadPool[enemyDeadPoolIndex];
         enemyDeadPoolIndex = (enemyDeadPoolIndex + 1) % enemyDeadPool.length;
         audio.currentTime = 0;
