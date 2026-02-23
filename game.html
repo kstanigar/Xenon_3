@@ -271,8 +271,8 @@
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 24px;
-      color: red;
-      text-shadow: 0 0 10px red;
+      color: #00FFFF;
+      text-shadow: 0 0 10px #00FFFF;
       text-align: center;
       line-height: 1.6;
     }
@@ -500,7 +500,7 @@
 
       // ── Boss minions (spawn during boss fights) ──────────────────
       bossMinionSpeed: 2,           // Minion horizontal scroll speed in px/frame
-      bossMinionSpawnChance: 0.015, // Per-frame probability of a minion spawning
+      bossMinionSpawnChance: 0.025, // Per-frame probability (desktop: 67% more than mobile)
 
       // ── Enemy roster per level ───────────────────────────────────
       // Each level unlocks an additional enemy type. Wave formations
@@ -850,9 +850,18 @@
     var rightPressed = false;
     var leftPressed = false;
 
+    // Mouse controls (desktop only)
+    var mouseX = 0;
+    var mouseY = 0;
+    var mouseActive = false;
+    var mouseDown = false;
+    var spacebarPressed = false;
+    var lastShotTime = 0;
+    var FIRE_COOLDOWN = 170; // ms between shots (matches mobile)
+
     // Power-up state
     var hasDoubleLaser = false;
-    var laserLevel = 1; // 1 = single, 2 = double, 4 = quad (purple phase only)
+    var laserLevel = 1; // 1 = single, 2 = double, 3 = triple, 4 = quad (purple phase only)
     var powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
     var lastPowerupSpawnTime = 0;
     var powerupSpawnCooldown = 5000; // 5 seconds minimum between power-ups
@@ -876,6 +885,10 @@
     var screenShakeIntensity = 0;
     var screenShakeDuration = 0;
     var screenShakeTimer = 0;
+
+    // Explosion effects (desktop enhancement)
+    var explosions = [];
+    var particles = [];
 
     // Game phase tracking
     var currentBoss = 0;        // 0 = no boss yet, 1 = boss 1, 2 = boss 2, 3 = boss 3
@@ -1167,9 +1180,18 @@
         updateUI();
         showAnnouncement("powerupDisplay", "+10 Health!", 1500);
       } else if (powerup.type === POWERUP_TYPES.DOUBLE_LASER) {
-        if (purplePhase && hasDoubleLaser && laserLevel < 4) {
-          laserLevel = 4;
-          showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
+        if (purplePhase && hasDoubleLaser) {
+          if (laserLevel === 2) {
+            laserLevel = 3;
+            showAnnouncement("powerupDisplay", "TRIPLE LASER!", 1500);
+          } else if (laserLevel === 3) {
+            laserLevel = 4;
+            showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
+          } else {
+            // Already at max power
+            score += 50;
+            showAnnouncement("powerupDisplay", "MAX POWER +50", 1500);
+          }
         } else {
           hasDoubleLaser = true;
           laserLevel = 2;
@@ -2939,6 +2961,10 @@
             bullet.y + bullet.height > orbiter.y) {
             playerBullets.splice(j, 1);
             orbiter.alive = false;
+            var orbiterCenterX = orbiter.x + orbiter.width / 2;
+            var orbiterCenterY = orbiter.y + orbiter.height / 2;
+            spawnExplosion(orbiterCenterX, orbiterCenterY, false);
+            spawnParticles(orbiterCenterX, orbiterCenterY, 10); // 10 particles for orbiter
             bossOrbiters.splice(i, 1);
             score += 15; // Slightly more than regular enemies
             updateUI();
@@ -3122,6 +3148,10 @@
         for (var j = playerBullets.length - 1; j >= 0; j--) {
           if (isColliding(playerBullets[j], minion)) {
             playerBullets.splice(j, 1);
+            var minionCenterX = minion.x + minion.width / 2;
+            var minionCenterY = minion.y + minion.height / 2;
+            spawnExplosion(minionCenterX, minionCenterY, false);
+            spawnParticles(minionCenterX, minionCenterY, 8); // 8 particles for minion
             bossMinions.splice(i, 1);
             score += 10;
             updateUI();
@@ -3352,8 +3382,12 @@
       bossBlinkTimer = 10; // Short blink (10 frames)
 
       if (boss.health <= 0) {
-        // Boss defeated - trigger screen shake!
+        // Boss defeated - trigger screen shake and explosion!
         triggerScreenShake(15, 800); // Strong shake for boss death
+        var bossCenterX = boss.x + boss.width / 2;
+        var bossCenterY = boss.y + boss.height / 2;
+        spawnExplosion(bossCenterX, bossCenterY, true);
+        spawnParticles(bossCenterX, bossCenterY, 24); // 24 particles for boss - more dramatic!
 
         bossActive = false;
         boss = null;
@@ -3534,16 +3568,29 @@
      * based on the active laser level:
      *   1 → single centre bullet
      *   2 → dual side-by-side bullets (double laser)
-     *   4 → four evenly spread bullets (quad laser, purple phase only)
+     *   3 → three evenly spread bullets (triple laser, purple phase)
+     *   4 → four evenly spread bullets (quad laser, purple phase rare upgrade)
      */
     function shootBullet() {
       playSound('playerBullet');
       if (laserLevel >= 4) {
-        // Quad laser - four bullets spread across ship width
+        // Quad laser - four bullets spread across ship width (rare upgrade)
         var offsets = [0.15, 0.38, 0.62, 0.85];
         for (var q = 0; q < 4; q++) {
           playerBullets.push({
             x: Math.floor(player.x + player.width * offsets[q] - 2),
+            y: Math.floor(player.y),
+            width: 5,
+            height: 10,
+            speed: CONFIG.bulletSpeed
+          });
+        }
+      } else if (laserLevel === 3) {
+        // Triple laser - three bullets spread across ship width (purple phase)
+        var offsets = [0.2, 0.5, 0.8];
+        for (var t = 0; t < 3; t++) {
+          playerBullets.push({
+            x: Math.floor(player.x + player.width * offsets[t] - 2),
             y: Math.floor(player.y),
             width: 5,
             height: 10,
@@ -3648,11 +3695,14 @@
           return;
         }
       } else {
-        // Lose double laser when hit without shield (red and purple phases)
+        // Lose laser power when hit without shield (red and purple phases)
         if ((redPhase || purplePhase) && hasDoubleLaser) {
           if (laserLevel >= 4) {
-            laserLevel = 2; // Quad -> double
+            laserLevel = 3; // Quad -> triple
             showAnnouncement("powerupDisplay", "Lost Quad Laser!", 1500);
+          } else if (laserLevel === 3) {
+            laserLevel = 2; // Triple -> double
+            showAnnouncement("powerupDisplay", "Lost Triple Laser!", 1500);
           } else {
             hasDoubleLaser = false;
             laserLevel = 1;
@@ -3715,6 +3765,135 @@
       }
     }
 
+    /**
+     * Spawns an explosion effect at the given coordinates.
+     * @param {number} x - Center X position
+     * @param {number} y - Center Y position
+     * @param {boolean} isBoss - True for boss explosion (triple rings)
+     */
+    function spawnExplosion(x, y, isBoss) {
+      explosions.push({
+        x: x,
+        y: y,
+        startTime: Date.now(),
+        duration: isBoss ? 500 : 300,
+        isBoss: isBoss || false
+      });
+    }
+
+    /**
+     * Updates and draws all active explosions.
+     * Regular enemies: Single expanding ring
+     * Boss enemies: Triple concentric rings
+     */
+    function updateExplosions() {
+      var now = Date.now();
+
+      for (var i = explosions.length - 1; i >= 0; i--) {
+        var exp = explosions[i];
+        var elapsed = now - exp.startTime;
+
+        if (elapsed >= exp.duration) {
+          explosions.splice(i, 1);
+          continue;
+        }
+
+        var progress = elapsed / exp.duration;
+        var alpha = 1.0 - progress;
+        var color = purplePhase ? '138, 43, 226' : (redPhase ? '255, 69, 0' : '0, 255, 255');
+
+        if (exp.isBoss) {
+          // Boss: Triple rings
+          var radius1 = 30 + (progress * 70);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius1, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + (alpha * 0.8) + ')';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          var radius2 = 20 + (progress * 55);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius2, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + (alpha * 0.6) + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          var radius3 = 10 + (progress * 40);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius3, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + (alpha * 0.4) + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else {
+          // Regular enemy: Single ring
+          var radius = 10 + (progress * 30);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + alpha + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+    }
+
+    /**
+     * Spawns explosion particles at the given coordinates.
+     * @param {number} x - Center X position
+     * @param {number} y - Center Y position
+     * @param {number} count - Number of particles to spawn
+     */
+    function spawnParticles(x, y, count) {
+      var color = '255, 215, 0'; // Golden color - like shield breaking
+
+      for (var i = 0; i < count; i++) {
+        var angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+        var speed = 2 + Math.random() * 3;
+
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          startTime: Date.now(),
+          duration: 400 + Math.random() * 200,
+          size: 2 + Math.random() * 2,
+          color: color
+        });
+      }
+    }
+
+    /**
+     * Updates and draws all active particles.
+     * Particles fly outward and fade over time.
+     */
+    function updateParticles() {
+      var now = Date.now();
+
+      for (var i = particles.length - 1; i >= 0; i--) {
+        var p = particles[i];
+        var elapsed = now - p.startTime;
+
+        if (elapsed >= p.duration) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        var progress = elapsed / p.duration;
+        var alpha = 1.0 - progress;
+
+        // Update position
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Apply gravity
+        p.vy += 0.1;
+
+        // Draw particle
+        ctx.fillStyle = 'rgba(' + p.color + ', ' + alpha + ')';
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      }
+    }
+
     // ============================================
     // INPUT HANDLING
     // ============================================
@@ -3747,7 +3926,12 @@
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
       else if (e.key === " ") {
         e.preventDefault();
-        shootBullet();
+        spacebarPressed = true;
+        var now = Date.now();
+        if (now - lastShotTime >= FIRE_COOLDOWN) {
+          shootBullet();
+          lastShotTime = now;
+        }
       }
       // Debug: jump to level (Shift+1 through Shift+9 = levels 1-9, Shift+0 = level 12)
       else if (e.shiftKey && !gameOver && !bossActive) {
@@ -3786,6 +3970,34 @@
     document.addEventListener("keyup", function (e) {
       if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+      else if (e.key === " ") spacebarPressed = false;
+    });
+
+    // ============================================
+    // MOUSE CONTROLS (DESKTOP)
+    // ============================================
+    canvas.addEventListener("mousemove", function (e) {
+      var rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+      mouseActive = true;
+    });
+
+    canvas.addEventListener("mousedown", function (e) {
+      if (e.button === 0) { // Left click
+        mouseDown = true;
+      }
+    });
+
+    canvas.addEventListener("mouseup", function (e) {
+      if (e.button === 0) {
+        mouseDown = false;
+      }
+    });
+
+    canvas.addEventListener("mouseleave", function () {
+      mouseActive = false;
+      mouseDown = false;
     });
 
     // ============================================
@@ -3820,6 +4032,10 @@
       // Update player blink effect
       updatePlayerBlink();
 
+      // Update explosions and particles
+      updateExplosions();
+      updateParticles();
+
       // Draw shield ripple effect if active
       if (hasShield) {
         var playerCx = player.x + player.width / 2;
@@ -3849,12 +4065,39 @@
         ctx.restore();
       }
 
+      // Draw quad laser glow when player has quad lasers
+      if (!gameOver && !paused && laserLevel >= 4) {
+        var playerCenterX = player.x + player.width / 2;
+        var playerCenterY = player.y + player.height / 2;
+        var gradient = ctx.createRadialGradient(playerCenterX, playerCenterY, 0, playerCenterX, playerCenterY, player.width);
+        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.4)');
+        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.2)');
+        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width * 2, player.height * 2);
+      }
+
       // Draw and move player (only if visible during blink)
       if (playerVisible) {
         ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
       }
-      // Keyboard movement
-      if (rightPressed && player.x < canvas.width - player.width) {
+      // Mouse movement (prioritize over keyboard)
+      if (mouseActive && !gameOver && !paused) {
+        var targetX = mouseX - player.width / 2;
+        targetX = Math.max(0, Math.min(targetX, canvas.width - player.width));
+        player.x += (targetX - player.x) * 0.3; // Smooth follow
+
+        // Mouse shooting with cooldown
+        if (mouseDown) {
+          var now = Date.now();
+          if (now - lastShotTime >= FIRE_COOLDOWN) {
+            shootBullet();
+            lastShotTime = now;
+          }
+        }
+      }
+      // Keyboard movement (fallback)
+      else if (rightPressed && player.x < canvas.width - player.width) {
         player.x += CONFIG.playerSpeed;
       } else if (leftPressed && player.x > 0) {
         player.x -= CONFIG.playerSpeed;
@@ -3905,6 +4148,10 @@
               break;
             } else {
               // No shield - destroy both bullet and enemy
+              var centerX = enemy.x + enemy.width / 2;
+              var centerY = enemy.y + enemy.height / 2;
+              spawnExplosion(centerX, centerY, false);
+              spawnParticles(centerX, centerY, 8); // 8 particles for regular enemy
               playerBullets.splice(i, 1);
               enemies.splice(j, 1);
               score += 10;
@@ -4053,6 +4300,10 @@
           // Check collision with player bullets
           for (var j = playerBullets.length - 1; j >= 0; j--) {
             if (isColliding(playerBullets[j], enemy)) {
+              var centerX = enemy.x + enemy.width / 2;
+              var centerY = enemy.y + enemy.height / 2;
+              spawnExplosion(centerX, centerY, false);
+              spawnParticles(centerX, centerY, 8); // 8 particles for regular enemy
               playerBullets.splice(j, 1);
               enemies.splice(i, 1);
               score += 10;
