@@ -41,6 +41,15 @@
 <html lang="en">
 
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-9ECFZ9JBE5');
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>NON-X - Desktop</title>
@@ -53,7 +62,8 @@
     }
 
     /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
-    html, body {
+    html,
+    body {
       overscroll-behavior: none;
       touch-action: none;
     }
@@ -744,12 +754,22 @@
         platform: 'desktop'
       });
 
-      leaderboard.sort(function(a, b) { return b.score - a.score; });
+      leaderboard.sort(function (a, b) { return b.score - a.score; });
       leaderboard = leaderboard.slice(0, 100);
 
+      //Save
       localStorage.setItem('nonx_leaderboard', JSON.stringify(leaderboard));
 
-      alert('Score submitted! You rank #' + (leaderboard.findIndex(function(e) { return e.score === score; }) + 1) + ' globally!');
+      //Track leaderboard submission
+      gtag('event', 'leaderboard_submit', {
+        'ab_music_group': userABGroup,
+        'platform': 'desktop',
+        'score': score,
+        'instagram_provided': sanitized !== ''
+      });
+
+
+      alert('Score submitted! You rank #' + (leaderboard.findIndex(function (e) { return e.score === score; }) + 1) + ' globally!');
 
       document.getElementById('leaderboardSubmit').style.display = 'none';
       showLeaderboard();
@@ -3448,6 +3468,14 @@
       bossMinions = [];
       boss = null;
 
+      // Track game completion (victory)
+      gtag('event', 'game_complete', {
+        'ab_music_group': userABGroup,
+        'platform': 'desktop',
+        'final_score': score,
+        'music_on': localStorage.getItem('nonex_music') !== 'off'
+      });
+
       // Clear the canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -4261,29 +4289,29 @@
         var g = c.getContext('2d');
         var w = c.width, h = c.height;
         g.fillStyle = '#FF3333';
-        g.beginPath(); g.moveTo(w/2,0); g.lineTo(w,h/2); g.lineTo(w/2,h); g.lineTo(0,h/2); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w, h / 2); g.lineTo(w / 2, h); g.lineTo(0, h / 2); g.closePath(); g.fill();
         g.strokeStyle = '#FF0000'; g.lineWidth = 2; g.stroke();
         g.fillStyle = '#FFFFFF';
-        g.fillRect(w/2-2, h/4, 4, h/2);
-        g.fillRect(w/4, h/2-2, w/2, 4);
+        g.fillRect(w / 2 - 2, h / 4, 4, h / 2);
+        g.fillRect(w / 4, h / 2 - 2, w / 2, 4);
       })();
       // Double Laser — purple hexagon with double bars
       (function () {
         var c = document.getElementById('puLaser');
         var g = c.getContext('2d');
-        var w = c.width, h = c.height, cx = w/2, cy = h/2, r = w/2 - 1;
+        var w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 1;
         g.fillStyle = '#9933FF';
         g.beginPath();
         for (var i = 0; i < 6; i++) {
-          var a = (Math.PI/3)*i - Math.PI/2;
-          if (i===0) g.moveTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
-          else g.lineTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
+          var a = (Math.PI / 3) * i - Math.PI / 2;
+          if (i === 0) g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          else g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
         }
         g.closePath(); g.fill();
         g.strokeStyle = '#6600CC'; g.lineWidth = 2; g.stroke();
         g.fillStyle = '#FFFFFF';
-        g.fillRect(cx-7, cy-7, 3, 14);
-        g.fillRect(cx+4, cy-7, 3, 14);
+        g.fillRect(cx - 7, cy - 7, 3, 14);
+        g.fillRect(cx + 4, cy - 7, 3, 14);
       })();
       // Shield — aqua triangle with circle
       (function () {
@@ -4291,28 +4319,28 @@
         var g = c.getContext('2d');
         var w = c.width, h = c.height;
         g.fillStyle = '#00FFFF';
-        g.beginPath(); g.moveTo(w/2,0); g.lineTo(w,h); g.lineTo(0,h); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
         g.strokeStyle = '#00CCCC'; g.lineWidth = 2; g.stroke();
-        g.beginPath(); g.arc(w/2, h/2+5, 6, 0, Math.PI*2);
+        g.beginPath(); g.arc(w / 2, h / 2 + 5, 6, 0, Math.PI * 2);
         g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.stroke();
       })();
       // Quad Laser — purple hexagon with four bars
       (function () {
         var c = document.getElementById('puQuad');
         var g = c.getContext('2d');
-        var w = c.width, h = c.height, cx = w/2, cy = h/2, r = w/2 - 1;
+        var w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 1;
         g.fillStyle = '#9933FF';
         g.beginPath();
         for (var i = 0; i < 6; i++) {
-          var a = (Math.PI/3)*i - Math.PI/2;
-          if (i===0) g.moveTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
-          else g.lineTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
+          var a = (Math.PI / 3) * i - Math.PI / 2;
+          if (i === 0) g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+          else g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
         }
         g.closePath(); g.fill();
         g.strokeStyle = '#6600CC'; g.lineWidth = 2; g.stroke();
         g.fillStyle = '#FFFFFF';
         var offsets = [-9, -3, 3, 9];
-        for (var j = 0; j < 4; j++) { g.fillRect(cx + offsets[j], cy-6, 2, 12); }
+        for (var j = 0; j < 4; j++) { g.fillRect(cx + offsets[j], cy - 6, 2, 12); }
       })();
     }
 
@@ -4425,6 +4453,13 @@
 
         startButton.innerText = "Pause";
         startButton.classList.add('game-active');
+
+        // Track game start with A/B group and platform
+        gtag('event', 'game_start', {
+          'ab_music_group': userABGroup,
+          'platform': 'desktop',
+          'music_on': localStorage.getItem('nonex_music') !== 'off'
+        });
 
         showAnnouncement("levelDisplay", "Level 1", 2000);
         startBackgroundMusic();
