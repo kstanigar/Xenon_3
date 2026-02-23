@@ -56,6 +56,15 @@
 <html lang="en">
 
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-9ECFZ9JBE5');
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NON-X - Mobile</title>
@@ -808,14 +817,22 @@
       });
 
       // Sort by score descending and keep top 100
-      leaderboard.sort(function(a, b) { return b.score - a.score; });
+      leaderboard.sort(function (a, b) { return b.score - a.score; });
       leaderboard = leaderboard.slice(0, 100);
 
       // Save
       localStorage.setItem('nonx_leaderboard', JSON.stringify(leaderboard));
 
+      // Track Leaderboard submissions
+      gtag('event', 'leaderboard_submit', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'score': score,
+        'instagram_provided': sanitized !== ''
+      });
+
       // Show confirmation
-      alert('Score submitted! You rank #' + (leaderboard.findIndex(function(e) { return e.score === score; }) + 1) + ' globally!');
+      alert('Score submitted! You rank #' + (leaderboard.findIndex(function (e) { return e.score === score; }) + 1) + ' globally!');
 
       // Hide submit button, show leaderboard
       document.getElementById('leaderboardSubmit').style.display = 'none';
@@ -3935,6 +3952,14 @@
       bossMinions = [];
       boss = null;
 
+      // Track Game completion (victory)
+      gtag('event', 'game_complete', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'final_score': score,
+        'music_on': localStorage.getItem('nonex_music') !== 'off'
+      });
+
       // Clear the canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -5123,10 +5148,19 @@
         document.getElementById("victory").style.display = "none";
         paused = false;
 
+
         // Change button to Pause and move to corner on mobile
         startButton.innerText = "Pause";
         startButton.classList.add('game-active');
 
+        // Track game start with A/B group and platform
+        gtag('event', 'game_start', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'music_on': localStorage.getItem('nonex_music') !== 'off'
+        });
+
+        // Level Display
         showAnnouncement("levelDisplay", "Level 1", 2000);
         startBackgroundMusic();
         draw();
