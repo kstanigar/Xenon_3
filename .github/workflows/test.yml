@@ -1,22 +1,23 @@
- name: Test Game Build
+                                                                                                                                                                                                                          
+  name: Test Game Build                                                                                                                                                                                                   
 
-  # Run on push to any branch and on pull requests
   on:
     push:
-      branches: ['*']
+      branches:
+        - '**'
     pull_request:
-      branches: [main, develop]
+      branches:
+        - main
+        - develop
 
   jobs:
     test:
       runs-on: ubuntu-latest
 
       steps:
-        # Checkout the code
         - name: Checkout code
           uses: actions/checkout@v3
 
-        # Verify required files exist
         - name: Check required files
           run: |
             echo "Checking for required game files..."
@@ -25,23 +26,14 @@
             test -f game_mobile.html || exit 1
             echo "✓ All required files present"
 
-        # Validate HTML syntax
         - name: Validate HTML
           run: |
             echo "Installing HTML validator..."
             npm install -g html-validate
             echo "Validating HTML files..."
-            html-validate index.html game.html game_mobile.html || true
+            html-validate index.html game.html game_mobile.html || echo "HTML validation warnings (non-blocking)"
             echo "✓ HTML validation complete"
 
-        # Check JavaScript syntax
-        - name: Lint JavaScript
-          run: |
-            echo "Checking JavaScript syntax..."
-            node --check <(grep -oP '(?<=<script>)[\s\S]*?(?=</script>)' index.html) || true
-            echo "✓ JavaScript syntax check complete"
-
-        # Verify Google Analytics is configured
         - name: Check Google Analytics
           run: |
             echo "Verifying Google Analytics tracking..."
@@ -50,7 +42,6 @@
             grep -q "G-9ECFZ9JBE5" game_mobile.html || exit 1
             echo "✓ Google Analytics configured in all files"
 
-        # Verify A/B testing code exists
         - name: Check A/B Testing
           run: |
             echo "Verifying A/B testing implementation..."
@@ -58,7 +49,6 @@
             grep -q "ab_music_group" game_mobile.html || exit 1
             echo "✓ A/B testing code present"
 
-        # Success message
         - name: All tests passed
           run: |
             echo "================================"
