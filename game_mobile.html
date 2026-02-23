@@ -30,12 +30,12 @@
     • Touch event listeners on canvas (touchstart/move/end/cancel)
     • Touch state vars: touchActive, touchTargetX, TOUCH_SHOOT_*
 
-  Image Assets (all in project root, paths use /Xenon_3/ prefix):
+  Image Assets (all in project root, paths use  prefix):
     player.png, enemy.png, enemy2–4.png, Boss.png,
     enemy1–4_Red.png, boss_Red.png,
     enemy1–4_purple.png, boss_purple.png
 
-  Audio Assets (in /Xenon_3/sfx/):
+  Audio Assets (in sfx/):
     NonexFullSong.mp3, bossIntro.mp3,
     playerBullet.mp3, playerHit.mp3, playerDead.mp3,
     enemyDead.mp3, powerUp.mp3
@@ -504,74 +504,74 @@
     var ctx = canvas.getContext("2d");
 
     var playerImg = new Image();
-    playerImg.src = "/Xenon_3/player.webp";
+    playerImg.src = "player.webp";
 
     var enemyImg1 = new Image();
-    enemyImg1.src = "/Xenon_3/enemy.webp";
+    enemyImg1.src = "enemy.webp";
 
     var enemyImg2 = new Image();
-    enemyImg2.src = "/Xenon_3/enemy2.webp";
+    enemyImg2.src = "enemy2.webp";
 
     var enemyImg3 = new Image();
-    enemyImg3.src = "/Xenon_3/enemy3.webp";
+    enemyImg3.src = "enemy3.webp";
 
     var enemyImg4 = new Image();
-    enemyImg4.src = "/Xenon_3/enemy4.webp";
+    enemyImg4.src = "enemy4.webp";
 
     var bossImg = new Image();
-    bossImg.src = "/Xenon_3/Boss.webp";
+    bossImg.src = "Boss.webp";
 
     // Red enemy images (levels 5-8)
     var enemyImg1Red = new Image();
-    enemyImg1Red.src = "/Xenon_3/enemy1_Red.webp";
+    enemyImg1Red.src = "enemy1_Red.webp";
 
     var enemyImg2Red = new Image();
-    enemyImg2Red.src = "/Xenon_3/enemy2_Red.webp";
+    enemyImg2Red.src = "enemy2_Red.webp";
 
     var enemyImg3Red = new Image();
-    enemyImg3Red.src = "/Xenon_3/enemy3_Red.webp";
+    enemyImg3Red.src = "enemy3_Red.webp";
 
     var enemyImg4Red = new Image();
-    enemyImg4Red.src = "/Xenon_3/enemy4_Red.webp";
+    enemyImg4Red.src = "enemy4_Red.webp";
 
     var bossImgRed = new Image();
-    bossImgRed.src = "/Xenon_3/boss_Red.webp";
+    bossImgRed.src = "boss_Red.webp";
 
     // Purple enemy images (levels 9-12)
     var enemyImg1Purple = new Image();
-    enemyImg1Purple.src = "/Xenon_3/enemy1_purple.webp";
+    enemyImg1Purple.src = "enemy1_purple.webp";
 
     var enemyImg2Purple = new Image();
-    enemyImg2Purple.src = "/Xenon_3/enemy2_purple.webp";
+    enemyImg2Purple.src = "enemy2_purple.webp";
 
     var enemyImg3Purple = new Image();
-    enemyImg3Purple.src = "/Xenon_3/enemy3_purple.webp";
+    enemyImg3Purple.src = "enemy3_purple.webp";
 
     var enemyImg4Purple = new Image();
-    enemyImg4Purple.src = "/Xenon_3/enemy4_purple.webp";
+    enemyImg4Purple.src = "enemy4_purple.webp";
 
     var bossImgPurple = new Image();
-    bossImgPurple.src = "/Xenon_3/boss_purple.webp";
+    bossImgPurple.src = "boss_purple.webp";
 
     // ============================================
     // SOUND SETUP
     // ============================================
     var sounds = {
-      playerBullet: new Audio("/Xenon_3/sfx/playerBullet.mp3"),
-      playerHit: new Audio("/Xenon_3/sfx/playerHit.mp3"),
-      playerDead: new Audio("/Xenon_3/sfx/playerDead.mp3"),
-      enemyDead: new Audio("/Xenon_3/sfx/enemyDead.mp3"),
-      bossIntro: new Audio("/Xenon_3/sfx/bossIntro.mp3"),
-      powerUp: new Audio("/Xenon_3/sfx/powerUp.mp3")
+      playerBullet: new Audio("sfx/playerBullet.mp3"),
+      playerHit: new Audio("sfx/playerHit.mp3"),
+      playerDead: new Audio("sfx/playerDead.mp3"),
+      enemyDead: new Audio("sfx/enemyDead.mp3"),
+      bossIntro: new Audio("sfx/bossIntro.mp3"),
+      powerUp: new Audio("sfx/powerUp.mp3")
     };
 
     // Background music (full song, looped)
-    var bgMusic = new Audio("/Xenon_3/sfx/NonexFullSong.mp3");
+    var bgMusic = new Audio("sfx/NonexFullSong.mp3");
     bgMusic.loop = true;
     bgMusic.volume = 0.79;
 
     // Credits music
-    var creditsMusic = new Audio("/Xenon_3/sfx/NonexFullSong.mp3");
+    var creditsMusic = new Audio("sfx/NonexFullSong.mp3");
     creditsMusic.volume = 0.79;
 
     // Set sound effect volumes (all at 0.4)
@@ -582,75 +582,71 @@
     sounds.bossIntro.volume = 0.4;
     sounds.powerUp.volume = 0.4;
 
-    // Audio pool for enemyDead sound (allows multiple simultaneous plays)
-    var enemyDeadPool = [];
-    for (var i = 0; i < 5; i++) {
-      var audio = new Audio("/Xenon_3/sfx/enemyDead.mp3");
-      audio.volume = 0.4;
-      enemyDeadPool.push(audio);
-    }
-    var enemyDeadPoolIndex = 0;
-
-    // Audio pool for playerBullet sound (rapid fire support)
+    // Audio pools for high-frequency sounds (allows overlapping plays)
     var playerBulletPool = [];
-    for (var i = 0; i < 4; i++) {
-      var audio = new Audio("/Xenon_3/sfx/playerBullet.mp3");
+    for (var i = 0; i < 3; i++) {
+      var audio = new Audio("sfx/playerBullet.mp3");
       audio.volume = 0.4;
       playerBulletPool.push(audio);
     }
-    var playerBulletPoolIndex = 0;
-    var lastPlayerBulletSound = 0;
-    var PLAYER_BULLET_SOUND_COOLDOWN = 500; // Only play sound every 500ms
+    var playerBulletIndex = 0;
 
-    var lastEnemyDeadSound = 0;
-    var ENEMY_DEAD_SOUND_COOLDOWN = 100; // Limit enemy death sounds to every 100ms
+    var enemyDeadPool = [];
+    for (var i = 0; i < 4; i++) {
+      var audio = new Audio("sfx/enemyDead.mp3");
+      audio.volume = 0.4;
+      enemyDeadPool.push(audio);
+    }
+    var enemyDeadIndex = 0;
 
     var bossIntroInterval = null;
 
+    // Cooldown tracking for high-frequency sounds
+    var lastEnemyDeadTime = 0;
+    var ENEMY_DEAD_COOLDOWN = 333; // ms between plays (1000/3 ≈ 333, max 3/sec)
+
     /**
-     * Plays a one-shot sound effect by resetting its playback position and
-     * calling play(). Uses audio pooling for high-frequency sounds to allow simultaneous plays.
-     * Autoplay errors are silently ignored.
+     * Plays a one-shot sound effect.
+     * playerBullet waits until previous play finishes (no overlap).
+     * enemyDead has a cooldown (max 3 plays/second).
      * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
      */
     function playSound(soundName) {
-      // Use audio pool for enemyDead with cooldown to prevent audio spam
+      var sound = sounds[soundName];
+      if (!sound) {
+        console.log('Sound not found:', soundName);
+        return;
+      }
+
+      // playerBullet: only play if previous sound has finished
+      if (soundName === 'playerBullet') {
+        // Check if sound is currently playing
+        if (!sound.paused && sound.currentTime > 0 && !sound.ended) {
+          return; // Still playing, skip this request
+        }
+      }
+
+      // enemyDead cooldown: max 3 times per second
       if (soundName === 'enemyDead') {
         var now = Date.now();
-        if (now - lastEnemyDeadSound < ENEMY_DEAD_SOUND_COOLDOWN) {
-          return; // Skip sound if still in cooldown
+        if (now - lastEnemyDeadTime < ENEMY_DEAD_COOLDOWN) {
+          return; // Too soon, skip this play
         }
-        lastEnemyDeadSound = now;
-        var audio = enemyDeadPool[enemyDeadPoolIndex];
-        enemyDeadPoolIndex = (enemyDeadPoolIndex + 1) % enemyDeadPool.length;
-        audio.currentTime = 0;
-        audio.play().catch(function (e) {
-          // Ignore autoplay errors
-        });
-        return;
+        lastEnemyDeadTime = now;
       }
 
-      // Use audio pool for playerBullet with cooldown to prevent performance issues
-      if (soundName === 'playerBullet') {
-        var now = Date.now();
-        if (now - lastPlayerBulletSound < PLAYER_BULLET_SOUND_COOLDOWN) {
-          return; // Skip sound if still in cooldown
-        }
-        lastPlayerBulletSound = now;
-        var audio = playerBulletPool[playerBulletPoolIndex];
-        playerBulletPoolIndex = (playerBulletPoolIndex + 1) % playerBulletPool.length;
-        audio.currentTime = 0;
-        audio.play().catch(function (e) {
-          // Ignore autoplay errors
-        });
-        return;
+      // Debug: log when sounds are played
+      console.log('Playing sound:', soundName);
+
+      // Force load the audio if not ready
+      if (sound.readyState < 2) {
+        console.log('Sound not ready, loading:', soundName);
+        sound.load();
       }
 
-      var sound = sounds[soundName];
-      if (!sound) return;
       sound.currentTime = 0;
       sound.play().catch(function (e) {
-        // Ignore autoplay errors
+        console.log('Error playing sound:', soundName, e);
       });
     }
 
@@ -950,7 +946,7 @@
     var TOUCH_SHOOT_DURATION = 1800;  // 1.8 seconds shooting
     var TOUCH_SHOOT_COOLDOWN = 400;   // 0.4 second reload
     var touchLastShot = 0;
-    var TOUCH_SHOOT_INTERVAL = 170;   // fire every 170ms while active
+    var TOUCH_SHOOT_INTERVAL = 130;   // fire every 130ms while active
 
     // Power-up state
     var hasDoubleLaser = false;
@@ -1216,6 +1212,7 @@
      * @param {Object} powerup - The power-up object being collected.
      */
     function collectPowerup(powerup) {
+      console.log('Collecting powerup:', powerup.type);
       playSound('powerUp');
       score += 5;
       updateUI();
@@ -3936,6 +3933,7 @@
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
       } else {
+        console.log('Player hit! Health:', health);
         playSound('playerHit');
       }
     }
@@ -4759,6 +4757,15 @@
      * button to begin the first game session.
      */
     function startFromCard() {
+      // Preload all sounds to unlock browser audio
+      console.log('Preloading sounds...');
+      for (var key in sounds) {
+        if (sounds[key]) {
+          sounds[key].load();
+          console.log('Loaded:', key);
+        }
+      }
+
       document.getElementById('introCard').style.display = 'none';
       var sb = document.getElementById('startButton');
       sb.style.display = 'block';
