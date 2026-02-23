@@ -1,8 +1,8 @@
 <!--
   ============================================================
-  game.html — Nonex Desktop Game
+  game.html — NON-X Desktop Game
   ============================================================
-  Desktop build of the Nonex top-scrolling space shooter.
+  Desktop build of the NON-X top-scrolling space shooter.
   Targets a fixed 4:3 canvas (800×600 px) centered in the
   viewport. Scaled up via CSS transform to fill the screen
   while preserving the intended aspect ratio.
@@ -43,7 +43,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Top-Scrolling Flying Game - Responsive</title>
+  <title>NON-X - Desktop</title>
   <style>
     /* Reset — consistent box model */
     * {
@@ -100,6 +100,19 @@
       left: 12px;
       padding: 10px 20px;
       font-size: 16px;
+      z-index: 10;
+      cursor: pointer;
+      background: #00FFFF;
+      color: #000;
+      border: none;
+    }
+
+    #muteButton {
+      position: absolute;
+      top: 12px;
+      left: 110px;
+      padding: 10px 15px;
+      font-size: 20px;
       z-index: 10;
       cursor: pointer;
       background: #00FFFF;
@@ -311,12 +324,17 @@
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 24px;
-      color: #FF3333;
-      text-shadow: 0 0 10px #FF0000, 0 0 20px #FF0000;
+      color: #FFD700;
+      text-shadow: 0 0 10px #FFD700, 0 0 20px #FFD700;
       z-index: 3;
       text-align: center;
       line-height: 1.5;
       animation: warningPulse 0.5s ease-in-out infinite;
+    }
+
+    #warningDisplay br {
+      display: block;
+      margin-bottom: 8px;
     }
 
     @keyframes warningPulse {
@@ -348,8 +366,8 @@
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 18px;
-      color: #00FF00;
-      text-shadow: 0 0 15px #00FF00;
+      color: #00FFFF;
+      text-shadow: 0 0 15px #00FFFF;
       z-index: 3;
       text-align: center;
       line-height: 1.4;
@@ -363,9 +381,10 @@
   <div id="container">
     <div id="gameWrapper">
       <button id="startButton">Pause</button>
+      <button id="muteButton">🔊</button>
 
       <div id="introCard">
-        <h2>Nonex</h2>
+        <h2>NON-X</h2>
 
         <h3>Controls</h3>
         <ul>
@@ -635,6 +654,23 @@
     function stopBackgroundMusic() {
       bgMusic.pause();
       bgMusic.currentTime = 0;
+    }
+
+    /**
+     * Toggles the background music on/off and updates the mute button icon.
+     * Saves the preference to localStorage for persistence across sessions.
+     */
+    function toggleMusic() {
+      var muteBtn = document.getElementById('muteButton');
+      if (bgMusic.paused) {
+        bgMusic.play().catch(function (e) {
+          // Silently handle autoplay restrictions
+        });
+        muteBtn.textContent = '🔊';
+      } else {
+        bgMusic.pause();
+        muteBtn.textContent = '🔇';
+      }
     }
 
     /** Plays the credits music track from the beginning (used on victory screen). */
@@ -3360,22 +3396,28 @@
 
       // Build victory display
       var victoryEl = document.getElementById("victory");
-      var html = "Thank you for playing!<br>";
+      var html = "Thank you for playing NON-X!<br><br>";
       html += "Your Score: " + score;
       if (madeTopTen) {
         html += " <span style='color: #FFD700;'>- TOP 10! Rank #" + rank + "</span>";
       }
       html += "<br><br>";
-      html += "Special thanks to <a href='https://modmotif.com/' target='_blank' style='color: #FFFFFF; text-decoration: underline;'>Modmotif</a> for the music.<br>";
-      html += "Please submit your email to subscribe and download our music:<br>";
+      html += "Subscribe for game updates and events!<br>";
       html += "<input type='email' id='emailInput' placeholder='your@email.com' style='padding: 6px; font-size: 14px; width: 180px; border-radius: 4px; border: none; margin-top: 5px;'>";
-      html += "<button onclick='submitEmail()' style='padding: 6px 12px; font-size: 14px; margin-left: 5px; border-radius: 4px; border: none; background: #FFD700; cursor: pointer;'>Submit</button>";
+      html += "<button onclick='submitEmail()' style='padding: 6px 12px; font-size: 14px; margin-left: 5px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer;'>Submit</button>";
       html += "<br><br>";
       html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
-      html += "<br><br>&copy; 2026";
+      html += "<br><br>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026";
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
+
+      // Keep mute button visible and center it above victory screen
+      var muteBtn = document.getElementById("muteButton");
+      muteBtn.style.display = "block";
+      muteBtn.style.left = "50%";
+      muteBtn.style.transform = "translateX(-50%)";
+      muteBtn.style.top = "20%";
       document.getElementById("startButton").style.display = "none";
     }
 
@@ -3580,6 +3622,12 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
+      // Debug: Victory screen (V key)
+      if (e.key === "v" || e.key === "V") {
+        showVictory();
+        return;
+      }
+
       // Pause toggle (P or Escape)
       if (e.key === "p" || e.key === "P" || e.key === "Escape") {
         if (!gameOver) {
@@ -4325,6 +4373,13 @@
       }
     });
 
+
+    // ── Mute button listener ──────────────────────────────────────────────
+    var muteButton = document.getElementById("muteButton");
+    muteButton.addEventListener("click", function () {
+      this.blur();
+      toggleMusic();
+    });
   </script>
 </body>
 

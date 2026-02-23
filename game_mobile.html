@@ -1,8 +1,8 @@
 <!--
   ============================================================
-  game_mobile.html — Nonex Mobile Game
+  game_mobile.html — NON-X Mobile Game
   ============================================================
-  Mobile build of the Nonex top-scrolling space shooter.
+  Mobile build of the NON-X top-scrolling space shooter.
   Targets a portrait 9:19.5 canvas (480×1040 px) that is
   scaled via CSS transform to fill the device viewport while
   preserving the intended aspect ratio.
@@ -58,7 +58,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Top-Scrolling Flying Game - Mobile</title>
+  <title>NON-X - Mobile</title>
   <style>
     /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
     html,
@@ -115,6 +115,19 @@
       left: 12px;
       padding: 10px 20px;
       font-size: 16px;
+      z-index: 10;
+      cursor: pointer;
+      background: #00FFFF;
+      color: #000;
+      border: none;
+    }
+
+    #muteButton {
+      position: absolute;
+      top: 12px;
+      left: 110px;
+      padding: 10px 15px;
+      font-size: 20px;
       z-index: 10;
       cursor: pointer;
       background: #00FFFF;
@@ -317,8 +330,8 @@
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 24px;
-      color: #FF3333;
-      text-shadow: 0 0 10px #FF0000, 0 0 20px #FF0000;
+      color: #FFD700;
+      text-shadow: 0 0 10px #FFD700, 0 0 20px #FFD700;
       z-index: 3;
       text-align: center;
       line-height: 1;
@@ -327,7 +340,7 @@
 
     #warningDisplay br {
       display: block;
-      margin-bottom: 4px;
+      margin-top: 16px;
     }
 
     @keyframes warningPulse {
@@ -361,8 +374,8 @@
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 18px;
-      color: #00FF00;
-      text-shadow: 0 0 15px #00FF00;
+      color: #00FFFF;
+      text-shadow: 0 0 15px #00FFFF;
       z-index: 3;
       text-align: center;
       line-height: 1.4;
@@ -376,9 +389,10 @@
   <div id="container">
 
     <button id="startButton">Pause</button>
+    <button id="muteButton">🔊</button>
 
     <div id="introCard">
-      <h2>Nonex</h2>
+      <h2>NON-X</h2>
 
       <h3>Controls</h3>
       <ul>
@@ -417,7 +431,7 @@
     <div id="levelDisplay">Level 1</div>
     <div id="powerupDisplay"></div>
     <div id="bonusDisplay"></div>
-    <div id="warningDisplay">Warning!<br>Shielded Enemy!</div>
+    <div id="warningDisplay">Warning!<br><br>Shielded Enemy!</div>
     <div id="pauseDisplay">PAUSED</div>
     <div id="victory">Thank you for playing!<br><br>Special thanks to Modmotif for the music.<br><br>Please submit your
       email to download the song for remix.<br><br>&copy; 2026</div>
@@ -698,6 +712,24 @@
     }
 
     /**
+     * Toggles the background music on/off and updates the mute button icon.
+     * This is a TEMPORARY toggle - does not save to localStorage.
+     * Permanent music preference is set from the main menu only.
+     */
+    function toggleMusic() {
+      var muteBtn = document.getElementById('muteButton');
+      if (bgMusic.paused) {
+        bgMusic.play().catch(function (e) {
+          // Silently handle autoplay restrictions
+        });
+        muteBtn.textContent = '🔊';
+      } else {
+        bgMusic.pause();
+        muteBtn.textContent = '🔇';
+      }
+    }
+
+    /**
      * Plays the credits music track (used on victory screen).
      *
      * Starts from the beginning and handles autoplay restrictions gracefully.
@@ -721,11 +753,18 @@
      * A basic '@' check is the only validation applied.
      */
     function submitEmail() {
-      var email = document.getElementById('emailInput').value;
-      if (email && email.includes('@')) {
+      var email = document.getElementById('emailInput').value.trim();
+
+      // Basic email validation (client-side only)
+      var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (email && emailRegex.test(email)) {
+        // Sanitize email before storing
+        var sanitized = email.replace(/[<>'"]/g, '');
+
         // Store email locally (can be sent to server later)
         var emails = JSON.parse(localStorage.getItem('xenonEmails')) || [];
-        emails.push(email);
+        emails.push(sanitized);
         localStorage.setItem('xenonEmails', JSON.stringify(emails));
         alert('Thank you for subscribing!');
         document.getElementById('emailInput').value = '';
@@ -1260,23 +1299,27 @@
     // EXPLOSION EFFECTS
     // ============================================
     /**
-     * Creates a simple expanding ring explosion effect when an enemy dies.
-     * The explosion expands and fades over 300ms, synced with enemyDead sound cooldown.
+     * Creates an expanding ring explosion effect when an enemy dies.
+     * Regular enemies: Single ring, 300ms duration.
+     * Boss enemies: Triple concentric rings, 500ms duration for dramatic effect.
      * @param {number} x - Center X position of explosion
      * @param {number} y - Center Y position of explosion
+     * @param {boolean} isBoss - If true, creates a larger triple-ring boss explosion
      */
-    function spawnExplosion(x, y) {
+    function spawnExplosion(x, y, isBoss) {
       explosions.push({
         x: x,
         y: y,
         startTime: Date.now(),
-        duration: 300 // Match enemyDead cooldown for visual/audio sync
+        duration: isBoss ? 500 : 300, // Boss explosions last longer
+        isBoss: isBoss || false
       });
     }
 
     /**
      * Updates and draws all active explosions. Removes completed ones.
-     * Each explosion is an expanding ring that fades from full opacity to transparent.
+     * Regular enemies: Single expanding ring.
+     * Boss enemies: Triple concentric rings expanding at different rates.
      * Color is based on current game phase (cyan/red/purple).
      */
     function updateExplosions() {
@@ -1295,21 +1338,46 @@
         // Calculate animation progress (0 to 1)
         var progress = elapsed / exp.duration;
 
-        // Expanding radius (10px to 30px)
-        var radius = 10 + (progress * 20);
-
         // Fading alpha (1.0 to 0)
         var alpha = 1.0 - progress;
 
         // Color based on phase
         var color = purplePhase ? '138, 43, 226' : (redPhase ? '255, 69, 0' : '0, 255, 255');
 
-        // Draw expanding ring
-        ctx.beginPath();
-        ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(' + color + ', ' + alpha + ')';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        if (exp.isBoss) {
+          // Boss explosion: Triple concentric rings at different speeds
+          // Ring 1 (outer, fastest): 30px → 100px
+          var radius1 = 30 + (progress * 70);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius1, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + (alpha * 0.8) + ')';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Ring 2 (middle, medium speed): 20px → 75px
+          var radius2 = 20 + (progress * 55);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius2, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + alpha + ')';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Ring 3 (inner, slowest): 10px → 50px
+          var radius3 = 10 + (progress * 40);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius3, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + (alpha * 1.2) + ')';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        } else {
+          // Regular enemy explosion: Single ring (10px → 30px)
+          var radius = 10 + (progress * 20);
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + color + ', ' + alpha + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
       }
     }
 
@@ -3683,8 +3751,9 @@
       bossBlinkTimer = 10; // Short blink (10 frames)
 
       if (boss.health <= 0) {
-        // Boss defeated - trigger screen shake!
+        // Boss defeated - trigger screen shake and explosion!
         triggerScreenShake(15, 800); // Strong shake for boss death
+        spawnExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2, true); // Boss explosion
 
         bossActive = false;
         boss = null;
@@ -3811,23 +3880,29 @@
 
       // Build victory display
       var victoryEl = document.getElementById("victory");
-      var html = "Thank you for playing!<br>";
+      var html = "Thank you for playing NON-X!<br><br>";
       html += "Your Score: " + score;
       if (madeTopTen) {
         html += " <span style='color: #FFD700;'>- TOP 10! Rank #" + rank + "</span>";
       }
       html += "<br><br>";
-      html += "Special thanks to <a href='https://modmotif.com/' target='_blank' style='color: #FFFFFF; text-decoration: underline;'>Modmotif</a> for the music.<br>";
-      html += "Please submit your email to subscribe and download our music:<br>";
+      html += "Subscribe for game updates and events!<br>";
       html += "<input type='email' id='emailInput' placeholder='your@email.com' style='padding: 6px; font-size: 14px; width: 180px; border-radius: 4px; border: none; margin-top: 5px;'>";
-      html += "<button onclick='submitEmail()' style='padding: 6px 12px; font-size: 14px; margin-left: 5px; border-radius: 4px; border: none; background: #FFD700; cursor: pointer;'>Submit</button>";
+      html += "<button onclick='submitEmail()' style='padding: 6px 12px; font-size: 14px; margin-left: 5px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer;'>Submit</button>";
       html += "<br><br>";
       html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
-      html += "<br><br>&copy; 2026";
+      html += "<br><br>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026";
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
       document.getElementById("startButton").style.display = "none";
+
+      // Keep mute button visible and center it above victory screen
+      var muteBtn = document.getElementById("muteButton");
+      muteBtn.style.display = "block";
+      muteBtn.style.left = "50%";
+      muteBtn.style.transform = "translateX(-50%)";
+      muteBtn.style.top = "20%";
     }
 
     /** Stops all audio and navigates back to `index.html`. */
@@ -4047,6 +4122,12 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
+      // Debug: Victory screen (V key)
+      if (e.key === "v" || e.key === "V") {
+        showVictory();
+        return;
+      }
+
       // Pause toggle (P or Escape)
       if (e.key === "p" || e.key === "P" || e.key === "Escape") {
         if (!gameOver) {
@@ -4985,6 +5066,13 @@
           bgMusic.play();
         }
       }
+    });
+
+    // ── Mute button listener ──────────────────────────────────────────────
+    var muteButton = document.getElementById("muteButton");
+    muteButton.addEventListener("click", function () {
+      this.blur();
+      toggleMusic();
     });
   </script>
 </body>
