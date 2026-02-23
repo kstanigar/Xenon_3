@@ -692,14 +692,18 @@
      */
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
+      var victoryMuteBtn = document.getElementById('victoryMuteBtn');
+
       if (bgMusic.paused) {
         bgMusic.play().catch(function (e) {
           // Silently handle autoplay restrictions
         });
-        muteBtn.textContent = '🔊';
+        if (muteBtn) muteBtn.textContent = '🔊';
+        if (victoryMuteBtn) victoryMuteBtn.textContent = '🔊';
       } else {
         bgMusic.pause();
-        muteBtn.textContent = '🔇';
+        if (muteBtn) muteBtn.textContent = '🔇';
+        if (victoryMuteBtn) victoryMuteBtn.textContent = '🔇';
       }
     }
 
@@ -3473,14 +3477,16 @@
       // Leaderboard display
       html += "<div id='leaderboardDisplay' style='margin-bottom: 25px;'></div>";
 
-      html += "<button onclick='returnToHomeScreen()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer; margin-bottom: 20px;'>Return to Home Screen</button>";
+      // Buttons row (mute + return home)
+      html += "<div style='margin-bottom: 20px;'>";
+      html += "<button id='victoryMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
+      html += "<button onclick='returnToHomeScreen()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
+      html += "</div>";
+
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
-
-      // Hide mute button on victory screen (music control available on main menu)
-      document.getElementById("muteButton").style.display = "none";
       document.getElementById("startButton").style.display = "none";
     }
 
