@@ -644,6 +644,36 @@
      * Starts looping background music from the beginning, unless the player
      * has disabled music (localStorage key `nonex_music` === 'off').
      */
+    // ============================================
+    // A/B TESTING - MUSIC DEFAULT
+    // ============================================
+    /**
+     * Assigns user to A/B test group for music default setting.
+     * Group A: Music ON by default
+     * Group B: Music OFF by default
+     * Assignment is random and persists in localStorage.
+     */
+    function initMusicABTest() {
+      var abGroup = localStorage.getItem('nonx_ab_music_group');
+
+      if (!abGroup) {
+        abGroup = Math.random() < 0.5 ? 'A' : 'B';
+        localStorage.setItem('nonx_ab_music_group', abGroup);
+
+        if (!localStorage.getItem('nonex_music')) {
+          if (abGroup === 'A') {
+            localStorage.setItem('nonex_music', 'on');
+          } else {
+            localStorage.setItem('nonex_music', 'off');
+          }
+        }
+      }
+
+      return abGroup;
+    }
+
+    var userABGroup = initMusicABTest();
+
     function startBackgroundMusic() {
       if (localStorage.getItem('nonex_music') === 'off') return;
       bgMusic.currentTime = 0;
@@ -692,18 +722,48 @@
      * Emails are stored in `localStorage` under the key `xenonEmails` (JSON array).
      * A basic '@' check is the only validation applied.
      */
-    function submitEmail() {
-      var email = document.getElementById('emailInput').value;
-      if (email && email.includes('@')) {
-        // Store email locally (can be sent to server later)
-        var emails = JSON.parse(localStorage.getItem('xenonEmails')) || [];
-        emails.push(email);
-        localStorage.setItem('xenonEmails', JSON.stringify(emails));
-        alert('Thank you for subscribing!');
-        document.getElementById('emailInput').value = '';
-      } else {
-        alert('Please enter a valid email address.');
+    /**
+     * Submits score to the global leaderboard with optional Instagram handle.
+     * Leaderboard is stored in localStorage and can sync to backend.
+     */
+    function submitToLeaderboard() {
+      var igHandle = document.getElementById('igInput').value.trim();
+
+      var sanitized = igHandle.replace(/[@<>'"]/g, '').substring(0, 30);
+
+      var leaderboard = JSON.parse(localStorage.getItem('nonx_leaderboard')) || [];
+
+      leaderboard.push({
+        score: score,
+        instagram: sanitized || 'Anonymous',
+        date: new Date().toISOString(),
+        platform: 'desktop'
+      });
+
+      leaderboard.sort(function(a, b) { return b.score - a.score; });
+      leaderboard = leaderboard.slice(0, 100);
+
+      localStorage.setItem('nonx_leaderboard', JSON.stringify(leaderboard));
+
+      alert('Score submitted! You rank #' + (leaderboard.findIndex(function(e) { return e.score === score; }) + 1) + ' globally!');
+
+      document.getElementById('leaderboardSubmit').style.display = 'none';
+      showLeaderboard();
+    }
+
+    function showLeaderboard() {
+      var leaderboard = JSON.parse(localStorage.getItem('nonx_leaderboard')) || [];
+      var top10 = leaderboard.slice(0, 10);
+
+      var html = '<div style="margin-top: 20px; text-align: left; display: inline-block;"><strong>Top 10 Global Scores:</strong><br>';
+      for (var i = 0; i < top10.length; i++) {
+        var entry = top10[i];
+        var igText = entry.instagram !== 'Anonymous' ? '@' + entry.instagram : entry.instagram;
+        html += (i + 1) + '. ' + entry.score + ' - ' + igText + '<br>';
       }
+      html += '</div>';
+
+      document.getElementById('leaderboardDisplay').innerHTML = html;
     }
 
     // ============================================
@@ -3396,28 +3456,31 @@
 
       // Build victory display
       var victoryEl = document.getElementById("victory");
-      var html = "Thank you for playing NON-X!<br><br>";
-      html += "Your Score: " + score;
+      var html = "<div style='font-size: 22px; margin-bottom: 15px;'>Thank you for playing NON-X!</div>";
+      html += "<div style='font-size: 20px; margin-bottom: 25px;'>Your Score: <strong>" + score + "</strong>";
       if (madeTopTen) {
         html += " <span style='color: #FFD700;'>- TOP 10! Rank #" + rank + "</span>";
       }
-      html += "<br><br>";
-      html += "Subscribe for game updates and events!<br>";
-      html += "<input type='email' id='emailInput' placeholder='your@email.com' style='padding: 6px; font-size: 14px; width: 180px; border-radius: 4px; border: none; margin-top: 5px;'>";
-      html += "<button onclick='submitEmail()' style='padding: 6px 12px; font-size: 14px; margin-left: 5px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer;'>Submit</button>";
-      html += "<br><br>";
-      html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
-      html += "<br><br>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026";
+      html += "</div>";
+
+      // Leaderboard submission
+      html += "<div id='leaderboardSubmit' style='margin-bottom: 20px;'>";
+      html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
+      html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px;'><br>";
+      html += "<button onclick='submitToLeaderboard()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
+      html += "</div>";
+
+      // Leaderboard display
+      html += "<div id='leaderboardDisplay' style='margin-bottom: 25px;'></div>";
+
+      html += "<button onclick='returnToHomeScreen()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer; margin-bottom: 20px;'>Return to Home Screen</button>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
 
-      // Keep mute button visible and center it above victory screen
-      var muteBtn = document.getElementById("muteButton");
-      muteBtn.style.display = "block";
-      muteBtn.style.left = "50%";
-      muteBtn.style.transform = "translateX(-50%)";
-      muteBtn.style.top = "20%";
+      // Hide mute button on victory screen (music control available on main menu)
+      document.getElementById("muteButton").style.display = "none";
       document.getElementById("startButton").style.display = "none";
     }
 
