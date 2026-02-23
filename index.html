@@ -500,7 +500,7 @@
     // ============================================================
     // User preferences are persisted to localStorage so they are
     // restored on the next visit. Defaults: Computer platform, music on,
-    // analytics off (opt-in only).
+    // analytics on (opt-out available).
 
     /** Currently selected platform ('computer' | 'mobile'). */
     var selectedPlatform = 'computer';
@@ -563,7 +563,8 @@
       var platform = localStorage.getItem('nonex_platform');
 
       if (music !== null) document.getElementById('musicSwitch').checked = (music === 'on');
-      if (analytics !== null) document.getElementById('analyticsSwitch').checked = (analytics === 'on');
+      // Default analytics to ON for first-time visitors
+      document.getElementById('analyticsSwitch').checked = (analytics === 'on' || analytics === null);
       if (platform) selectPlatform(platform);
     }
 

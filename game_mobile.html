@@ -251,8 +251,8 @@
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 24px;
-      color: red;
-      text-shadow: 0 0 10px red;
+      color: #00FFFF;
+      text-shadow: 0 0 10px #00FFFF;
       z-index: 2;
       text-align: center;
       line-height: 1.6;
@@ -2033,73 +2033,73 @@
       1: {
         enemyType: 'enemy1',
         waves: [
-          { count: 7, kamikazes: 2, shapes: ['grid3x3Exploded', 'grid3x3'], barrier: 'circle', barrierCount: 5 }
+          { count: 9, kamikazes: 2, shapes: ['grid3x3Exploded', 'grid3x3'], barrier: 'circle', barrierCount: 5 }
         ]
       },
       2: {
         enemyType: 'enemy2',
         waves: [
-          { count: 7, kamikazes: 2, shapes: ['diamondExploded', 'diamond'], barrier: 'horizontalLine', barrierCount: 5 }
+          { count: 9, kamikazes: 2, shapes: ['diamondExploded', 'diamond'], barrier: 'horizontalLine', barrierCount: 5 }
         ]
       },
       3: {
         enemyType: 'enemy3',
         waves: [
-          { count: 8, kamikazes: 2, shapes: ['circleExploded', 'circle'], barrier: null }
+          { count: 10, kamikazes: 2, shapes: ['circleExploded', 'circle'], barrier: null }
         ]
       },
       4: {
         enemyType: 'enemy4',
         waves: [
-          { count: 7, kamikazes: 2, shapes: ['flyingVExploded', 'flyingV'], barrier: 'arrow', barrierCount: 5 }
+          { count: 9, kamikazes: 2, shapes: ['flyingVExploded', 'flyingV'], barrier: 'arrow', barrierCount: 5 }
         ]
       },
       5: {
         enemyType: 'enemy1_red',
         waves: [
-          { count: 13, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
+          { count: 16, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
         ]
       },
       6: {
         enemyType: 'enemy2_red',
         waves: [
-          { count: 10, kamikazes: 2, shapes: ['doubleDiamondExploded', 'doubleDiamond'], barrier: 'orbitingShield', barrierCount: 6 }
+          { count: 13, kamikazes: 2, shapes: ['doubleDiamondExploded', 'doubleDiamond'], barrier: 'orbitingShield', barrierCount: 6 }
         ]
       },
       7: {
         enemyType: 'enemy3_red',
         waves: [
-          { count: 9, kamikazes: 3, shapes: ['doubleVExploded', 'doubleV'], barrier: null }
+          { count: 11, kamikazes: 3, shapes: ['doubleVExploded', 'doubleV'], barrier: null }
         ]
       },
       8: {
         enemyType: 'enemy4_red',
         waves: [
-          { count: 10, kamikazes: 3, shapes: ['dualSineWaveExploded', 'dualSineWave'], barrier: 'dualLines', barrierCount: 8 }
+          { count: 12, kamikazes: 3, shapes: ['dualSineWaveExploded', 'dualSineWave'], barrier: 'dualLines', barrierCount: 8 }
         ]
       },
       9: {
         enemyType: 'enemy1_purple',
         waves: [
-          { count: 14, kamikazes: 3, shapes: ['spiralExploded', 'spiral'], barrier: 'orbitingShield', barrierCount: 8 }
+          { count: 18, kamikazes: 3, shapes: ['spiralExploded', 'spiral'], barrier: 'orbitingShield', barrierCount: 8 }
         ]
       },
       10: {
         enemyType: 'enemy2_purple',
         waves: [
-          { count: 16, kamikazes: 4, shapes: ['hexGridExploded', 'hexGrid'], barrier: 'dualLines', barrierCount: 10 }
+          { count: 20, kamikazes: 4, shapes: ['hexGridExploded', 'hexGrid'], barrier: 'dualLines', barrierCount: 10 }
         ]
       },
       11: {
         enemyType: 'enemy3_purple',
         waves: [
-          { count: 18, kamikazes: 4, shapes: ['twinCirclesExploded', 'twinCircles'], barrier: 'circle', barrierCount: 8 }
+          { count: 22, kamikazes: 4, shapes: ['twinCirclesExploded', 'twinCircles'], barrier: 'circle', barrierCount: 8 }
         ]
       },
       12: {
         enemyType: 'enemy4_purple',
         waves: [
-          { count: 20, kamikazes: 5, shapes: ['arrowheadExploded', 'arrowhead'], barrier: 'arrow', barrierCount: 8 }
+          { count: 25, kamikazes: 5, shapes: ['arrowheadExploded', 'arrowhead'], barrier: 'arrow', barrierCount: 8 }
         ]
       }
     };
@@ -2291,7 +2291,8 @@
     function updateKamikazeEntry() {
       if (!kamikazeCenterActive) return;
 
-      kamikazeCenterY += (kamikazeCenterTargetY - kamikazeCenterY) * 0.045;
+      // Faster entry animation for smoother kamikaze descent (was 0.045)
+      kamikazeCenterY += (kamikazeCenterTargetY - kamikazeCenterY) * 0.08;
 
       if (kamikazeCenterTargetY - kamikazeCenterY < 1) {
         kamikazeCenterY = kamikazeCenterTargetY;
@@ -4480,6 +4481,18 @@
         ctx.restore();
       }
 
+      // Draw firing glow when player is actively touching (under joystick)
+      if (!gameOver && !paused && touchActive) {
+        var jx = player.x + player.width / 2;
+        var jy = player.y + player.height + 42; // joystick center
+        var gradient = ctx.createRadialGradient(jx, jy, 0, jx, jy, 80);
+        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.5)');
+        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.25)');
+        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(jx - 80, jy - 80, 160, 160);
+      }
+
       // Draw joystick base below player
       {
         var jx = player.x + player.width / 2;
@@ -4492,6 +4505,18 @@
         ctx.fillStyle = 'rgba(0, 255, 255, 0.45)';
         ctx.fill();
         ctx.restore();
+      }
+
+      // Draw quad laser glow when player has quad lasers
+      if (!gameOver && !paused && laserLevel >= 4) {
+        var playerCenterX = player.x + player.width / 2;
+        var playerCenterY = player.y + player.height / 2;
+        var gradient = ctx.createRadialGradient(playerCenterX, playerCenterY, 0, playerCenterX, playerCenterY, player.width);
+        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.4)');
+        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.2)');
+        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width * 2, player.height * 2);
       }
 
       // Draw and move player (only if visible during blink)
