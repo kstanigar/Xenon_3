@@ -40,6 +40,14 @@
     playerBullet.mp3, playerHit.mp3, playerDead.mp3,
     enemyDead.mp3, powerUp.mp3
 
+  Audio Implementation:
+    • Sound effects use intelligent throttling for mobile optimization
+    • playerBullet: Waits for previous play to finish (no overlap)
+    • enemyDead: Limited to 3 plays/second via time-based cooldown
+    • Other SFX: Play immediately without throttling
+    • No audio pools required (simple, clean, performant approach)
+    • All sounds preloaded on game start to satisfy autoplay policies
+
   Dependencies: None (no external libraries or frameworks).
   Entry point: index.html → launchGame() → game_mobile.html
   ============================================================
@@ -582,81 +590,69 @@
     sounds.bossIntro.volume = 0.4;
     sounds.powerUp.volume = 0.4;
 
-    // Audio pools for high-frequency sounds (allows overlapping plays)
-    var playerBulletPool = [];
-    for (var i = 0; i < 3; i++) {
-      var audio = new Audio("sfx/playerBullet.mp3");
-      audio.volume = 0.4;
-      playerBulletPool.push(audio);
-    }
-    var playerBulletIndex = 0;
-
-    var enemyDeadPool = [];
-    for (var i = 0; i < 4; i++) {
-      var audio = new Audio("sfx/enemyDead.mp3");
-      audio.volume = 0.4;
-      enemyDeadPool.push(audio);
-    }
-    var enemyDeadIndex = 0;
-
+    // Boss intro music interval reference
     var bossIntroInterval = null;
 
-    // Cooldown tracking for high-frequency sounds
+    // Sound throttling for performance optimization
     var lastEnemyDeadTime = 0;
-    var ENEMY_DEAD_COOLDOWN = 333; // ms between plays (1000/3 ≈ 333, max 3/sec)
+    var ENEMY_DEAD_COOLDOWN = 333; // Limit to 3 plays per second (1000ms / 3)
 
     /**
-     * Plays a one-shot sound effect.
-     * playerBullet waits until previous play finishes (no overlap).
-     * enemyDead has a cooldown (max 3 plays/second).
-     * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
+     * Plays a one-shot sound effect with intelligent throttling to optimize performance.
+     *
+     * Throttling strategy:
+     * - playerBullet: Waits for previous instance to finish (prevents audio overlap)
+     * - enemyDead: Time-based cooldown limiting to 3 plays per second
+     * - All others: Play immediately without throttling
+     *
+     * This approach eliminates the need for audio pools while maintaining smooth
+     * performance on mobile devices during high-frequency events.
+     *
+     * @param {string} soundName - Key in the `sounds` object ('playerBullet',
+     *                             'playerHit', 'playerDead', 'enemyDead',
+     *                             'bossIntro', 'powerUp').
      */
     function playSound(soundName) {
       var sound = sounds[soundName];
-      if (!sound) {
-        console.log('Sound not found:', soundName);
-        return;
-      }
+      if (!sound) return;
 
-      // playerBullet: only play if previous sound has finished
+      // playerBullet: Prevent overlap by checking if previous play has finished
       if (soundName === 'playerBullet') {
-        // Check if sound is currently playing
         if (!sound.paused && sound.currentTime > 0 && !sound.ended) {
-          return; // Still playing, skip this request
+          return;
         }
       }
 
-      // enemyDead cooldown: max 3 times per second
+      // enemyDead: Time-based throttling (max 3 plays per second)
       if (soundName === 'enemyDead') {
         var now = Date.now();
         if (now - lastEnemyDeadTime < ENEMY_DEAD_COOLDOWN) {
-          return; // Too soon, skip this play
+          return;
         }
         lastEnemyDeadTime = now;
       }
 
-      // Debug: log when sounds are played
-      console.log('Playing sound:', soundName);
-
-      // Force load the audio if not ready
+      // Ensure audio is loaded before attempting playback
       if (sound.readyState < 2) {
-        console.log('Sound not ready, loading:', soundName);
         sound.load();
       }
 
+      // Reset to beginning and play
       sound.currentTime = 0;
       sound.play().catch(function (e) {
-        console.log('Error playing sound:', soundName, e);
+        // Silently handle autoplay restrictions (browser policy)
       });
     }
 
     /**
-     * Starts the boss intro sting and sets a repeating interval so it plays
-     * every 10 seconds for as long as a boss fight is active.
+     * Initiates boss encounter music sequence.
+     *
+     * Plays the boss intro sting immediately, then establishes a 10-second
+     * interval that continues playing the sting throughout the boss fight
+     * (until stopBossMusic() is called or game ends).
      */
     function startBossMusic() {
       playSound('bossIntro');
-      // Repeat every 10 seconds
       bossIntroInterval = setInterval(function () {
         if (bossActive && !gameOver) {
           playSound('bossIntro');
@@ -664,7 +660,12 @@
       }, 10000);
     }
 
-    /** Clears the boss music interval and resets the audio element to the start. */
+    /**
+     * Stops boss music playback and clears the repeat interval.
+     *
+     * Cleans up the interval timer and resets the boss intro audio element
+     * to the beginning, ready for the next boss encounter.
+     */
     function stopBossMusic() {
       if (bossIntroInterval) {
         clearInterval(bossIntroInterval);
@@ -675,26 +676,36 @@
     }
 
     /**
-     * Starts looping background music from the beginning, unless the player
-     * has disabled music (localStorage key `nonex_music` === 'off').
+     * Starts the looping background music track from the beginning.
+     *
+     * Respects user preference stored in localStorage ('nonex_music').
+     * If music is disabled, this function returns without starting playback.
      */
     function startBackgroundMusic() {
       if (localStorage.getItem('nonex_music') === 'off') return;
       bgMusic.currentTime = 0;
-      bgMusic.play().catch(function (e) { });
+      bgMusic.play().catch(function (e) {
+        // Silently handle autoplay restrictions
+      });
     }
 
-    /** Pauses and resets the background music track. */
+    /**
+     * Stops and resets the background music track to the beginning.
+     */
     function stopBackgroundMusic() {
       bgMusic.pause();
       bgMusic.currentTime = 0;
     }
 
-    /** Plays the credits music track from the beginning (used on victory screen). */
+    /**
+     * Plays the credits music track (used on victory screen).
+     *
+     * Starts from the beginning and handles autoplay restrictions gracefully.
+     */
     function startCreditsMusic() {
       creditsMusic.currentTime = 0;
       creditsMusic.play().catch(function (e) {
-        // Ignore autoplay errors
+        // Silently handle autoplay restrictions
       });
     }
 
@@ -1212,7 +1223,6 @@
      * @param {Object} powerup - The power-up object being collected.
      */
     function collectPowerup(powerup) {
-      console.log('Collecting powerup:', powerup.type);
       playSound('powerUp');
       score += 5;
       updateUI();
@@ -3933,7 +3943,6 @@
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
       } else {
-        console.log('Player hit! Health:', health);
         playSound('playerHit');
       }
     }
@@ -4752,20 +4761,25 @@
     drawCardPowerupIcons();
 
     /**
-     * Called by the intro card's "Start Game" button. Hides the card, shows the
-     * Pause button in game-active state, then programmatically clicks the start
-     * button to begin the first game session.
+     * Initializes the game session from the intro card.
+     *
+     * This function is triggered by the "Start Game" button and performs the
+     * following initialization sequence:
+     * 1. Preloads all sound effects to satisfy browser autoplay policies
+     *    (user interaction is required to unlock Web Audio API)
+     * 2. Hides the intro card and reveals the game interface
+     * 3. Programmatically triggers the start button to begin gameplay
      */
     function startFromCard() {
-      // Preload all sounds to unlock browser audio
-      console.log('Preloading sounds...');
+      // Preload all sound effects to unlock browser audio context
+      // (requires user interaction per browser autoplay policies)
       for (var key in sounds) {
         if (sounds[key]) {
           sounds[key].load();
-          console.log('Loaded:', key);
         }
       }
 
+      // Transition from intro card to active game state
       document.getElementById('introCard').style.display = 'none';
       var sb = document.getElementById('startButton');
       sb.style.display = 'block';
