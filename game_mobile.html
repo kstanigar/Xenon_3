@@ -403,7 +403,7 @@
         </div>
         <div class="powerup-item">
           <canvas class="pu-icon" id="puQuad" width="32" height="32"></canvas>
-          <span>Quad Laser — four simultaneous shots</span>
+          <span>Triple/Quad Laser — three or four simultaneous shots</span>
         </div>
       </div>
 
@@ -903,6 +903,7 @@
 
     var enemies = [];
     var powerups = [];
+    var explosions = []; // Simple array for enemy death explosions
     var score = 0;
     var level = 1;
     var health = 50;
@@ -961,7 +962,7 @@
 
     // Power-up state
     var hasDoubleLaser = false;
-    var laserLevel = 1; // 1 = single, 2 = double, 4 = quad (purple phase only)
+    var laserLevel = 1; // 1 = single, 2 = double, 3 = triple, 4 = quad (purple phase only)
     var powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
     var lastPowerupSpawnTime = 0;
     var powerupSpawnCooldown = 5000; // 5 seconds minimum between power-ups
@@ -1232,7 +1233,10 @@
         showAnnouncement("powerupDisplay", "+10 Health!", 1500);
       } else if (powerup.type === POWERUP_TYPES.DOUBLE_LASER) {
         if (purplePhase && hasDoubleLaser) {
-          if (laserLevel < 4) {
+          if (laserLevel === 2) {
+            laserLevel = 3;
+            showAnnouncement("powerupDisplay", "TRIPLE LASER!", 1500);
+          } else if (laserLevel === 3) {
             laserLevel = 4;
             showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
           } else {
@@ -1249,6 +1253,63 @@
         hasShield = true;
         shieldHitsRemaining = 5;
         showAnnouncement("powerupDisplay", "Shield Active!", 1500);
+      }
+    }
+
+    // ============================================
+    // EXPLOSION EFFECTS
+    // ============================================
+    /**
+     * Creates a simple expanding ring explosion effect when an enemy dies.
+     * The explosion expands and fades over 300ms, synced with enemyDead sound cooldown.
+     * @param {number} x - Center X position of explosion
+     * @param {number} y - Center Y position of explosion
+     */
+    function spawnExplosion(x, y) {
+      explosions.push({
+        x: x,
+        y: y,
+        startTime: Date.now(),
+        duration: 300 // Match enemyDead cooldown for visual/audio sync
+      });
+    }
+
+    /**
+     * Updates and draws all active explosions. Removes completed ones.
+     * Each explosion is an expanding ring that fades from full opacity to transparent.
+     * Color is based on current game phase (cyan/red/purple).
+     */
+    function updateExplosions() {
+      var now = Date.now();
+
+      for (var i = explosions.length - 1; i >= 0; i--) {
+        var exp = explosions[i];
+        var elapsed = now - exp.startTime;
+
+        // Remove completed explosions
+        if (elapsed >= exp.duration) {
+          explosions.splice(i, 1);
+          continue;
+        }
+
+        // Calculate animation progress (0 to 1)
+        var progress = elapsed / exp.duration;
+
+        // Expanding radius (10px to 30px)
+        var radius = 10 + (progress * 20);
+
+        // Fading alpha (1.0 to 0)
+        var alpha = 1.0 - progress;
+
+        // Color based on phase
+        var color = purplePhase ? '138, 43, 226' : (redPhase ? '255, 69, 0' : '0, 255, 255');
+
+        // Draw expanding ring
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(' + color + ', ' + alpha + ')';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
     }
 
@@ -3231,6 +3292,7 @@
             score += 15; // Slightly more than regular enemies
             updateUI();
             playSound('enemyDead');
+            spawnExplosion(orbiter.x + orbiter.width / 2, orbiter.y + orbiter.height / 2);
             lastOrbiterDeathTime = time;
             break;
           }
@@ -3414,6 +3476,7 @@
             score += 10;
             updateUI();
             playSound('enemyDead');
+            spawnExplosion(minion.x + minion.width / 2, minion.y + minion.height / 2);
             break;
           }
         }
@@ -3783,16 +3846,29 @@
      * based on the active laser level:
      *   1 → single centre bullet
      *   2 → dual side-by-side bullets (double laser)
-     *   4 → four evenly spread bullets (quad laser, purple phase only)
+     *   3 → three evenly spread bullets (triple laser, purple phase default)
+     *   4 → four evenly spread bullets (quad laser, purple phase rare upgrade)
      */
     function shootBullet() {
       playSound('playerBullet');
       if (laserLevel >= 4) {
-        // Quad laser - four bullets spread across ship width
+        // Quad laser - four bullets spread across ship width (rare upgrade)
         var offsets = [0.15, 0.38, 0.62, 0.85];
         for (var q = 0; q < 4; q++) {
           playerBullets.push(BulletPool.get(
             Math.floor(player.x + player.width * offsets[q] - 2),
+            Math.floor(player.y),
+            5,
+            10,
+            CONFIG.bulletSpeed
+          ));
+        }
+      } else if (laserLevel === 3) {
+        // Triple laser - three bullets spread across ship width (purple phase default)
+        var offsets = [0.2, 0.5, 0.8];
+        for (var t = 0; t < 3; t++) {
+          playerBullets.push(BulletPool.get(
+            Math.floor(player.x + player.width * offsets[t] - 2),
             Math.floor(player.y),
             5,
             10,
@@ -3897,11 +3973,14 @@
           return;
         }
       } else {
-        // Lose double laser when hit without shield (red and purple phases)
+        // Lose laser power when hit without shield (red and purple phases)
         if ((redPhase || purplePhase) && hasDoubleLaser) {
           if (laserLevel >= 4) {
-            laserLevel = 2; // Quad -> double
+            laserLevel = 3; // Quad -> triple
             showAnnouncement("powerupDisplay", "Lost Quad Laser!", 1500);
+          } else if (laserLevel === 3) {
+            laserLevel = 2; // Triple -> double
+            showAnnouncement("powerupDisplay", "Lost Triple Laser!", 1500);
           } else {
             hasDoubleLaser = false;
             laserLevel = 1;
@@ -4302,6 +4381,7 @@
               BulletPool.release(bullet);
               playerBullets.splice(i, 1);
 
+              spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
               var realIndex = enemies.indexOf(enemy);
               if (realIndex > -1) {
                 EnemyPool.release(enemy);
@@ -4460,6 +4540,7 @@
             if (isColliding(playerBullets[j], enemy)) {
               BulletPool.release(playerBullets[j]);
               playerBullets.splice(j, 1);
+              spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
               score += 10;
@@ -4689,6 +4770,9 @@
         trySpawnPowerup();
       }
 
+      // Update and draw explosion effects
+      updateExplosions();
+
       requestAnimationFrame(draw);
     }
 
@@ -4865,6 +4949,7 @@
         playerBullets = [];
         enemyBullets = [];
         powerups = [];
+        explosions = [];
         bossMinions = [];
         bossOrbiters = [];
         orbitersInitialized = false;
