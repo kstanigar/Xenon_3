@@ -115,12 +115,14 @@
       background: #00FFFF;
       color: #000;
       border: none;
+      border-radius: 4px;
+      font-weight: bold;
     }
 
     #muteButton {
       position: absolute;
       top: 12px;
-      left: 110px;
+      right: 12px;
       padding: 10px 15px;
       font-size: 20px;
       z-index: 10;
@@ -128,9 +130,9 @@
       background: #00FFFF;
       color: #000;
       border: none;
-      border-radius: 8px;
+      border-radius: 4px;
       font-weight: bold;
-      display: none;
+      display: block;
     }
 
     #introCard {
@@ -243,18 +245,14 @@
 
     #score {
       color: white;
-      top: 10px;
+      top: 60px;
       right: 10px;
       font-size: 18px;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     }
 
     #levelIndicator {
-      color: white;
-      top: 60px;
-      right: 10px;
-      font-size: 16px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      display: none;
     }
 
     #health {
@@ -703,17 +701,22 @@
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
       var victoryMuteBtn = document.getElementById('victoryMuteBtn');
+      var gameOverMuteBtn = document.getElementById('gameOverMuteBtn');
 
       if (bgMusic.paused) {
         bgMusic.play().catch(function (e) {
           // Silently handle autoplay restrictions
         });
+        localStorage.setItem('nonex_music', 'on');
         if (muteBtn) muteBtn.textContent = '🔊';
         if (victoryMuteBtn) victoryMuteBtn.textContent = '🔊';
+        if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔊';
       } else {
         bgMusic.pause();
+        localStorage.setItem('nonex_music', 'off');
         if (muteBtn) muteBtn.textContent = '🔇';
         if (victoryMuteBtn) victoryMuteBtn.textContent = '🔇';
+        if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔇';
       }
     }
 
@@ -857,7 +860,7 @@
     var mouseDown = false;
     var spacebarPressed = false;
     var lastShotTime = 0;
-    var FIRE_COOLDOWN = 170; // ms between shots (matches mobile)
+    var FIRE_COOLDOWN = 127; // ms between shots (~7.9 shots/sec, +2 more than mobile)
 
     // Power-up state
     var hasDoubleLaser = false;
@@ -3739,7 +3742,10 @@
           html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
         }
         html += "<br><br>";
+        html += "<div style='margin-bottom: 20px;'>";
+        html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
         html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
+        html += "</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
