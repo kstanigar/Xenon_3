@@ -129,12 +129,14 @@
       background: #00FFFF;
       color: #000;
       border: none;
+      border-radius: 4px;
+      font-weight: bold;
     }
 
     #muteButton {
       position: absolute;
       top: 12px;
-      left: 110px;
+      right: 12px;
       padding: 10px 15px;
       font-size: 20px;
       z-index: 10;
@@ -142,9 +144,9 @@
       background: #00FFFF;
       color: #000;
       border: none;
-      border-radius: 8px;
+      border-radius: 4px;
       font-weight: bold;
-      display: none;
+      display: block;
     }
 
     #introCard {
@@ -238,10 +240,11 @@
     #score {
       color: white;
       position: absolute;
-      top: 10px;
+      top: 60px;
       right: 10px;
       font-size: 18px;
       z-index: 2;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     }
 
     #gameOver {
@@ -289,12 +292,7 @@
     }
 
     #levelIndicator {
-      color: white;
-      position: absolute;
-      top: 60px;
-      right: 10px;
-      font-size: 16px;
-      z-index: 2;
+      display: none;
     }
 
     #health {
@@ -757,23 +755,28 @@
 
     /**
      * Toggles the background music on/off and updates the mute button icon.
-     * This is a TEMPORARY toggle - does not save to localStorage.
-     * Permanent music preference is set from the main menu only.
+     * Saves the preference to localStorage for persistence across sessions.
+     * Music preference now persists whether changed in-game, victory, game over, or main menu.
      */
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
       var victoryMuteBtn = document.getElementById('victoryMuteBtn');
+      var gameOverMuteBtn = document.getElementById('gameOverMuteBtn');
 
       if (bgMusic.paused) {
         bgMusic.play().catch(function (e) {
           // Silently handle autoplay restrictions
         });
+        localStorage.setItem('nonex_music', 'on');
         if (muteBtn) muteBtn.textContent = '🔊';
         if (victoryMuteBtn) victoryMuteBtn.textContent = '🔊';
+        if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔊';
       } else {
         bgMusic.pause();
+        localStorage.setItem('nonex_music', 'off');
         if (muteBtn) muteBtn.textContent = '🔇';
         if (victoryMuteBtn) victoryMuteBtn.textContent = '🔇';
+        if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔇';
       }
     }
 
@@ -4193,7 +4196,10 @@
           html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
         }
         html += "<br><br>";
+        html += "<div style='margin-bottom: 20px;'>";
+        html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
         html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
+        html += "</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
