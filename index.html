@@ -559,8 +559,8 @@
       savePrefs();
       trackEvent('play_clicked', {
         platform: selectedPlatform,
-        music: localStorage.getItem('nonex_music'),
-        analytics: localStorage.getItem('nonex_analytics')
+        music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        ab_music_group: localStorage.getItem('nonx_ab_music_group') || 'unknown'
       });
       var dest = selectedPlatform === 'mobile' ? 'game_mobile.html' : 'game.html';
       // Delay navigation slightly so the analytics fetch can fire before unload
@@ -570,7 +570,12 @@
     // Restore saved preferences and log the menu view on page load
 
     loadPrefs();
-    trackEvent('menu_view', { referrer: document.referrer || 'direct' });
+    trackEvent('menu_view', {
+      referrer: document.referrer || 'direct',
+      music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+      ab_music_group: localStorage.getItem('nonx_ab_music_group') || 'unknown',
+      platform: localStorage.getItem('nonex_platform') || 'not_set'
+    });
   </script>
 </body>
 
