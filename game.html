@@ -880,6 +880,17 @@
     // Load top 10 high scores from localStorage
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
 
+    // ── Analytics tracking variables ─────────────────────────────────────────
+    // gameSessionStart: timestamp (ms) when the current game session began.
+    //   Used to calculate session duration sent with player_death and player_won.
+    //   Reset each time the player presses Start / Play Again.
+    var gameSessionStart = null;
+
+    // isReplay: true if the current game was started via the Play Again button
+    //   rather than a fresh page load. Sent with game_start so replays can be
+    //   distinguished from first-time starts in GA4 reports.
+    var isReplay = false;
+
     /**
      * Inserts a score into the top-10 leaderboard, sorts descending, trims to
      * 10 entries, and persists to `localStorage` under `xenonHighScores`.
@@ -1270,6 +1281,22 @@
         shieldHitsRemaining = 5;
         showAnnouncement("powerupDisplay", "Shield Active!", 1500);
       }
+
+      // powerup_collected fires whenever a player picks up a powerup.
+      // powerup_type values: 'health', 'double_laser', 'shield'.
+      // level_number and phase allow drop analysis — e.g. do players collect
+      // shields more in red/purple phase? Does powerup collection correlate with survival?
+      fireEvent('powerup_collected', {
+        'ab_music_group': userABGroup,
+        'platform': 'desktop',
+        'powerup_type': powerup.type === POWERUP_TYPES.HEALTH ? 'health'
+                      : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
+                      : 'shield',
+        'level_number': level,
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
     }
 
     /**
@@ -1936,10 +1963,14 @@
       currentMorphShape = 0;
 
       // Track highest wave reached
+      // wave_reached fires at the start of every level's formation wave.
+      // level_number is the current level (1–12). phase indicates which
+      // gameplay phase the player is in for drop-off segmentation.
       fireEvent('wave_reached', {
         'ab_music_group': userABGroup,
         'platform': 'desktop',
-        'wave_number': level,
+        'level_number': level,
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -2571,18 +2602,41 @@
       // Check for boss triggers
       if (!redPhase && level >= 4 && score >= CONFIG.boss1ScoreThreshold && !boss1Defeated) {
         currentBoss = 1;
+        // boss_attempt fires when the boss spawns — paired with boss_defeated to
+        // calculate kill rate: boss_defeated / boss_attempt per boss_id.
+        fireEvent('boss_attempt', {
+          'ab_music_group': userABGroup,
+          'platform': 'desktop',
+          'boss_id': 1,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
         spawnBoss();
         return;
       }
 
       if (redPhase && !purplePhase && level >= 8 && score >= CONFIG.boss2ScoreThreshold && !boss2Defeated) {
         currentBoss = 2;
+        fireEvent('boss_attempt', {
+          'ab_music_group': userABGroup,
+          'platform': 'desktop',
+          'boss_id': 2,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
         spawnBoss();
         return;
       }
 
       if (purplePhase && level >= 12 && score >= CONFIG.boss3ScoreThreshold && !boss3Defeated) {
         currentBoss = 3;
+        fireEvent('boss_attempt', {
+          'ab_music_group': userABGroup,
+          'platform': 'desktop',
+          'boss_id': 3,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
         spawnBoss();
         return;
       }
@@ -3628,12 +3682,15 @@
       bossMinions = [];
       boss = null;
 
-      // Track player won (defeated all 3 bosses)
+      // player_won fires when all 3 bosses are defeated.
+      // score is used (not final_score) to match naming convention across all events.
+      // session_duration_seconds measures the full run length for completion-time analysis.
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'desktop',
-        'final_score': score,
-        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
       });
 
       // Clear the canvas
@@ -3902,6 +3959,9 @@
       document.getElementById('gameOver').style.display = 'none';
       document.getElementById('victory').style.display = 'none';
 
+      // Flag this as a replay so game_start can distinguish it from a fresh start
+      isReplay = true;
+
       // Trigger the start button reset branch (gameOver is true so it fully resets)
       var sb = document.getElementById('startButton');
       sb.style.display = 'block';
@@ -4105,20 +4165,18 @@
           gameOverEl.appendChild(surveyDiv);
         }
 
-        // Track player death (played until death = game_complete per analytics spec)
+        // player_death fires when health reaches zero.
+        // phase lets you segment deaths by game phase in GA4.
+        // session_duration_seconds measures how long the player survived this session
+        // (from game_start to death), enabling time-based engagement analysis.
         fireEvent('player_death', {
           'ab_music_group': userABGroup,
           'platform': 'desktop',
           'level_reached': level,
+          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
-        });
-        fireEvent('game_complete', {
-          'ab_music_group': userABGroup,
-          'platform': 'desktop',
-          'level_reached': level,
-          'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
       } else {
         playSound('playerHit');
@@ -5131,12 +5189,21 @@
         startButton.innerText = "Pause";
         startButton.classList.add('game-active');
 
-        // Track game start with A/B group, platform and music variant
+        // Track game start.
+        // is_replay distinguishes Play Again sessions from fresh page-load starts.
+        // games_played gives lifetime context — is this their 1st or 50th game?
+        // Session timer starts here; duration is calculated on player_death / player_won.
+        gameSessionStart = Date.now();
         fireEvent('game_start', {
           'ab_music_group': userABGroup,
           'platform': 'desktop',
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'is_replay': isReplay,
+          'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1
         });
+
+        // Reset replay flag — next start from this session will be a replay
+        isReplay = false;
 
         // Increment game play counter for survey trigger
         var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1;
