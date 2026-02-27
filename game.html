@@ -393,11 +393,11 @@
 
       <div id="introCard">
         <h2>NON-X</h2>
-
+        <p>Can you defeat all 3 Alien Bosses?</p>
         <h3>Controls</h3>
         <ul>
-          <li>← → Arrow keys to move</li>
-          <li>Spacebar to shoot</li>
+          <li>Use mouse or ← → Arrow keys to move</li>
+          <li>Hold left mouse button or Spacebar to shoot</li>
           <li>P or Escape to pause</li>
         </ul>
 
@@ -3404,20 +3404,31 @@
           // Boss 1 defeated - show victory, then start red phase
           boss1Defeated = true;
 
-          // Calculate bonus and set score to 800
+          // Track boss 1 defeat
+          gtag('event', 'boss_defeated', {
+            'ab_music_group': userABGroup,
+            'platform': 'desktop',
+            'boss_number': 1,
+            'score': score
+          });
+
+          // Calculate bonus and set score to 800 (only if player is under threshold)
           var bonus = 800 - score;
-          if (bonus < 0) bonus = 0;
-          score = 800;
+          if (bonus > 0) {
+            score = 800;
+          }
           redPhaseStartScore = score;
           updateUI();
 
           // Show victory message
           showAnnouncement("levelDisplay", "Victory!", 2500);
 
-          // Show bonus in yellow
-          setTimeout(function () {
-            showAnnouncement("bonusDisplay", "Bonus +" + bonus + "!", 2000);
-          }, 500);
+          // Show bonus in yellow (only if player earned one)
+          if (bonus > 0) {
+            setTimeout(function () {
+              showAnnouncement("bonusDisplay", "Bonus +" + bonus + "!", 2000);
+            }, 500);
+          }
 
           // After delay, start level 5 with wave reset
           setTimeout(function () {
@@ -3435,17 +3446,30 @@
           // Boss 2 defeated - start purple phase (levels 9-12)
           boss2Defeated = true;
 
+          // Track boss 2 defeat
+          gtag('event', 'boss_defeated', {
+            'ab_music_group': userABGroup,
+            'platform': 'desktop',
+            'boss_number': 2,
+            'score': score
+          });
+
+          // Calculate bonus and set score to 2000 (only if player is under threshold)
           var bonus = 2000 - score;
-          if (bonus < 0) bonus = 0;
-          score = 2000;
+          if (bonus > 0) {
+            score = 2000;
+          }
           purplePhaseStartScore = score;
           updateUI();
 
           showAnnouncement("levelDisplay", "Victory!", 2500);
 
-          setTimeout(function () {
-            showAnnouncement("bonusDisplay", "Bonus +" + bonus + "!", 2000);
-          }, 500);
+          // Show bonus in yellow (only if player earned one)
+          if (bonus > 0) {
+            setTimeout(function () {
+              showAnnouncement("bonusDisplay", "Bonus +" + bonus + "!", 2000);
+            }, 500);
+          }
 
           setTimeout(function () {
             purplePhase = true;
@@ -3462,6 +3486,14 @@
           // Boss 3 defeated - game complete!
           boss3Defeated = true;
           bossDefeated = true;
+
+          // Track boss 3 defeat
+          gtag('event', 'boss_defeated', {
+            'ab_music_group': userABGroup,
+            'platform': 'desktop',
+            'boss_number': 3,
+            'score': score
+          });
           score += 100;
           updateUI();
           showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
@@ -3749,6 +3781,14 @@
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
+
+        // Track game over
+        gtag('event', 'game_over', {
+          'ab_music_group': userABGroup,
+          'platform': 'desktop',
+          'level_reached': level,
+          'score': score
+        });
       } else {
         playSound('playerHit');
       }

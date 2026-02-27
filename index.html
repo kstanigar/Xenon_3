@@ -35,7 +35,7 @@
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
+    function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-9ECFZ9JBE5');
   </script>
@@ -465,33 +465,14 @@
      * @param {Object} [data] - Optional key/value metadata for the event.
      */
     function trackEvent(name, data) {
-      // Gate on consent — except for the consent-change event itself
-      var hasConsent = localStorage.getItem('nonex_analytics') === 'on';
+      // Gate on consent — null means first visit (default ON)
+      var analyticsValue = localStorage.getItem('nonex_analytics');
+      var hasConsent = (analyticsValue === 'on' || analyticsValue === null);
       if (!hasConsent && name !== 'analytics_toggled') return;
 
-      var event = {
-        event: name,
-        session: sessionId,
-        ts: new Date().toISOString(),
-        data: data || {}
-      };
-
-      // Buffer event locally — capped at 200 entries to prevent unbounded growth
-      try {
-        var queue = JSON.parse(localStorage.getItem('nonex_event_queue') || '[]');
-        queue.push(event);
-        if (queue.length > 200) queue = queue.slice(-200);
-        localStorage.setItem('nonex_event_queue', JSON.stringify(queue));
-      } catch (e) { /* Silently skip if localStorage is full or unavailable */ }
-
-      // Fire-and-forget POST to the analytics endpoint if configured
-      if (ANALYTICS_ENDPOINT) {
-        fetch(ANALYTICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(event),
-          keepalive: true // Ensures the request fires even if the user navigates away
-        }).catch(function () { /* Silently ignore network errors */ });
+      // Send to Google Analytics
+      if (typeof gtag !== 'undefined') {
+        gtag('event', name, data || {});
       }
     }
 
