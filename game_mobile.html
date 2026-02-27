@@ -60,9 +60,13 @@
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
+    function gtag(){window.dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-9ECFZ9JBE5');
+    gtag('config', 'G-9ECFZ9JBE5', {
+      'send_page_view': true,
+      'page_title': 'NON-X Mobile Game',
+      'page_location': window.location.href
+    });
   </script>
 
   <meta charset="UTF-8" />
@@ -732,6 +736,64 @@
     // Initialize A/B test on page load
     var userABGroup = initMusicABTest();
 
+    // ── Developer Mode ────────────────────────────────────────────────────────
+    // Toggle with Shift+D. Never persists — resets on every page load.
+    // Hotkeys active only while devMode is ON:
+    //   Shift+V  → skip to victory screen
+    //   Shift+G  → skip to game over screen
+    // All analytics are suppressed and logged to console instead.
+    var devMode = false;
+
+    /**
+     * Wrapper for all GA4 event calls. In devMode, logs to console instead of
+     * sending to GA4 so analytics are never skewed during development/testing.
+     * @param {string} eventName - GA4 event name
+     * @param {Object} params    - Event parameters
+     */
+    function fireEvent(eventName, params) {
+      if (devMode) {
+        console.log(
+          '%c[DEV MODE] Event suppressed: ' + eventName,
+          'color:#00FFFF;font-weight:bold;background:#111;padding:2px 6px;border-radius:3px;',
+          params
+        );
+        return;
+      }
+      gtag('event', eventName, params);
+    }
+
+    // ── Session & User Identity Events ───────────────────────────────────────
+    (function fireSessionEvents() {
+      var isFirstVisit = !localStorage.getItem('nonx_has_visited');
+      var musicVariant = localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off';
+
+      // Always fire session_start on every page load
+      fireEvent('session_start', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'music_variant': musicVariant
+      });
+
+      if (isFirstVisit) {
+        fireEvent('first_visit', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'music_variant': musicVariant
+        });
+        localStorage.setItem('nonx_has_visited', 'true');
+        localStorage.setItem('nonx_visit_count', '1');
+      } else {
+        var visitCount = parseInt(localStorage.getItem('nonx_visit_count') || '1', 10) + 1;
+        localStorage.setItem('nonx_visit_count', String(visitCount));
+        fireEvent('returning_user', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'music_variant': musicVariant,
+          'visit_count': visitCount
+        });
+      }
+    })();
+
     /**
      * Starts the looping background music track from the beginning.
      *
@@ -828,11 +890,12 @@
       localStorage.setItem('nonx_leaderboard', JSON.stringify(leaderboard));
 
       // Track Leaderboard submissions
-      gtag('event', 'leaderboard_submit', {
+      fireEvent('leaderboard_submit', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
         'score': score,
-        'instagram_provided': sanitized !== ''
+        'instagram_provided': sanitized !== '',
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
       // Show confirmation
@@ -1038,6 +1101,17 @@
     var paused = false;
     // Load top 10 high scores from localStorage
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
+
+    // ── Analytics tracking variables ─────────────────────────────────────────
+    // gameSessionStart: timestamp (ms) when the current game session began.
+    //   Used to calculate session duration sent with player_death and player_won.
+    //   Reset each time the player presses Start / Play Again.
+    var gameSessionStart = null;
+
+    // isReplay: true if the current game was started via the Play Again button
+    //   rather than a fresh page load. Sent with game_start so replays can be
+    //   distinguished from first-time starts in GA4 reports.
+    var isReplay = false;
 
     /**
      * Inserts a score into the top-10 leaderboard, sorts descending, trims to
@@ -1381,6 +1455,22 @@
         shieldHitsRemaining = 5;
         showAnnouncement("powerupDisplay", "Shield Active!", 1500);
       }
+
+      // powerup_collected fires whenever a player picks up a powerup.
+      // powerup_type values: 'health', 'double_laser', 'shield'.
+      // level_number and phase allow drop analysis — e.g. do players collect
+      // shields more in red/purple phase? Does powerup collection correlate with survival?
+      fireEvent('powerup_collected', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'powerup_type': powerup.type === POWERUP_TYPES.HEALTH ? 'health'
+                      : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
+                      : 'shield',
+        'level_number': level,
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
     }
 
     // ============================================
@@ -1731,8 +1821,8 @@
         for (var i = 1; i <= half; i++) {
           positions.push({ x: -spacing * i, y: spacing * (half - i) * 0.7 });
         }
-        // Right arm going up-right
-        for (var i = 1; i < count - half - 1; i++) {
+        // Right arm going up-right — fixed: use <= to match left arm count
+        for (var i = 1; i <= count - half - 1; i++) {
           positions.push({ x: spacing * i, y: spacing * (half - i) * 0.7 });
         }
         return positions.slice(0, count);
@@ -1746,7 +1836,8 @@
         for (var i = 1; i <= half; i++) {
           positions.push({ x: -spacing * i, y: spacing * (half - i) * 0.7 });
         }
-        for (var i = 1; i < count - half - 1; i++) {
+        // Right arm going up-right — fixed: use <= to match left arm count
+        for (var i = 1; i <= count - half - 1; i++) {
           positions.push({ x: spacing * i, y: spacing * (half - i) * 0.7 });
         }
         return positions.slice(0, count);
@@ -1923,16 +2014,17 @@
       hexGrid: function (count) {
         var positions = [];
         var spacing = 0.28;
-        // Offset rows to form hex grid
+        // Offset rows to form hex grid — 20 positions to cover max count
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0], [0.5, 0],
-          [-1, 0.5], [0, 0.5], [1, 0.5],
+          [-0.5, 0],  [0.5, 0],
+          [-1, 0.5],  [0, 0.5],  [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1], [0.5, 1],
-          [0, -1.5], [0, 1.5],
+          [-0.5, 1],  [0.5, 1],
+          [0, -1.5],  [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5], [1, 1.5]
+          [-1, 1.5],  [1, 1.5],
+          [-1.5, 0],  [1.5, 0]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           positions.push({ x: layout[i][0] * spacing, y: layout[i][1] * spacing });
@@ -1946,13 +2038,14 @@
         var explode = 2.8;
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0], [0.5, 0],
-          [-1, 0.5], [0, 0.5], [1, 0.5],
+          [-0.5, 0],  [0.5, 0],
+          [-1, 0.5],  [0, 0.5],  [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1], [0.5, 1],
-          [0, -1.5], [0, 1.5],
+          [-0.5, 1],  [0.5, 1],
+          [0, -1.5],  [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5], [1, 1.5]
+          [-1, 1.5],  [1, 1.5],
+          [-1.5, 0],  [1.5, 0]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           var x = layout[i][0] * spacing;
@@ -2129,6 +2222,17 @@
       morphStartTime = Date.now();
       currentMorphShape = 0;
 
+      // wave_reached fires at the start of every level's formation wave.
+      // level_number is the current level (1–12). phase indicates which
+      // gameplay phase the player is in for drop-off segmentation.
+      fireEvent('wave_reached', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'level_number': level,
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
+
       // Reset formation and barrier tracking
       formationRotation = 0;
       targetFormationRotation = 0;
@@ -2195,10 +2299,18 @@
 
       // Get initial shape positions (exploded - enters spread out)
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
+      if (typeof shapeFunc !== 'function') {
+        console.error('Formation shape not found:', waveData.shapes[0]);
+        shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
+      }
       var positions = shapeFunc(count);
 
       for (var i = 0; i < count; i++) {
         var pos = positions[i];
+        if (!pos) {
+          console.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
+          break; // stop spawning rather than crash
+        }
         var width = 50;
         var height = 50;
 
@@ -2353,7 +2465,7 @@
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
       var morphInterval = BPM_INTERVAL * 6;
-      var timeSinceStart = time - morphStartTime;
+      var timeSinceStart = Math.max(0, time - morphStartTime); // clamp to avoid negative
       var newShapeIndex = Math.floor(timeSinceStart / morphInterval);
 
       // Get formation enemies
@@ -2361,10 +2473,10 @@
       if (formationEnemies.length === 0) return;
 
       var waveShapes = formationEnemies[0].waveShapes;
-      if (!waveShapes) return;
+      if (!waveShapes || waveShapes.length === 0) return;
 
-      // Cycle through shapes (tightGrid -> exploded -> tightGrid -> exploded...)
-      newShapeIndex = newShapeIndex % waveShapes.length;
+      // Cycle through shapes — use ((n % len) + len) % len to guarantee positive index in JS
+      newShapeIndex = ((newShapeIndex % waveShapes.length) + waveShapes.length) % waveShapes.length;
 
       // If shape changed, update target positions
       if (newShapeIndex !== currentMorphShape) {
@@ -2388,6 +2500,10 @@
 
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
+        if (typeof shapeFunc !== 'function') {
+          console.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
+          shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
+        }
         var count = formationEnemies[0].formationCount;
         var newPositions = shapeFunc(count);
 
@@ -2747,18 +2863,41 @@
       // Check for boss triggers
       if (!redPhase && level >= 4 && score >= CONFIG.boss1ScoreThreshold && !boss1Defeated) {
         currentBoss = 1;
+        // boss_attempt fires when the boss spawns — paired with boss_defeated to
+        // calculate kill rate: boss_defeated / boss_attempt per boss_id.
+        fireEvent('boss_attempt', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'boss_id': 1,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
         spawnBoss();
         return;
       }
 
       if (redPhase && !purplePhase && level >= 8 && score >= CONFIG.boss2ScoreThreshold && !boss2Defeated) {
         currentBoss = 2;
+        fireEvent('boss_attempt', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'boss_id': 2,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
         spawnBoss();
         return;
       }
 
       if (purplePhase && level >= 12 && score >= CONFIG.boss3ScoreThreshold && !boss3Defeated) {
         currentBoss = 3;
+        fireEvent('boss_attempt', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'boss_id': 3,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
         spawnBoss();
         return;
       }
@@ -3857,11 +3996,12 @@
           boss1Defeated = true;
 
           // Track boss 1 defeat
-          gtag('event', 'boss_defeated', {
+          fireEvent('boss_defeated', {
             'ab_music_group': userABGroup,
             'platform': 'mobile',
-            'boss_number': 1,
-            'score': score
+            'boss_id': 1,
+            'score': score,
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
           });
 
           // Calculate bonus and set score to 800 (only if player is under threshold)
@@ -3899,11 +4039,12 @@
           boss2Defeated = true;
 
           // Track boss 2 defeat
-          gtag('event', 'boss_defeated', {
+          fireEvent('boss_defeated', {
             'ab_music_group': userABGroup,
             'platform': 'mobile',
-            'boss_number': 2,
-            'score': score
+            'boss_id': 2,
+            'score': score,
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
           });
 
           // Calculate bonus and set score to 2000 (only if player is under threshold)
@@ -3940,11 +4081,12 @@
           bossDefeated = true;
 
           // Track boss 3 defeat
-          gtag('event', 'boss_defeated', {
+          fireEvent('boss_defeated', {
             'ab_music_group': userABGroup,
             'platform': 'mobile',
-            'boss_number': 3,
-            'score': score
+            'boss_id': 3,
+            'score': score,
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
           });
           score += 100;
           updateUI();
@@ -3989,12 +4131,15 @@
       bossMinions = [];
       boss = null;
 
-      // Track Game completion (victory)
-      gtag('event', 'game_complete', {
+      // player_won fires when all 3 bosses are defeated.
+      // score is used (not final_score) to match naming convention across all events.
+      // session_duration_seconds measures the full run length for completion-time analysis.
+      fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
-        'final_score': score,
-        'music_on': localStorage.getItem('nonex_music') !== 'off'
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
       });
 
       // Clear the canvas
@@ -4026,17 +4171,29 @@
       // Leaderboard display
       html += "<div id='leaderboardDisplay' style='margin-bottom: 25px;'></div>";
 
-      // Buttons row (mute + return home)
-      html += "<div style='margin-bottom: 20px;'>";
+      // Buttons row (mute + play again + leave game)
+      html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
       html += "<button id='victoryMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
-      html += "<button onclick='returnToHomeScreen()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
+      html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+      html += "<button onclick='leaveGame(\"victory\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
 
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+      html += buildBugButtonHTML('victory');
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
       document.getElementById("startButton").style.display = "none";
+
+      // Show survey after 5th game (once only)
+      if (shouldShowSurvey()) {
+        var surveyTarget = document.getElementById('leaderboardDisplay');
+        if (surveyTarget) {
+          var surveyDiv = document.createElement('div');
+          surveyDiv.innerHTML = buildSurveyHTML('mobile');
+          surveyTarget.parentNode.insertBefore(surveyDiv, surveyTarget.nextSibling);
+        }
+      }
 
       // Show leaderboard immediately
       showLeaderboard();
@@ -4048,6 +4205,212 @@
       stopBossMusic();
       stopCreditsMusic();
       window.location.href = 'index.html';
+    }
+
+    // ============================================
+    // SURVEY & BUG REPORT
+    // ============================================
+    // Forms submit directly to stanigarkeith@gmail.com via FormSubmit.co
+    // No account or ID needed — already configured and working.
+    var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/stanigarkeith@gmail.com';
+
+    function shouldShowSurvey() {
+      var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10);
+      var surveyDone = localStorage.getItem('nonx_survey_done') === 'true';
+      return gameCount >= 5 && !surveyDone;
+    }
+
+    function buildSurveyHTML(platform) {
+      var s = '';
+      s += "<div id='nonxSurvey' style='margin: 20px 0; padding: 16px; border: 1px solid #00FFFF; border-radius: 6px; text-align: left; max-width: 420px; margin-left: auto; margin-right: auto;'>";
+      s += "<div style='font-size: 16px; color: #00FFFF; margin-bottom: 14px; text-align: center; font-weight: bold;'>📋 Quick Feedback (5 games in — thank you!)</div>";
+
+      var questions = [
+        { id: 'q1', text: 'Did you enjoy the gameplay?' },
+        { id: 'q2', text: 'Would you play again?' },
+        { id: 'q3', text: 'Was the game easy to pick up and play?' },
+        { id: 'q4', text: 'Did you enjoy the music?' },
+        { id: 'q5', text: 'Would you like more music options?' }
+      ];
+
+      questions.forEach(function(q) {
+        s += "<div style='margin-bottom: 10px; font-size: 14px; color: #fff;'>" + q.text;
+        s += "<span style='margin-left: 12px;'>";
+        s += "<label style='margin-right: 10px; cursor: pointer;'><input type='radio' name='" + q.id + "' value='Yes' style='margin-right: 4px;'>Yes</label>";
+        s += "<label style='cursor: pointer;'><input type='radio' name='" + q.id + "' value='No' style='margin-right: 4px;'>No</label>";
+        s += "</span></div>";
+      });
+
+      s += "<div style='margin-bottom: 10px;'>";
+      s += "<div style='font-size: 14px; color: #fff; margin-bottom: 6px;'>Suggestions or recommendations:</div>";
+      s += "<textarea id='surveyComments' rows='3' style='width: 100%; padding: 6px; font-size: 13px; border-radius: 4px; border: none; background: #1a1a1a; color: #fff; resize: vertical; box-sizing: border-box;' placeholder='Any thoughts? We read everything...'></textarea>";
+      s += "</div>";
+
+      s += "<div style='text-align: center; white-space: nowrap;'>";
+      s += "<button onclick='submitSurvey(\"" + platform + "\")' style='padding: 8px 20px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 12px;'>Submit Feedback</button>";
+      s += "<button onclick='dismissSurvey()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #333; color: #aaa; cursor: pointer;'>Skip</button>";
+      s += "</div>";
+      s += "</div>";
+      return s;
+    }
+
+    function submitSurvey(platform) {
+      var answers = {
+        'Enjoyed gameplay':  document.querySelector('input[name="q1"]:checked'),
+        'Would play again':  document.querySelector('input[name="q2"]:checked'),
+        'Easy to pick up':   document.querySelector('input[name="q3"]:checked'),
+        'Enjoyed music':     document.querySelector('input[name="q4"]:checked'),
+        'Want more music':   document.querySelector('input[name="q5"]:checked'),
+        'Suggestions':       (document.getElementById('surveyComments') || {}).value || '',
+        'Platform':          platform,
+        'AB Music Group':    userABGroup,
+        'Music Variant':     localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'Games Played':      localStorage.getItem('nonx_game_count') || '5'
+      };
+
+      var body = {};
+      Object.keys(answers).forEach(function(k) {
+        body[k] = answers[k] ? answers[k].value : 'No answer';
+      });
+      body['Suggestions'] = answers['Suggestions'];
+
+      fetch(FORMSUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function() {
+        localStorage.setItem('nonx_survey_done', 'true');
+        fireEvent('survey_submitted', {
+          'platform': platform,
+          'ab_music_group': userABGroup,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'games_played': parseInt(localStorage.getItem('nonx_game_count') || '5', 10)
+        });
+        var el = document.getElementById('nonxSurvey');
+        if (el) el.innerHTML = "<div style='text-align:center; color:#00FFFF; padding: 12px;'>✓ Thanks for your feedback!</div>";
+      }).catch(function() {
+        localStorage.setItem('nonx_survey_done', 'true');
+        var el = document.getElementById('nonxSurvey');
+        if (el) el.innerHTML = "<div style='text-align:center; color:#555; padding: 12px;'>Could not send — but thanks anyway!</div>";
+      });
+    }
+
+    function dismissSurvey() {
+      localStorage.setItem('nonx_survey_done', 'true');
+      fireEvent('survey_dismissed', {
+        'ab_music_group': userABGroup,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'games_played': parseInt(localStorage.getItem('nonx_game_count') || '5', 10)
+      });
+      var el = document.getElementById('nonxSurvey');
+      if (el) el.style.display = 'none';
+    }
+
+    function buildBugButtonHTML(source) {
+      return "<div style='margin-top: 10px;'>" +
+        "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
+        "</div>";
+    }
+
+    function openBugReport(source) {
+      var existing = document.getElementById('nonxBugModal');
+      if (existing) { existing.style.display = 'flex'; return; }
+
+      var modal = document.createElement('div');
+      modal.id = 'nonxBugModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML =
+        "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:24px;max-width:400px;width:90%;color:#fff;font-family:monospace;'>" +
+        "<div style='font-size:16px;color:#00FFFF;margin-bottom:16px;font-weight:bold;'>🐛 Report a Bug</div>" +
+        "<div style='margin-bottom:10px;'>" +
+          "<label style='font-size:13px;display:block;margin-bottom:4px;'>What happened?</label>" +
+          "<textarea id='bugDescription' rows='3' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='Describe the bug...'></textarea>" +
+        "</div>" +
+        "<div style='margin-bottom:10px;'>" +
+          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Steps to reproduce (optional):</label>" +
+          "<textarea id='bugSteps' rows='2' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='e.g. Level 3, used shield, then...'></textarea>" +
+        "</div>" +
+        "<div style='margin-bottom:16px;'>" +
+          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Your email (optional, for follow-up):</label>" +
+          "<input type='email' id='bugEmail' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;box-sizing:border-box;' placeholder='you@example.com'>" +
+        "</div>" +
+        "<div style='text-align:right; white-space: nowrap;'>" +
+          "<button onclick='submitBugReport(\"" + source + "\")' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;margin-right:10px;'>Submit</button>" +
+          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 14px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Cancel</button>" +
+        "</div>" +
+        "</div>";
+      document.body.appendChild(modal);
+    }
+
+    function submitBugReport(source) {
+      var desc  = (document.getElementById('bugDescription') || {}).value || '';
+      var steps = (document.getElementById('bugSteps') || {}).value || '';
+      var email = (document.getElementById('bugEmail') || {}).value || '';
+
+      if (!desc.trim()) {
+        alert('Please describe the bug before submitting.');
+        return;
+      }
+
+      fetch(FORMSUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          'Type': 'Bug Report',
+          'Source': source,
+          'Description': desc,
+          'Steps': steps,
+          'Reporter Email': email || 'Not provided',
+          'Platform': 'mobile',
+          'Games Played': localStorage.getItem('nonx_game_count') || '?',
+          'AB Music Group': userABGroup
+        })
+      }).then(function() {
+        fireEvent('bug_report_submitted', {
+          'platform': 'mobile',
+          'source': source,
+          'ab_music_group': userABGroup,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
+        var modal = document.getElementById('nonxBugModal');
+        if (modal) modal.innerHTML =
+          "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:32px;color:#00FFFF;font-family:monospace;text-align:center;'>" +
+          "✓ Bug report sent!<br><br>" +
+          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Close</button>" +
+          "</div>";
+      }).catch(function() {
+        alert('Could not send bug report. Please try again later.');
+      });
+    }
+
+    /** Fires leave_game event then navigates to main menu. */
+    function leaveGame(source) {
+      fireEvent('leave_game', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'source': source, // 'game_over' or 'victory'
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
+      stopBackgroundMusic();
+      stopBossMusic();
+      stopCreditsMusic();
+      window.location.href = 'index.html';
+    }
+
+    /** Resets and restarts the game in place without returning to main menu. */
+    function playAgain() {
+      // Hide both end screens
+      document.getElementById('gameOver').style.display = 'none';
+      document.getElementById('victory').style.display = 'none';
+
+      // Flag this as a replay so game_start can distinguish it from a fresh start
+      isReplay = true;
+
+      // Trigger the start button reset branch (gameOver is true so it fully resets)
+      var sb = document.getElementById('startButton');
+      sb.style.display = 'block';
+      sb.click();
     }
 
     // ============================================
@@ -4229,20 +4592,36 @@
           html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
         }
         html += "<br><br>";
-        html += "<div style='margin-bottom: 20px;'>";
+        html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
         html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
-        html += "<button onclick='returnToHomeScreen()' style='padding: 10px 20px; font-size: 16px; border-radius: 4px; border: none; background: #4CAF50; color: white; cursor: pointer;'>Return to Home Screen</button>";
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+        html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
+        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+        html += buildBugButtonHTML('game_over');
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
 
-        // Track game over
-        gtag('event', 'game_over', {
+        // Show survey after 5th game (once only)
+        if (shouldShowSurvey()) {
+          var surveyDiv = document.createElement('div');
+          surveyDiv.innerHTML = buildSurveyHTML('mobile');
+          gameOverEl.appendChild(surveyDiv);
+        }
+
+        // player_death fires when health reaches zero.
+        // phase lets you segment deaths by game phase in GA4.
+        // session_duration_seconds measures how long the player survived this session
+        // (from game_start to death), enabling time-based engagement analysis.
+        fireEvent('player_death', {
           'ab_music_group': userABGroup,
           'platform': 'mobile',
           'level_reached': level,
-          'score': score
+          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
       } else {
         playSound('playerHit');
@@ -4270,10 +4649,93 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
-      // Debug: Victory screen (V key)
-      if (e.key === "v" || e.key === "V") {
-        showVictory();
+      // Shift+D — toggle developer mode
+      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+        devMode = !devMode;
+        var indicator = document.getElementById('devModeIndicator');
+        if (!indicator) {
+          indicator = document.createElement('div');
+          indicator.id = 'devModeIndicator';
+          indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
+            'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
+            'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
+          indicator.textContent = '⚠ DEV MODE — Analytics OFF | Shift+V: Victory | Shift+G: Game Over';
+          document.body.appendChild(indicator);
+        }
+        indicator.style.display = devMode ? 'block' : 'none';
+        console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢' : 'DISABLED 🔴'), 'color:#FF0;font-weight:bold;font-size:14px;');
         return;
+      }
+
+      // Shift+V — skip to victory (devMode only)
+      if (e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+        if (devMode) {
+          console.log('%c[DEV MODE] Skipping to victory screen', 'color:#00FFFF;font-weight:bold;');
+          showVictory();
+        }
+        return;
+      }
+
+      // Shift+G — skip to game over (devMode only)
+      if (e.shiftKey && (e.key === 'g' || e.key === 'G')) {
+        if (devMode) {
+          console.log('%c[DEV MODE] Skipping to game over screen', 'color:#00FFFF;font-weight:bold;');
+          health = 0;
+          updateUI();
+          gameOver = true;
+          stopBossMusic();
+          var madeTopTen = isTopTenScore(score);
+          var rank = getScoreRank(score);
+          if (madeTopTen) addHighScore(score);
+          var gameOverEl = document.getElementById('gameOver');
+          var html = "Game Over!<br><br>Your Score: " + score;
+          if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+          html += "<br><br>";
+          html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+          html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+          html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
+          html += "</div>";
+          gameOverEl.innerHTML = html;
+          gameOverEl.style.display = 'block';
+          document.getElementById('startButton').style.display = 'none';
+        }
+        return;
+      }
+
+      // Shift+1–9/0 — jump to level (devMode only)
+      if (devMode && e.shiftKey && !gameOver && !bossActive) {
+        var jumpLevel = null;
+        if (e.key === '!') jumpLevel = 1;
+        else if (e.key === '@') jumpLevel = 2;
+        else if (e.key === '#') jumpLevel = 3;
+        else if (e.key === '$') jumpLevel = 4;
+        else if (e.key === '%') jumpLevel = 5;
+        else if (e.key === '^') jumpLevel = 6;
+        else if (e.key === '&') jumpLevel = 7;
+        else if (e.key === '*') jumpLevel = 8;
+        else if (e.key === '(') jumpLevel = 9;
+        else if (e.key === ')') jumpLevel = 12;
+        if (jumpLevel !== null) {
+          enemies.forEach(function (e) { EnemyPool.release(e); });
+          enemies = [];
+          waveInProgress = false;
+          waveCooldown = false;
+          currentWave = 0;
+          bossActive = false;
+          boss = null;
+          level = jumpLevel;
+          redPhase = jumpLevel >= 5;
+          purplePhase = jumpLevel >= 9;
+          boss1Defeated = jumpLevel >= 5;
+          boss2Defeated = jumpLevel >= 9;
+          health = CONFIG.maxHealth;
+          score = jumpLevel >= 9 ? 2000 : (jumpLevel >= 5 ? 800 : 0);
+          powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+          updateUI();
+          showAnnouncement("levelDisplay", "DEV: Level " + jumpLevel, 2000);
+          console.log('%c[DEV MODE] Jumped to level ' + jumpLevel, 'color:#00FFFF;font-weight:bold;');
+        }
       }
 
       // Pause toggle (P or Escape)
@@ -4299,40 +4761,6 @@
       else if (e.key === " ") {
         e.preventDefault();
         shootBullet();
-      }
-      // Debug: jump to level (Shift+1 through Shift+9 = levels 1-9, Shift+0 = level 12)
-      else if (e.shiftKey && !gameOver && !bossActive) {
-        var jumpLevel = null;
-        if (e.key === '!') jumpLevel = 1;
-        else if (e.key === '@') jumpLevel = 2;
-        else if (e.key === '#') jumpLevel = 3;
-        else if (e.key === '$') jumpLevel = 4;
-        else if (e.key === '%') jumpLevel = 5;
-        else if (e.key === '^') jumpLevel = 6;
-        else if (e.key === '&') jumpLevel = 7;
-        else if (e.key === '*') jumpLevel = 8;
-        else if (e.key === '(') jumpLevel = 9;
-        else if (e.key === ')') jumpLevel = 12;
-        if (jumpLevel !== null) {
-          // RELEASE EXISTING ENEMIES TO POOL BEFORE CLEARING
-          enemies.forEach(function (e) { EnemyPool.release(e); });
-          enemies = [];
-          waveInProgress = false;
-          waveCooldown = false;
-          currentWave = 0;
-          bossActive = false;
-          boss = null;
-          level = jumpLevel;
-          redPhase = jumpLevel >= 5;
-          purplePhase = jumpLevel >= 9;
-          boss1Defeated = jumpLevel >= 5;
-          boss2Defeated = jumpLevel >= 9;
-          health = CONFIG.maxHealth;
-          score = jumpLevel >= 9 ? 2000 : (jumpLevel >= 5 ? 800 : 0);
-          powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
-          updateUI();
-          showAnnouncement("levelDisplay", "DEBUG: Level " + jumpLevel, 2000);
-        }
       }
     });
 
@@ -5225,12 +5653,25 @@
         startButton.innerText = "Pause";
         startButton.classList.add('game-active');
 
-        // Track game start with A/B group and platform
-        gtag('event', 'game_start', {
+        // Track game start.
+        // is_replay distinguishes Play Again sessions from fresh page-load starts.
+        // games_played gives lifetime context — is this their 1st or 50th game?
+        // Session timer starts here; duration is calculated on player_death / player_won.
+        gameSessionStart = Date.now();
+        fireEvent('game_start', {
           'ab_music_group': userABGroup,
           'platform': 'mobile',
-          'music_on': localStorage.getItem('nonex_music') !== 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'is_replay': isReplay,
+          'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1
         });
+
+        // Reset replay flag — next start from this session will be a replay
+        isReplay = false;
+
+        // Increment game play counter for survey trigger
+        var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1;
+        localStorage.setItem('nonx_game_count', String(gameCount));
 
         // Level Display
         showAnnouncement("levelDisplay", "Level 1", 2000);
