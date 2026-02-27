@@ -2195,6 +2195,10 @@
 
       // Get initial shape positions (exploded - enters spread out)
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
+      if (typeof shapeFunc !== 'function') {
+        console.error('Formation shape not found:', waveData.shapes[0]);
+        shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
+      }
       var positions = shapeFunc(count);
 
       for (var i = 0; i < count; i++) {
@@ -2388,6 +2392,10 @@
 
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
+        if (typeof shapeFunc !== 'function') {
+          console.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
+          shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
+        }
         var count = formationEnemies[0].formationCount;
         var newPositions = shapeFunc(count);
 
