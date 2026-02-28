@@ -1467,7 +1467,7 @@
                       : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
                       : 'shield',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
@@ -2229,7 +2229,7 @@
         'ab_music_group': userABGroup,
         'platform': 'mobile',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -4618,7 +4618,7 @@
           'ab_music_group': userABGroup,
           'platform': 'mobile',
           'level_reached': level,
-          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
           'score': score,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
