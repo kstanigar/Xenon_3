@@ -1971,6 +1971,7 @@
         'platform': 'desktop',
         'level_number': level,
         'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+        'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -2608,8 +2609,10 @@
           'ab_music_group': userABGroup,
           'platform': 'desktop',
           'boss_id': 1,
+          'level_reached': level,
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
         spawnBoss();
         return;
@@ -2621,8 +2624,10 @@
           'ab_music_group': userABGroup,
           'platform': 'desktop',
           'boss_id': 2,
+          'level_reached': level,
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
         spawnBoss();
         return;
@@ -2634,8 +2639,10 @@
           'ab_music_group': userABGroup,
           'platform': 'desktop',
           'boss_id': 3,
+          'level_reached': level,
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
         spawnBoss();
         return;
@@ -3551,8 +3558,10 @@
             'ab_music_group': userABGroup,
             'platform': 'desktop',
             'boss_id': 1,
+            'level_reached': level,
             'score': score,
-            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
           });
 
           // Calculate bonus and set score to 800 (only if player is under threshold)
@@ -3594,8 +3603,10 @@
             'ab_music_group': userABGroup,
             'platform': 'desktop',
             'boss_id': 2,
+            'level_reached': level,
             'score': score,
-            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
           });
 
           // Calculate bonus and set score to 2000 (only if player is under threshold)
@@ -3636,8 +3647,10 @@
             'ab_music_group': userABGroup,
             'platform': 'desktop',
             'boss_id': 3,
+            'level_reached': level,
             'score': score,
-            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
           });
           score += 100;
           updateUI();
@@ -3688,6 +3701,18 @@
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'desktop',
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+      });
+
+      // game_complete fires on every session ending regardless of outcome.
+      // outcome: 'victory' | 'death' | 'abandoned'
+      fireEvent('game_complete', {
+        'outcome': 'victory',
+        'ab_music_group': userABGroup,
+        'platform': 'desktop',
+        'level_reached': level,
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
@@ -3999,10 +4024,21 @@
       fireEvent('leave_game', {
         'ab_music_group': userABGroup,
         'platform': 'desktop',
-        'source': source, // 'game_over' or 'victory'
+        'source': source,
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
+
+      fireEvent('game_complete', {
+        'outcome': 'abandoned',
+        'ab_music_group': userABGroup,
+        'platform': 'desktop',
+        'level_reached': level,
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+      });
+
       stopBackgroundMusic();
       stopBossMusic();
       stopCreditsMusic();
@@ -4232,6 +4268,16 @@
           'platform': 'desktop',
           'level_reached': level,
           'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+        });
+
+        fireEvent('game_complete', {
+          'outcome': 'death',
+          'ab_music_group': userABGroup,
+          'platform': 'desktop',
+          'level_reached': level,
           'score': score,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null

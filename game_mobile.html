@@ -2240,6 +2240,7 @@
         'platform': 'mobile',
         'level_number': level,
         'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+        'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -2879,8 +2880,10 @@
           'ab_music_group': userABGroup,
           'platform': 'mobile',
           'boss_id': 1,
+          'level_reached': level,
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
         spawnBoss();
         return;
@@ -2892,8 +2895,10 @@
           'ab_music_group': userABGroup,
           'platform': 'mobile',
           'boss_id': 2,
+          'level_reached': level,
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
         spawnBoss();
         return;
@@ -2905,8 +2910,10 @@
           'ab_music_group': userABGroup,
           'platform': 'mobile',
           'boss_id': 3,
+          'level_reached': level,
           'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
         spawnBoss();
         return;
@@ -4010,8 +4017,10 @@
             'ab_music_group': userABGroup,
             'platform': 'mobile',
             'boss_id': 1,
+            'level_reached': level,
             'score': score,
-            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
           });
 
           // Calculate bonus and set score to 800 (only if player is under threshold)
@@ -4053,8 +4062,10 @@
             'ab_music_group': userABGroup,
             'platform': 'mobile',
             'boss_id': 2,
+            'level_reached': level,
             'score': score,
-            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
           });
 
           // Calculate bonus and set score to 2000 (only if player is under threshold)
@@ -4095,8 +4106,10 @@
             'ab_music_group': userABGroup,
             'platform': 'mobile',
             'boss_id': 3,
+            'level_reached': level,
             'score': score,
-            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+            'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
           });
           score += 100;
           updateUI();
@@ -4215,6 +4228,16 @@
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
         });
+
+        fireEvent('game_complete', {
+          'outcome': 'death',
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'level_reached': level,
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+        });
       } else {
         playSound('playerHit');
       }
@@ -4244,6 +4267,16 @@
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+      });
+
+      fireEvent('game_complete', {
+        'outcome': 'victory',
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'level_reached': level,
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
@@ -4302,8 +4335,25 @@
       showLeaderboard();
     }
 
-    /** Stops all audio and navigates back to `index.html`. */
+    /** Stops all audio, fires leave_game and game_complete, then navigates back to index.html. */
     function returnToHomeScreen() {
+      fireEvent('leave_game', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
+
+      fireEvent('game_complete', {
+        'outcome': 'abandoned',
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'level_reached': level,
+        'score': score,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+      });
+
       stopBackgroundMusic();
       stopBossMusic();
       stopCreditsMusic();
@@ -4315,6 +4365,78 @@
     // ============================================
     // Forms submit directly to stanigarkeith@gmail.com via FormSubmit.co
     // No account or ID needed — already configured and working.
+    function openBugReport(source) {
+      var existing = document.getElementById('nonxBugModal');
+      if (existing) { existing.style.display = 'flex'; return; }
+
+      var modal = document.createElement('div');
+      modal.id = 'nonxBugModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML =
+        "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:24px;max-width:400px;width:90%;color:#fff;font-family:monospace;'>" +
+        "<div style='font-size:16px;color:#00FFFF;margin-bottom:16px;font-weight:bold;'>🐛 Report a Bug</div>" +
+        "<div style='margin-bottom:10px;'>" +
+          "<label style='font-size:13px;display:block;margin-bottom:4px;'>What happened?</label>" +
+          "<textarea id='bugDescription' rows='3' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='Describe the bug...'></textarea>" +
+        "</div>" +
+        "<div style='margin-bottom:10px;'>" +
+          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Steps to reproduce (optional):</label>" +
+          "<textarea id='bugSteps' rows='2' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='e.g. Level 3, used shield, then...'></textarea>" +
+        "</div>" +
+        "<div style='margin-bottom:16px;'>" +
+          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Your email (optional, for follow-up):</label>" +
+          "<input type='email' id='bugEmail' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;box-sizing:border-box;' placeholder='you@example.com'>" +
+        "</div>" +
+        "<div style='text-align:right; white-space: nowrap;'>" +
+          "<button onclick='submitBugReport(\"" + source + "\")' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;margin-right:10px;'>Submit</button>" +
+          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 14px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Cancel</button>" +
+        "</div>" +
+        "</div>";
+      document.body.appendChild(modal);
+    }
+
+    /** Submits bug report to Formspree. */
+    function submitBugReport(source) {
+      var desc  = (document.getElementById('bugDescription') || {}).value || '';
+      var steps = (document.getElementById('bugSteps') || {}).value || '';
+      var email = (document.getElementById('bugEmail') || {}).value || '';
+
+      if (!desc.trim()) {
+        alert('Please describe the bug before submitting.');
+        return;
+      }
+
+      fetch(FORMSUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          'Type': 'Bug Report',
+          'Source': source,
+          'Description': desc,
+          'Steps': steps,
+          'Reporter Email': email || 'Not provided',
+          'Platform': 'mobile',
+          'Level': level,
+          'AB Music Group': userABGroup
+        })
+      }).then(function() {
+        fireEvent('bug_report_submitted', {
+          'platform': 'mobile',
+          'source': source,
+          'ab_music_group': userABGroup,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
+        var modal = document.getElementById('nonxBugModal');
+        if (modal) modal.innerHTML =
+          "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:32px;color:#00FFFF;font-family:monospace;text-align:center;'>" +
+          "✓ Bug report sent!<br><br>" +
+          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Close</button>" +
+          "</div>";
+      }).catch(function() {
+        alert('Could not send bug report. Please try again later.');
+      });
+    }
+
     var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/stanigarkeith@gmail.com';
 
     /** Returns true if the 5-game survey should be shown. */
