@@ -821,18 +821,13 @@
      * Saves the preference to localStorage for persistence across sessions.
      * Music preference now persists whether changed in-game, victory, game over, or main menu.
      */
-    /**
-     * Hides the intro card and starts the game — called by the card's Start button.
-     * Shows the start button, sets it to Pause state, then programmatically clicks
-     * it to begin the first game session.
-     */
+    /** Hides the intro card and starts the game — called by the card's Start button. */
     function startFromCard() {
       document.getElementById('introCard').style.display = 'none';
       var sb = document.getElementById('startButton');
       sb.style.display = 'block';
       sb.innerText = 'Pause';
       sb.classList.add('game-active');
-      // Trigger the game start branch (gameOver is true on page load)
       sb.click();
     }
 
@@ -1482,7 +1477,7 @@
                       : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
                       : 'shield',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
@@ -2244,7 +2239,7 @@
         'ab_music_group': userABGroup,
         'platform': 'mobile',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -4323,6 +4318,13 @@
     var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/stanigarkeith@gmail.com';
 
     /** Returns true if the 5-game survey should be shown. */
+    /** Builds the bug report button HTML. */
+    function buildBugButtonHTML(source) {
+      return "<div style='margin-top: 10px;'>" +
+        "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
+        "</div>";
+    }
+
     function shouldShowSurvey() {
       var surveyDone = localStorage.getItem('nonx_survey_done') === 'true';
       return gameCount >= 5 && !surveyDone;
