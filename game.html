@@ -1293,7 +1293,7 @@
                       : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
                       : 'shield',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
@@ -1970,7 +1970,7 @@
         'ab_music_group': userABGroup,
         'platform': 'desktop',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -3736,14 +3736,9 @@
       victoryEl.style.display = "block";
       document.getElementById("startButton").style.display = "none";
 
-      // Show survey after 5th game (once only)
+      // Show survey banner after 5th game (once only)
       if (shouldShowSurvey()) {
-        var surveyTarget = document.getElementById('leaderboardDisplay');
-        if (surveyTarget) {
-          var surveyDiv = document.createElement('div');
-          surveyDiv.innerHTML = buildSurveyHTML('desktop');
-          surveyTarget.parentNode.insertBefore(surveyDiv, surveyTarget.nextSibling);
-        }
+        setTimeout(function() { showSurveyBanner('desktop'); }, 1800);
       }
     }
 
@@ -3769,11 +3764,32 @@
       return gameCount >= 5 && !surveyDone;
     }
 
-    /** Builds the survey HTML block. */
-    function buildSurveyHTML(platform) {
-      var s = '';
-      s += "<div id='nonxSurvey' style='margin: 20px 0; padding: 16px; border: 1px solid #00FFFF; border-radius: 6px; text-align: left; max-width: 420px; margin-left: auto; margin-right: auto;'>";
-      s += "<div style='font-size: 16px; color: #00FFFF; margin-bottom: 14px; text-align: center; font-weight: bold;'>📋 Quick Feedback (5 games in — thank you!)</div>";
+    /**
+     * Shows the slide-down survey banner from the top of the screen.
+     * Two states: collapsed (teaser bar) and expanded (full questions).
+     * Auto-expands 400ms after appearing. Fires 1800ms after game over/victory.
+     */
+    function showSurveyBanner(platform) {
+      if (document.getElementById('nonxSurveyBanner')) return;
+
+      var banner = document.createElement('div');
+      banner.id = 'nonxSurveyBanner';
+      banner.style.cssText = [
+        'position:fixed','top:0','left:50%','transform:translateX(-50%)',
+        'width:500px','max-width:96vw','z-index:9999',
+        'font-family:Arial,sans-serif',
+        'box-shadow:0 4px 28px rgba(0,255,255,0.15)',
+        'border-radius:0 0 12px 12px','overflow:hidden'
+      ].join(';');
+
+      var panel = document.createElement('div');
+      panel.id = 'nonxSurveyPanel';
+      panel.style.cssText = [
+        'background:#0d1f1f','border:1px solid #00FFFF','border-top:none','border-bottom:none',
+        'max-height:0','overflow:hidden',
+        'transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1)',
+        'padding:0 26px'
+      ].join(';');
 
       var questions = [
         { id: 'q1', text: 'Did you enjoy the gameplay?' },
@@ -3783,48 +3799,88 @@
         { id: 'q5', text: 'Would you like more music options?' }
       ];
 
+      var inner = "<div style='padding:18px 0 4px;'>";
+      inner += "<div style='font-size:13px;color:#00FFFF99;text-align:center;margin-bottom:18px;letter-spacing:0.4px;'>5 games in — we appreciate you ✨</div>";
       questions.forEach(function(q) {
-        s += "<div style='margin-bottom: 10px; font-size: 14px; color: #fff;'>" + q.text;
-        s += "<span style='margin-left: 12px;'>";
-        s += "<label style='margin-right: 10px; cursor: pointer;'><input type='radio' name='" + q.id + "' value='Yes' style='margin-right: 4px;'>Yes</label>";
-        s += "<label style='cursor: pointer;'><input type='radio' name='" + q.id + "' value='No' style='margin-right: 4px;'>No</label>";
-        s += "</span></div>";
+        inner += "<div style='margin-bottom:13px;display:flex;align-items:center;justify-content:space-between;gap:14px;'>";
+        inner += "<span style='font-size:14px;color:#ddd;flex:1;line-height:1.4;'>" + q.text + "</span>";
+        inner += "<span style='white-space:nowrap;flex-shrink:0;'>";
+        inner += "<label style='margin-right:16px;cursor:pointer;font-size:14px;color:#aaa;'>";
+        inner += "<input type='radio' name='" + q.id + "' value='Yes' style='margin-right:5px;accent-color:#00FFFF;'>Yes</label>";
+        inner += "<label style='cursor:pointer;font-size:14px;color:#aaa;'>";
+        inner += "<input type='radio' name='" + q.id + "' value='No' style='margin-right:5px;accent-color:#00FFFF;'>No</label>";
+        inner += "</span></div>";
+      });
+      inner += "<div style='margin:14px 0 6px;'>";
+      inner += "<div style='font-size:13px;color:#888;margin-bottom:8px;'>Suggestions or recommendations:</div>";
+      inner += "<textarea id='surveyComments' rows='3' style='width:100%;padding:8px;font-size:13px;border-radius:5px;border:1px solid #1e3a3a;background:#0a1515;color:#fff;resize:vertical;box-sizing:border-box;font-family:Arial,sans-serif;' placeholder='Any thoughts? We read everything...'></textarea>";
+      inner += "</div>";
+      inner += "<div style='text-align:center;padding:14px 0 20px;display:flex;justify-content:center;gap:12px;'>";
+      inner += "<button onclick='submitSurvey(\"" + platform + "\")' style='padding:9px 28px;font-size:14px;border-radius:5px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;letter-spacing:0.3px;'>Submit Feedback</button>";
+      inner += "<button onclick='dismissSurvey()' style='padding:9px 18px;font-size:14px;border-radius:5px;border:1px solid #1e3a3a;background:transparent;color:#555;cursor:pointer;'>Skip</button>";
+      inner += "</div></div>";
+      panel.innerHTML = inner;
+
+      var teaser = document.createElement('div');
+      teaser.id = 'nonxSurveyTeaser';
+      teaser.style.cssText = [
+        'background:#0d1f1f','border:1px solid #00FFFF','border-top:none',
+        'border-radius:0 0 12px 12px','padding:11px 22px',
+        'display:flex','align-items:center','justify-content:space-between',
+        'cursor:pointer','user-select:none'
+      ].join(';');
+      teaser.innerHTML = "<span style='color:#00FFFF;font-size:14px;font-weight:bold;letter-spacing:0.3px;'>&#128203; Enjoying NON-X? Help us improve</span>" +
+        "<span id='nonxSurveyChevron' style='color:#00FFFF;font-size:20px;margin-left:12px;transition:transform 0.35s;display:inline-block;'>&#8964;</span>";
+
+      var expanded = false;
+      teaser.addEventListener('click', function() {
+        expanded = !expanded;
+        var chev = document.getElementById('nonxSurveyChevron');
+        panel.style.maxHeight = expanded ? '560px' : '0';
+        if (chev) chev.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
       });
 
-      s += "<div style='margin-bottom: 10px;'>";
-      s += "<div style='font-size: 14px; color: #fff; margin-bottom: 6px;'>Suggestions or recommendations:</div>";
-      s += "<textarea id='surveyComments' rows='3' style='width: 100%; padding: 6px; font-size: 13px; border-radius: 4px; border: none; background: #1a1a1a; color: #fff; resize: vertical; box-sizing: border-box;' placeholder='Any thoughts? We read everything...'></textarea>";
-      s += "</div>";
+      banner.appendChild(panel);
+      banner.appendChild(teaser);
+      document.body.appendChild(banner);
 
-      s += "<div style='text-align: center; white-space: nowrap;'>";
-      s += "<button onclick='submitSurvey(\"" + platform + "\")' style='padding: 8px 20px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 12px;'>Submit Feedback</button>";
-      s += "<button onclick='dismissSurvey()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #333; color: #aaa; cursor: pointer;'>Skip</button>";
-      s += "</div>";
-      s += "</div>";
-      return s;
+      setTimeout(function() {
+        expanded = true;
+        panel.style.maxHeight = '560px';
+        var chev = document.getElementById('nonxSurveyChevron');
+        if (chev) chev.style.transform = 'rotate(180deg)';
+      }, 400);
     }
 
-    /** Submits survey to Formspree and hides the form. */
+    /** Collapses and removes the survey banner from the DOM. */
+    function collapseSurveyBanner() {
+      var panel = document.getElementById('nonxSurveyPanel');
+      var chev = document.getElementById('nonxSurveyChevron');
+      if (panel) panel.style.maxHeight = '0';
+      if (chev) chev.style.transform = 'rotate(0deg)';
+      setTimeout(function() {
+        var b = document.getElementById('nonxSurveyBanner');
+        if (b) b.remove();
+      }, 500);
+    }
+
+    /** Submits survey to Formspree then collapses the banner. */
     function submitSurvey(platform) {
       var answers = {
-        'Enjoyed gameplay':       document.querySelector('input[name="q1"]:checked'),
-        'Would play again':       document.querySelector('input[name="q2"]:checked'),
-        'Easy to pick up':        document.querySelector('input[name="q3"]:checked'),
-        'Enjoyed music':          document.querySelector('input[name="q4"]:checked'),
-        'Want more music':        document.querySelector('input[name="q5"]:checked'),
-        'Suggestions':            (document.getElementById('surveyComments') || {}).value || '',
-        'Platform':               platform,
-        'AB Music Group':         userABGroup,
-        'Music Variant':          localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-        'Games Played':           localStorage.getItem('nonx_game_count') || '5'
+        'Enjoyed gameplay': document.querySelector('input[name="q1"]:checked'),
+        'Would play again': document.querySelector('input[name="q2"]:checked'),
+        'Easy to pick up':  document.querySelector('input[name="q3"]:checked'),
+        'Enjoyed music':    document.querySelector('input[name="q4"]:checked'),
+        'Want more music':  document.querySelector('input[name="q5"]:checked'),
+        'Suggestions':      (document.getElementById('surveyComments') || {}).value || '',
+        'Platform':         platform,
+        'AB Music Group':   userABGroup,
+        'Music Variant':    localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'Games Played':     localStorage.getItem('nonx_game_count') || '5'
       };
-
       var body = {};
-      Object.keys(answers).forEach(function(k) {
-        body[k] = answers[k] ? answers[k].value : 'No answer';
-      });
+      Object.keys(answers).forEach(function(k) { body[k] = answers[k] ? answers[k].value : 'No answer'; });
       body['Suggestions'] = answers['Suggestions'];
-
       fetch(FORMSUBMIT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -3832,21 +3888,22 @@
       }).then(function() {
         localStorage.setItem('nonx_survey_done', 'true');
         fireEvent('survey_submitted', {
-          'platform': platform,
-          'ab_music_group': userABGroup,
+          'platform': platform, 'ab_music_group': userABGroup,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'games_played': parseInt(localStorage.getItem('nonx_game_count') || '5', 10)
         });
-        var el = document.getElementById('nonxSurvey');
-        if (el) el.innerHTML = "<div style='text-align:center; color:#00FFFF; padding: 12px;'>✓ Thanks for your feedback!</div>";
+        var p = document.getElementById('nonxSurveyPanel');
+        if (p) p.innerHTML = "<div style='padding:24px;text-align:center;color:#00FFFF;font-size:15px;font-weight:bold;'>\u2713 Thanks for your feedback!</div>";
+        setTimeout(function() { collapseSurveyBanner(); }, 2200);
       }).catch(function() {
         localStorage.setItem('nonx_survey_done', 'true');
-        var el = document.getElementById('nonxSurvey');
-        if (el) el.innerHTML = "<div style='text-align:center; color:#555; padding: 12px;'>Could not send — but thanks anyway!</div>";
+        var p = document.getElementById('nonxSurveyPanel');
+        if (p) p.innerHTML = "<div style='padding:24px;text-align:center;color:#555;font-size:14px;'>Could not send — but thanks anyway!</div>";
+        setTimeout(function() { collapseSurveyBanner(); }, 2200);
       });
     }
 
-    /** Dismisses survey without submitting. */
+    /** Dismisses survey without submitting and collapses the banner. */
     function dismissSurvey() {
       localStorage.setItem('nonx_survey_done', 'true');
       fireEvent('survey_dismissed', {
@@ -3854,11 +3911,10 @@
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'games_played': parseInt(localStorage.getItem('nonx_game_count') || '5', 10)
       });
-      var el = document.getElementById('nonxSurvey');
-      if (el) el.style.display = 'none';
+      collapseSurveyBanner();
     }
 
-    /** Builds the bug report button HTML. */
+        /** Builds the bug report button HTML. */
     function buildBugButtonHTML(source) {
       return "<div style='margin-top: 10px;'>" +
         "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
@@ -4084,6 +4140,10 @@
      * @param {number} damage - HP to subtract before shield mitigation.
      */
     function playerTakeDamage(damage) {
+      // Invincibility frames — ignore all damage while blinking from a previous hit.
+      // Prevents death spirals and feels fair to the player.
+      if (playerBlinking) return;
+
       if (hasShield) {
         shieldHitsRemaining--;
         if (shieldHitsRemaining <= 0) {
@@ -4158,11 +4218,9 @@
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
 
-        // Show survey after 5th game (once only)
+        // Show survey banner after 5th game (once only)
         if (shouldShowSurvey()) {
-          var surveyDiv = document.createElement('div');
-          surveyDiv.innerHTML = buildSurveyHTML('desktop');
-          gameOverEl.appendChild(surveyDiv);
+          setTimeout(function() { showSurveyBanner('desktop'); }, 1800);
         }
 
         // player_death fires when health reaches zero.
@@ -4173,7 +4231,7 @@
           'ab_music_group': userABGroup,
           'platform': 'desktop',
           'level_reached': level,
-          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
           'score': score,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null

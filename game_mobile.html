@@ -1467,7 +1467,7 @@
                       : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
                       : 'shield',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
@@ -2229,7 +2229,7 @@
         'ab_music_group': userABGroup,
         'platform': 'mobile',
         'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'standard',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -4114,6 +4114,103 @@
     }
 
     /**
+     * Handles player damage. Applies shield logic, laser downgrade on hit,
+     * health decrement, blink effect, and game over screen if health reaches 0.
+     * Fires player_death analytics event and shows the survey banner if eligible.
+     */
+    function playerTakeDamage(damage) {
+      // Invincibility frames — ignore all damage while blinking from a previous hit.
+      // Prevents death spirals and feels fair to the player.
+      if (playerBlinking) return;
+
+      if (hasShield) {
+        } else {
+          showAnnouncement("powerupDisplay", "Shield: " + shieldHitsRemaining + " hits left", 800);
+        }
+        if (purplePhase) {
+          return; // Purple phase: shield fully blocks all damage
+        }
+        damage = 5;
+        if (health <= 15) {
+          showAnnouncement("powerupDisplay", "Shield absorbed damage!", 800);
+          return;
+        }
+      } else {
+        // Lose laser power when hit without shield (red and purple phases)
+        if ((redPhase || purplePhase) && hasDoubleLaser) {
+          if (laserLevel >= 4) {
+            laserLevel = 3;
+            showAnnouncement("powerupDisplay", "Lost Quad Laser!", 1500);
+          } else if (laserLevel === 3) {
+            laserLevel = 2;
+            showAnnouncement("powerupDisplay", "Lost Triple Laser!", 1500);
+          } else {
+            hasDoubleLaser = false;
+            laserLevel = 1;
+          }
+        }
+      }
+
+      health -= damage;
+      updateUI();
+
+      // Start blinking effect
+      playerBlinking = true;
+      playerBlinkTimer = 30;
+
+      if (health <= 0) {
+        health = 0;
+        updateUI();
+        gameOver = true;
+        playSound('playerDead');
+        stopBossMusic();
+
+        // Check if top 10 score and save
+        var madeTopTen = isTopTenScore(score);
+        var rank = getScoreRank(score);
+        if (madeTopTen) {
+          addHighScore(score);
+        }
+
+        // Build game over display
+        var gameOverEl = document.getElementById("gameOver");
+        var html = "Game Over!<br><br>Your Score: " + score;
+        if (madeTopTen) {
+          html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
+        }
+        html += "<br><br>";
+        html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+        html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+        html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
+        html += "</div>";
+        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+        html += buildBugButtonHTML('game_over');
+        gameOverEl.innerHTML = html;
+        gameOverEl.style.display = "block";
+        document.getElementById("startButton").style.display = "none";
+
+        // Show survey banner after 5th game (once only)
+        if (shouldShowSurvey()) {
+          setTimeout(function() { showSurveyBanner('mobile'); }, 1800);
+        }
+
+        // player_death analytics event
+        fireEvent('player_death', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'level_reached': level,
+          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+        });
+      } else {
+        playSound('playerHit');
+      }
+    }
+
+    /**
      * Ends the game in a victory state. Clears all game objects, checks for a
      * top-10 score, builds the victory HTML (score, optional rank badge, email
      * subscription form, return button), and displays the #victory overlay.
@@ -4186,13 +4283,9 @@
       document.getElementById("startButton").style.display = "none";
 
       // Show survey after 5th game (once only)
+      // Show survey banner after 5th game (once only)
       if (shouldShowSurvey()) {
-        var surveyTarget = document.getElementById('leaderboardDisplay');
-        if (surveyTarget) {
-          var surveyDiv = document.createElement('div');
-          surveyDiv.innerHTML = buildSurveyHTML('mobile');
-          surveyTarget.parentNode.insertBefore(surveyDiv, surveyTarget.nextSibling);
-        }
+        setTimeout(function() { showSurveyBanner('mobile'); }, 1800);
       }
 
       // Show leaderboard immediately
@@ -4214,16 +4307,37 @@
     // No account or ID needed — already configured and working.
     var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/stanigarkeith@gmail.com';
 
+    /** Returns true if the 5-game survey should be shown. */
     function shouldShowSurvey() {
-      var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10);
       var surveyDone = localStorage.getItem('nonx_survey_done') === 'true';
       return gameCount >= 5 && !surveyDone;
     }
 
-    function buildSurveyHTML(platform) {
-      var s = '';
-      s += "<div id='nonxSurvey' style='margin: 20px 0; padding: 16px; border: 1px solid #00FFFF; border-radius: 6px; text-align: left; max-width: 420px; margin-left: auto; margin-right: auto;'>";
-      s += "<div style='font-size: 16px; color: #00FFFF; margin-bottom: 14px; text-align: center; font-weight: bold;'>📋 Quick Feedback (5 games in — thank you!)</div>";
+    /**
+     * Shows the slide-down survey banner from the top of the screen.
+     * Mobile version — same behaviour as desktop, platform param sends 'mobile'.
+     */
+    function showSurveyBanner(platform) {
+      if (document.getElementById('nonxSurveyBanner')) return;
+
+      var banner = document.createElement('div');
+      banner.id = 'nonxSurveyBanner';
+      banner.style.cssText = [
+        'position:fixed','top:0','left:50%','transform:translateX(-50%)',
+        'width:500px','max-width:96vw','z-index:9999',
+        'font-family:Arial,sans-serif',
+        'box-shadow:0 4px 28px rgba(0,255,255,0.15)',
+        'border-radius:0 0 12px 12px','overflow:hidden'
+      ].join(';');
+
+      var panel = document.createElement('div');
+      panel.id = 'nonxSurveyPanel';
+      panel.style.cssText = [
+        'background:#0d1f1f','border:1px solid #00FFFF','border-top:none','border-bottom:none',
+        'max-height:0','overflow:hidden',
+        'transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1)',
+        'padding:0 26px'
+      ].join(';');
 
       var questions = [
         { id: 'q1', text: 'Did you enjoy the gameplay?' },
@@ -4233,47 +4347,88 @@
         { id: 'q5', text: 'Would you like more music options?' }
       ];
 
+      var inner = "<div style='padding:18px 0 4px;'>";
+      inner += "<div style='font-size:13px;color:#00FFFF99;text-align:center;margin-bottom:18px;letter-spacing:0.4px;'>5 games in — we appreciate you ✨</div>";
       questions.forEach(function(q) {
-        s += "<div style='margin-bottom: 10px; font-size: 14px; color: #fff;'>" + q.text;
-        s += "<span style='margin-left: 12px;'>";
-        s += "<label style='margin-right: 10px; cursor: pointer;'><input type='radio' name='" + q.id + "' value='Yes' style='margin-right: 4px;'>Yes</label>";
-        s += "<label style='cursor: pointer;'><input type='radio' name='" + q.id + "' value='No' style='margin-right: 4px;'>No</label>";
-        s += "</span></div>";
+        inner += "<div style='margin-bottom:13px;display:flex;align-items:center;justify-content:space-between;gap:14px;'>";
+        inner += "<span style='font-size:14px;color:#ddd;flex:1;line-height:1.4;'>" + q.text + "</span>";
+        inner += "<span style='white-space:nowrap;flex-shrink:0;'>";
+        inner += "<label style='margin-right:16px;cursor:pointer;font-size:14px;color:#aaa;'>";
+        inner += "<input type='radio' name='" + q.id + "' value='Yes' style='margin-right:5px;accent-color:#00FFFF;'>Yes</label>";
+        inner += "<label style='cursor:pointer;font-size:14px;color:#aaa;'>";
+        inner += "<input type='radio' name='" + q.id + "' value='No' style='margin-right:5px;accent-color:#00FFFF;'>No</label>";
+        inner += "</span></div>";
+      });
+      inner += "<div style='margin:14px 0 6px;'>";
+      inner += "<div style='font-size:13px;color:#888;margin-bottom:8px;'>Suggestions or recommendations:</div>";
+      inner += "<textarea id='surveyComments' rows='3' style='width:100%;padding:8px;font-size:13px;border-radius:5px;border:1px solid #1e3a3a;background:#0a1515;color:#fff;resize:vertical;box-sizing:border-box;font-family:Arial,sans-serif;' placeholder='Any thoughts? We read everything...'></textarea>";
+      inner += "</div>";
+      inner += "<div style='text-align:center;padding:14px 0 20px;display:flex;justify-content:center;gap:12px;'>";
+      inner += "<button onclick='submitSurvey("" + platform + "")' style='padding:9px 28px;font-size:14px;border-radius:5px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;letter-spacing:0.3px;'>Submit Feedback</button>";
+      inner += "<button onclick='dismissSurvey()' style='padding:9px 18px;font-size:14px;border-radius:5px;border:1px solid #1e3a3a;background:transparent;color:#555;cursor:pointer;'>Skip</button>";
+      inner += "</div></div>";
+      panel.innerHTML = inner;
+
+      var teaser = document.createElement('div');
+      teaser.id = 'nonxSurveyTeaser';
+      teaser.style.cssText = [
+        'background:#0d1f1f','border:1px solid #00FFFF','border-top:none',
+        'border-radius:0 0 12px 12px','padding:11px 22px',
+        'display:flex','align-items:center','justify-content:space-between',
+        'cursor:pointer','user-select:none'
+      ].join(';');
+      teaser.innerHTML = "<span style='color:#00FFFF;font-size:14px;font-weight:bold;letter-spacing:0.3px;'>&#128203; Enjoying NON-X? Help us improve</span>" +
+        "<span id='nonxSurveyChevron' style='color:#00FFFF;font-size:20px;margin-left:12px;transition:transform 0.35s;display:inline-block;'>&#8964;</span>";
+
+      var expanded = false;
+      teaser.addEventListener('click', function() {
+        expanded = !expanded;
+        var chev = document.getElementById('nonxSurveyChevron');
+        panel.style.maxHeight = expanded ? '560px' : '0';
+        if (chev) chev.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
       });
 
-      s += "<div style='margin-bottom: 10px;'>";
-      s += "<div style='font-size: 14px; color: #fff; margin-bottom: 6px;'>Suggestions or recommendations:</div>";
-      s += "<textarea id='surveyComments' rows='3' style='width: 100%; padding: 6px; font-size: 13px; border-radius: 4px; border: none; background: #1a1a1a; color: #fff; resize: vertical; box-sizing: border-box;' placeholder='Any thoughts? We read everything...'></textarea>";
-      s += "</div>";
+      banner.appendChild(panel);
+      banner.appendChild(teaser);
+      document.body.appendChild(banner);
 
-      s += "<div style='text-align: center; white-space: nowrap;'>";
-      s += "<button onclick='submitSurvey(\"" + platform + "\")' style='padding: 8px 20px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 12px;'>Submit Feedback</button>";
-      s += "<button onclick='dismissSurvey()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #333; color: #aaa; cursor: pointer;'>Skip</button>";
-      s += "</div>";
-      s += "</div>";
-      return s;
+      setTimeout(function() {
+        expanded = true;
+        panel.style.maxHeight = '560px';
+        var chev = document.getElementById('nonxSurveyChevron');
+        if (chev) chev.style.transform = 'rotate(180deg)';
+      }, 400);
     }
 
+    /** Collapses and removes the survey banner from the DOM. */
+    function collapseSurveyBanner() {
+      var panel = document.getElementById('nonxSurveyPanel');
+      var chev = document.getElementById('nonxSurveyChevron');
+      if (panel) panel.style.maxHeight = '0';
+      if (chev) chev.style.transform = 'rotate(0deg)';
+      setTimeout(function() {
+        var b = document.getElementById('nonxSurveyBanner');
+        if (b) b.remove();
+      }, 500);
+    }
+
+    /** Submits survey to Formspree then collapses the banner. */
     function submitSurvey(platform) {
       var answers = {
-        'Enjoyed gameplay':  document.querySelector('input[name="q1"]:checked'),
-        'Would play again':  document.querySelector('input[name="q2"]:checked'),
-        'Easy to pick up':   document.querySelector('input[name="q3"]:checked'),
-        'Enjoyed music':     document.querySelector('input[name="q4"]:checked'),
-        'Want more music':   document.querySelector('input[name="q5"]:checked'),
-        'Suggestions':       (document.getElementById('surveyComments') || {}).value || '',
-        'Platform':          platform,
-        'AB Music Group':    userABGroup,
-        'Music Variant':     localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-        'Games Played':      localStorage.getItem('nonx_game_count') || '5'
+        'Enjoyed gameplay': document.querySelector('input[name="q1"]:checked'),
+        'Would play again': document.querySelector('input[name="q2"]:checked'),
+        'Easy to pick up':  document.querySelector('input[name="q3"]:checked'),
+        'Enjoyed music':    document.querySelector('input[name="q4"]:checked'),
+        'Want more music':  document.querySelector('input[name="q5"]:checked'),
+        'Suggestions':      (document.getElementById('surveyComments') || {}).value || '',
+        'Platform':         platform,
+        'AB Music Group':   userABGroup,
+        'Music Variant':    localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'Games Played':     localStorage.getItem('nonx_game_count') || '5'
       };
-
       var body = {};
-      Object.keys(answers).forEach(function(k) {
-        body[k] = answers[k] ? answers[k].value : 'No answer';
-      });
+      Object.keys(answers).forEach(function(k) { body[k] = answers[k] ? answers[k].value : 'No answer'; });
       body['Suggestions'] = answers['Suggestions'];
-
       fetch(FORMSUBMIT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -4281,20 +4436,22 @@
       }).then(function() {
         localStorage.setItem('nonx_survey_done', 'true');
         fireEvent('survey_submitted', {
-          'platform': platform,
-          'ab_music_group': userABGroup,
+          'platform': platform, 'ab_music_group': userABGroup,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'games_played': parseInt(localStorage.getItem('nonx_game_count') || '5', 10)
         });
-        var el = document.getElementById('nonxSurvey');
-        if (el) el.innerHTML = "<div style='text-align:center; color:#00FFFF; padding: 12px;'>✓ Thanks for your feedback!</div>";
+        var p = document.getElementById('nonxSurveyPanel');
+        if (p) p.innerHTML = "<div style='padding:24px;text-align:center;color:#00FFFF;font-size:15px;font-weight:bold;'>✓ Thanks for your feedback!</div>";
+        setTimeout(function() { collapseSurveyBanner(); }, 2200);
       }).catch(function() {
         localStorage.setItem('nonx_survey_done', 'true');
-        var el = document.getElementById('nonxSurvey');
-        if (el) el.innerHTML = "<div style='text-align:center; color:#555; padding: 12px;'>Could not send — but thanks anyway!</div>";
+        var p = document.getElementById('nonxSurveyPanel');
+        if (p) p.innerHTML = "<div style='padding:24px;text-align:center;color:#555;font-size:14px;'>Could not send — but thanks anyway!</div>";
+        setTimeout(function() { collapseSurveyBanner(); }, 2200);
       });
     }
 
+    /** Dismisses survey without submitting and collapses the banner. */
     function dismissSurvey() {
       localStorage.setItem('nonx_survey_done', 'true');
       fireEvent('survey_dismissed', {
@@ -4302,1401 +4459,7 @@
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'games_played': parseInt(localStorage.getItem('nonx_game_count') || '5', 10)
       });
-      var el = document.getElementById('nonxSurvey');
-      if (el) el.style.display = 'none';
+      collapseSurveyBanner();
     }
 
-    function buildBugButtonHTML(source) {
-      return "<div style='margin-top: 10px;'>" +
-        "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
-        "</div>";
-    }
-
-    function openBugReport(source) {
-      var existing = document.getElementById('nonxBugModal');
-      if (existing) { existing.style.display = 'flex'; return; }
-
-      var modal = document.createElement('div');
-      modal.id = 'nonxBugModal';
-      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
-      modal.innerHTML =
-        "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:24px;max-width:400px;width:90%;color:#fff;font-family:monospace;'>" +
-        "<div style='font-size:16px;color:#00FFFF;margin-bottom:16px;font-weight:bold;'>🐛 Report a Bug</div>" +
-        "<div style='margin-bottom:10px;'>" +
-          "<label style='font-size:13px;display:block;margin-bottom:4px;'>What happened?</label>" +
-          "<textarea id='bugDescription' rows='3' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='Describe the bug...'></textarea>" +
-        "</div>" +
-        "<div style='margin-bottom:10px;'>" +
-          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Steps to reproduce (optional):</label>" +
-          "<textarea id='bugSteps' rows='2' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='e.g. Level 3, used shield, then...'></textarea>" +
-        "</div>" +
-        "<div style='margin-bottom:16px;'>" +
-          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Your email (optional, for follow-up):</label>" +
-          "<input type='email' id='bugEmail' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;box-sizing:border-box;' placeholder='you@example.com'>" +
-        "</div>" +
-        "<div style='text-align:right; white-space: nowrap;'>" +
-          "<button onclick='submitBugReport(\"" + source + "\")' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;margin-right:10px;'>Submit</button>" +
-          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 14px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Cancel</button>" +
-        "</div>" +
-        "</div>";
-      document.body.appendChild(modal);
-    }
-
-    function submitBugReport(source) {
-      var desc  = (document.getElementById('bugDescription') || {}).value || '';
-      var steps = (document.getElementById('bugSteps') || {}).value || '';
-      var email = (document.getElementById('bugEmail') || {}).value || '';
-
-      if (!desc.trim()) {
-        alert('Please describe the bug before submitting.');
-        return;
-      }
-
-      fetch(FORMSUBMIT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          'Type': 'Bug Report',
-          'Source': source,
-          'Description': desc,
-          'Steps': steps,
-          'Reporter Email': email || 'Not provided',
-          'Platform': 'mobile',
-          'Games Played': localStorage.getItem('nonx_game_count') || '?',
-          'AB Music Group': userABGroup
-        })
-      }).then(function() {
-        fireEvent('bug_report_submitted', {
-          'platform': 'mobile',
-          'source': source,
-          'ab_music_group': userABGroup,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
-        });
-        var modal = document.getElementById('nonxBugModal');
-        if (modal) modal.innerHTML =
-          "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:32px;color:#00FFFF;font-family:monospace;text-align:center;'>" +
-          "✓ Bug report sent!<br><br>" +
-          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Close</button>" +
-          "</div>";
-      }).catch(function() {
-        alert('Could not send bug report. Please try again later.');
-      });
-    }
-
-    /** Fires leave_game event then navigates to main menu. */
-    function leaveGame(source) {
-      fireEvent('leave_game', {
-        'ab_music_group': userABGroup,
-        'platform': 'mobile',
-        'source': source, // 'game_over' or 'victory'
-        'score': score,
-        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
-      });
-      stopBackgroundMusic();
-      stopBossMusic();
-      stopCreditsMusic();
-      window.location.href = 'index.html';
-    }
-
-    /** Resets and restarts the game in place without returning to main menu. */
-    function playAgain() {
-      // Hide both end screens
-      document.getElementById('gameOver').style.display = 'none';
-      document.getElementById('victory').style.display = 'none';
-
-      // Flag this as a replay so game_start can distinguish it from a fresh start
-      isReplay = true;
-
-      // Trigger the start button reset branch (gameOver is true so it fully resets)
-      var sb = document.getElementById('startButton');
-      sb.style.display = 'block';
-      sb.click();
-    }
-
-    // ============================================
-    // BULLETS
-    // ============================================
-    /**
-     * Fires one or more player bullets from the ship's current position,
-     * based on the active laser level:
-     *   1 → single centre bullet
-     *   2 → dual side-by-side bullets (double laser)
-     *   3 → three evenly spread bullets (triple laser, purple phase default)
-     *   4 → four evenly spread bullets (quad laser, purple phase rare upgrade)
-     */
-    function shootBullet() {
-      playSound('playerBullet');
-      if (laserLevel >= 4) {
-        // Quad laser - four bullets spread across ship width (rare upgrade)
-        var offsets = [0.15, 0.38, 0.62, 0.85];
-        for (var q = 0; q < 4; q++) {
-          playerBullets.push(BulletPool.get(
-            Math.floor(player.x + player.width * offsets[q] - 2),
-            Math.floor(player.y),
-            5,
-            10,
-            CONFIG.bulletSpeed
-          ));
-        }
-      } else if (laserLevel === 3) {
-        // Triple laser - three bullets spread across ship width (purple phase default)
-        var offsets = [0.2, 0.5, 0.8];
-        for (var t = 0; t < 3; t++) {
-          playerBullets.push(BulletPool.get(
-            Math.floor(player.x + player.width * offsets[t] - 2),
-            Math.floor(player.y),
-            5,
-            10,
-            CONFIG.bulletSpeed
-          ));
-        }
-      } else if (hasDoubleLaser) {
-        // Double laser - two side-by-side bullets
-        playerBullets.push(BulletPool.get(
-          Math.floor(player.x + player.width / 4 - 2),
-          Math.floor(player.y),
-          5,
-          10,
-          CONFIG.bulletSpeed
-        ));
-        playerBullets.push(BulletPool.get(
-          Math.floor(player.x + (player.width * 3 / 4) - 2),
-          Math.floor(player.y),
-          5,
-          10,
-          CONFIG.bulletSpeed
-        ));
-      } else {
-        // Single bullet
-        playerBullets.push(BulletPool.get(
-          Math.floor(player.x + player.width / 2 - 2),
-          Math.floor(player.y),
-          5,
-          10,
-          CONFIG.bulletSpeed
-        ));
-      }
-    }
-
-    /**
-     * Fires one bullet downward from the bottom-centre of the given enemy.
-     * Bullet speed scales with the current game phase (red: +40%, purple: +65%).
-     * @param {Object} enemy - The firing enemy object.
-     */
-    function shootEnemyBullet(enemy) {
-      var bulletSpeed = CONFIG.enemyBulletSpeed;
-      if (purplePhase) {
-        bulletSpeed *= 1.65; // 65% faster in purple phase
-      } else if (redPhase) {
-        bulletSpeed *= 1.4; // 40% faster in red phase
-      }
-      enemyBullets.push(BulletPool.get(
-        Math.floor(enemy.x + enemy.width / 2 - 2),
-        Math.floor(enemy.y + enemy.height),
-        5,
-        10,
-        bulletSpeed
-      ));
-    }
-
-    // ============================================
-    // COLLISION DETECTION
-    // ============================================
-    /**
-     * Axis-Aligned Bounding Box (AABB) collision test between two rect objects.
-     * @param {{x:number, y:number, width:number, height:number}} a
-     * @param {{x:number, y:number, width:number, height:number}} b
-     * @returns {boolean} True when the two rects overlap.
-     */
-    function isColliding(a, b) {
-      return a.x < b.x + b.width &&
-        a.x + a.width > b.x &&
-        a.y < b.y + b.height &&
-        a.y + a.height > b.y;
-    }
-
-    // ============================================
-    // PLAYER DAMAGE
-    // ============================================
-    /**
-     * Applies damage to the player, accounting for the shield power-up:
-     *   • Purple phase with shield: damage fully blocked.
-     *   • Earlier phases with shield: damage reduced to 5; absorbed entirely
-     *     when health ≤ 15.
-     *   • No shield in red/purple phase: downgrades laser level on hit.
-     * Triggers the player blink effect, updates the HUD, and ends the game
-     * (showing the Game Over overlay) if health reaches 0.
-     * @param {number} damage - HP to subtract before shield mitigation.
-     */
-    function playerTakeDamage(damage) {
-      if (hasShield) {
-        shieldHitsRemaining--;
-        if (shieldHitsRemaining <= 0) {
-          hasShield = false;
-          showAnnouncement("powerupDisplay", "Shield Broken!", 1500);
-        } else {
-          showAnnouncement("powerupDisplay", "Shield: " + shieldHitsRemaining + " hits left", 800);
-        }
-        if (purplePhase) {
-          // Purple phase: shield fully blocks all damage, no health loss
-          return;
-        }
-        // Earlier phases: shield reduces damage to 5, protects health at low HP
-        damage = 5;
-        if (health <= 15) {
-          showAnnouncement("powerupDisplay", "Shield absorbed damage!", 800);
-          return;
-        }
-      } else {
-        // Lose laser power when hit without shield (red and purple phases)
-        if ((redPhase || purplePhase) && hasDoubleLaser) {
-          if (laserLevel >= 4) {
-            laserLevel = 3; // Quad -> triple
-            showAnnouncement("powerupDisplay", "Lost Quad Laser!", 1500);
-          } else if (laserLevel === 3) {
-            laserLevel = 2; // Triple -> double
-            showAnnouncement("powerupDisplay", "Lost Triple Laser!", 1500);
-          } else {
-            hasDoubleLaser = false;
-            laserLevel = 1;
-          }
-        }
-      }
-
-      health -= damage;
-      updateUI();
-
-      // Start blinking effect
-      playerBlinking = true;
-      playerBlinkTimer = 30; // Blink for 30 frames (~0.5 seconds)
-
-      if (health <= 0) {
-        health = 0;
-        updateUI();
-        gameOver = true;
-        playSound('playerDead');
-        stopBossMusic();
-        // Keep background music playing - don't stop it
-
-        // Check if top 10 score and save
-        var madeTopTen = isTopTenScore(score);
-        var rank = getScoreRank(score);
-        if (madeTopTen) {
-          addHighScore(score);
-        }
-
-        // Build game over display
-        var gameOverEl = document.getElementById("gameOver");
-        var html = "Game Over!<br><br>Your Score: " + score;
-        if (madeTopTen) {
-          html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
-        }
-        html += "<br><br>";
-        html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-        html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
-        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
-        html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
-        html += "</div>";
-        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
-        html += buildBugButtonHTML('game_over');
-        gameOverEl.innerHTML = html;
-        gameOverEl.style.display = "block";
-        document.getElementById("startButton").style.display = "none";
-
-        // Show survey after 5th game (once only)
-        if (shouldShowSurvey()) {
-          var surveyDiv = document.createElement('div');
-          surveyDiv.innerHTML = buildSurveyHTML('mobile');
-          gameOverEl.appendChild(surveyDiv);
-        }
-
-        // player_death fires when health reaches zero.
-        // phase lets you segment deaths by game phase in GA4.
-        // session_duration_seconds measures how long the player survived this session
-        // (from game_start to death), enabling time-based engagement analysis.
-        fireEvent('player_death', {
-          'ab_music_group': userABGroup,
-          'platform': 'mobile',
-          'level_reached': level,
-          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
-          'score': score,
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
-        });
-      } else {
-        playSound('playerHit');
-      }
-    }
-
-    /**
-     * Handles the player hit-flash animation. Decrements `playerBlinkTimer`
-     * each frame and toggles `playerVisible` every 3 frames to create a
-     * strobe effect lasting ~0.5 s (30 frames).
-     */
-    function updatePlayerBlink() {
-      if (playerBlinking) {
-        playerBlinkTimer--;
-        // Toggle visibility every 3 frames
-        playerVisible = Math.floor(playerBlinkTimer / 3) % 2 === 0;
-        if (playerBlinkTimer <= 0) {
-          playerBlinking = false;
-          playerVisible = true;
-        }
-      }
-    }
-
-    // ============================================
-    // INPUT HANDLING
-    // ============================================
-    document.addEventListener("keydown", function (e) {
-      // Shift+D — toggle developer mode
-      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
-        devMode = !devMode;
-        var indicator = document.getElementById('devModeIndicator');
-        if (!indicator) {
-          indicator = document.createElement('div');
-          indicator.id = 'devModeIndicator';
-          indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
-            'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
-            'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
-          indicator.textContent = '⚠ DEV MODE — Analytics OFF | Shift+V: Victory | Shift+G: Game Over';
-          document.body.appendChild(indicator);
-        }
-        indicator.style.display = devMode ? 'block' : 'none';
-        console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢' : 'DISABLED 🔴'), 'color:#FF0;font-weight:bold;font-size:14px;');
-        return;
-      }
-
-      // Shift+V — skip to victory (devMode only)
-      if (e.shiftKey && (e.key === 'v' || e.key === 'V')) {
-        if (devMode) {
-          console.log('%c[DEV MODE] Skipping to victory screen', 'color:#00FFFF;font-weight:bold;');
-          showVictory();
-        }
-        return;
-      }
-
-      // Shift+G — skip to game over (devMode only)
-      if (e.shiftKey && (e.key === 'g' || e.key === 'G')) {
-        if (devMode) {
-          console.log('%c[DEV MODE] Skipping to game over screen', 'color:#00FFFF;font-weight:bold;');
-          health = 0;
-          updateUI();
-          gameOver = true;
-          stopBossMusic();
-          var madeTopTen = isTopTenScore(score);
-          var rank = getScoreRank(score);
-          if (madeTopTen) addHighScore(score);
-          var gameOverEl = document.getElementById('gameOver');
-          var html = "Game Over!<br><br>Your Score: " + score;
-          if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
-          html += "<br><br>";
-          html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-          html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
-          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
-          html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
-          html += "</div>";
-          gameOverEl.innerHTML = html;
-          gameOverEl.style.display = 'block';
-          document.getElementById('startButton').style.display = 'none';
-        }
-        return;
-      }
-
-      // Shift+1–9/0 — jump to level (devMode only)
-      if (devMode && e.shiftKey && !gameOver && !bossActive) {
-        var jumpLevel = null;
-        if (e.key === '!') jumpLevel = 1;
-        else if (e.key === '@') jumpLevel = 2;
-        else if (e.key === '#') jumpLevel = 3;
-        else if (e.key === '$') jumpLevel = 4;
-        else if (e.key === '%') jumpLevel = 5;
-        else if (e.key === '^') jumpLevel = 6;
-        else if (e.key === '&') jumpLevel = 7;
-        else if (e.key === '*') jumpLevel = 8;
-        else if (e.key === '(') jumpLevel = 9;
-        else if (e.key === ')') jumpLevel = 12;
-        if (jumpLevel !== null) {
-          enemies.forEach(function (e) { EnemyPool.release(e); });
-          enemies = [];
-          waveInProgress = false;
-          waveCooldown = false;
-          currentWave = 0;
-          bossActive = false;
-          boss = null;
-          level = jumpLevel;
-          redPhase = jumpLevel >= 5;
-          purplePhase = jumpLevel >= 9;
-          boss1Defeated = jumpLevel >= 5;
-          boss2Defeated = jumpLevel >= 9;
-          health = CONFIG.maxHealth;
-          score = jumpLevel >= 9 ? 2000 : (jumpLevel >= 5 ? 800 : 0);
-          powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
-          updateUI();
-          showAnnouncement("levelDisplay", "DEV: Level " + jumpLevel, 2000);
-          console.log('%c[DEV MODE] Jumped to level ' + jumpLevel, 'color:#00FFFF;font-weight:bold;');
-        }
-      }
-
-      // Pause toggle (P or Escape)
-      if (e.key === "p" || e.key === "P" || e.key === "Escape") {
-        if (!gameOver) {
-          paused = !paused;
-          document.getElementById("pauseDisplay").style.display = paused ? "block" : "none";
-          document.getElementById("startButton").innerText = paused ? "Resume" : "Pause";
-          if (paused) {
-            bgMusic.pause();
-          } else {
-            bgMusic.play();
-          }
-        }
-        return;
-      }
-
-      // Ignore other keys if paused
-      if (paused) return;
-
-      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
-      else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
-      else if (e.key === " ") {
-        e.preventDefault();
-        shootBullet();
-      }
-    });
-
-    document.addEventListener("keyup", function (e) {
-      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
-      else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
-    });
-
-    // ============================================
-    // MOBILE CANVAS SCALING
-    // ============================================
-    /**
-     * Scales the canvas to fill the device viewport using a CSS transform,
-     * maintaining the native 480×1040 aspect ratio. Called once on load and
-     * again on every `resize` event. Uses `Math.max` so the canvas always
-     * covers the full screen without letterboxing.
-     */
-    function resizeCanvas() {
-      var vw = window.innerWidth;
-      var vh = window.innerHeight;
-      var scale = Math.max(vw / canvas.width, vh / canvas.height);
-      canvas.style.transformOrigin = 'center center';
-      canvas.style.transform = 'scale(' + scale + ')';
-    }
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    // ============================================
-    // TOUCH CONTROLS
-    // ============================================
-    /**
-     * Converts a Touch object's CSS-pixel clientX into the canvas coordinate
-     * space, accounting for the CSS transform scale applied by `resizeCanvas`.
-     * @param {Touch} touch - A Touch object from a touch event.
-     * @returns {number} X position in canvas pixels.
-     */
-    function getTouchCanvasX(touch) {
-      var rect = canvas.getBoundingClientRect();
-      // Scale from CSS pixels to canvas pixels
-      var scaleX = canvas.width / rect.width;
-      return (touch.clientX - rect.left) * scaleX;
-    }
-
-    canvas.addEventListener("touchstart", function (e) {
-      e.preventDefault();
-      if (gameOver || paused) return;
-      var touch = e.touches[0];
-      touchActive = true;
-      touchTargetX = getTouchCanvasX(touch);
-      // Begin shoot cycle on first touch
-      touchShootCycleStart = Date.now();
-      touchShootActive = true;
-      touchLastShot = 0;
-    }, { passive: false });
-
-    canvas.addEventListener("touchmove", function (e) {
-      e.preventDefault();
-      if (!touchActive) return;
-      var touch = e.touches[0];
-      touchTargetX = getTouchCanvasX(touch);
-    }, { passive: false });
-
-    canvas.addEventListener("touchend", function (e) {
-      e.preventDefault();
-      if (e.touches.length === 0) {
-        touchActive = false;
-        touchShootActive = false;
-      }
-    }, { passive: false });
-
-    canvas.addEventListener("touchcancel", function (e) {
-      touchActive = false;
-      touchShootActive = false;
-    }, { passive: false });
-
-    /**
-     * Called every game frame. Moves the player toward the touch x position at
-     * up to 10 px/frame (snaps when within 10 px), then manages the shoot cycle:
-     *   Active window : TOUCH_SHOOT_DURATION ms  (1.8 s)
-     *   Reload window : TOUCH_SHOOT_COOLDOWN ms  (0.4 s)
-     * During the active window, fires a bullet every TOUCH_SHOOT_INTERVAL ms
-     * (130 ms) as long as the player is touching the screen.
-     */
-    function updateTouchControls() {
-      if (!touchActive) return;
-      var now = Date.now();
-
-      // Move player toward touch x (snap directly — finger IS the ship)
-      var targetCenterX = touchTargetX;
-      var playerCenterX = player.x + player.width / 2;
-      var diff = targetCenterX - playerCenterX;
-      // Move up to 10px/frame, but snap if very close
-      if (Math.abs(diff) > 10) {
-        player.x += (diff / Math.abs(diff)) * Math.min(Math.abs(diff), 10);
-      } else {
-        player.x += diff;
-      }
-      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
-
-      // Shoot cycle: 5s on, 1.5s cooldown, repeat
-      var elapsed = now - touchShootCycleStart;
-      if (elapsed >= TOUCH_SHOOT_DURATION + TOUCH_SHOOT_COOLDOWN) {
-        // Start a new cycle
-        touchShootCycleStart = now;
-        elapsed = 0;
-        touchShootActive = true;
-      }
-      touchShootActive = elapsed < TOUCH_SHOOT_DURATION;
-
-      // Fire at interval during active window
-      if (touchShootActive && now - touchLastShot >= TOUCH_SHOOT_INTERVAL) {
-        shootBullet();
-        touchLastShot = now;
-      }
-    }
-
-    // ============================================
-    // MAIN GAME LOOP
-    // ============================================
-    /**
-     * Main game loop, called via `requestAnimationFrame`. Each frame:
-     *   1. Early-returns if game is over; keeps rAF alive while paused.
-     *   2. Clears the canvas and updates screen shake.
-     *   3. Updates touch controls (movement + auto-fire).
-     *   4. Draws the player ship (with blink) and processes keyboard movement.
-     *   5. Updates player bullets (upward movement, off-screen removal, collision
-     *      with boss/enemies, shield interaction).
-     *   6. Updates enemy bullets (downward, player collision, damage application).
-     *   7. Updates power-ups (fall, player collection).
-     *   8. Delegates to the boss subsystem or the wave-formation subsystem.
-     *   9. Schedules the next frame with requestAnimationFrame.
-     */
-    function draw() {
-      if (gameOver) return;
-
-      // If paused, just keep the animation frame going but don't update
-      if (paused) {
-        requestAnimationFrame(draw);
-        return;
-      }
-
-      // Update screen shake effect
-      updateScreenShake();
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Update spatial grid each frame
-      SpatialGrid.clear();
-      for (var i = 0; i < enemies.length; i++) {
-        SpatialGrid.insert(enemies[i]);
-      }
-      // Also insert boss minions if active
-      if (bossActive) {
-        for (var i = 0; i < bossMinions.length; i++) {
-          SpatialGrid.insert(bossMinions[i]);
-        }
-      }
-
-      // Update player blink effect
-      updatePlayerBlink();
-
-      // Draw shield ripple effect if active
-      if (hasShield) {
-        var playerCx = player.x + player.width / 2;
-        var playerCy = player.y + player.height / 2;
-        var time = Date.now();
-        var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
-        var maxShieldRipple = player.width * 0.9;
-        var shieldRippleRadius = beatPhase * maxShieldRipple;
-        var shieldRippleAlpha = 1 - beatPhase;
-
-        ctx.save();
-        if (shieldRippleAlpha > 0.05) {
-          ctx.beginPath();
-          ctx.arc(playerCx, playerCy, shieldRippleRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha * 0.6) + ')';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-        }
-
-        // Second ripple
-        var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
-        var shieldRippleRadius2 = beatPhase2 * maxShieldRipple;
-        var shieldRippleAlpha2 = 1 - beatPhase2;
-        if (shieldRippleAlpha2 > 0.05) {
-          ctx.beginPath();
-          ctx.arc(playerCx, playerCy, shieldRippleRadius2, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(0, 255, 255, ' + (shieldRippleAlpha2 * 0.4) + ')';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-
-      // Draw firing glow when player is actively touching (under joystick)
-      if (!gameOver && !paused && touchActive) {
-        var jx = player.x + player.width / 2;
-        var jy = player.y + player.height + 42; // joystick center
-        var gradient = ctx.createRadialGradient(jx, jy, 0, jx, jy, 80);
-        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.5)');
-        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.25)');
-        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(jx - 80, jy - 80, 160, 160);
-      }
-
-      // Draw joystick base below player
-      {
-        var jx = player.x + player.width / 2;
-        var jRadius = 42;
-        var jy = player.y + player.height + jRadius;
-        ctx.save();
-        // Joystick base circle
-        ctx.beginPath();
-        ctx.arc(jx, jy, jRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.45)';
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // Draw quad laser glow when player has quad lasers
-      if (!gameOver && !paused && laserLevel >= 4) {
-        var playerCenterX = player.x + player.width / 2;
-        var playerCenterY = player.y + player.height / 2;
-        var gradient = ctx.createRadialGradient(playerCenterX, playerCenterY, 0, playerCenterX, playerCenterY, player.width);
-        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.4)');
-        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.2)');
-        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width * 2, player.height * 2);
-      }
-
-      // Draw and move player (only if visible during blink)
-      if (playerVisible) {
-        ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
-      }
-      // Touch movement + auto-shoot cycle
-      updateTouchControls();
-      // Keyboard movement (only applies when touch is not active)
-      if (!touchActive) {
-        if (rightPressed && player.x < canvas.width - player.width) {
-          player.x += CONFIG.playerSpeed;
-        } else if (leftPressed && player.x > 0) {
-          player.x -= CONFIG.playerSpeed;
-        }
-      }
-
-      // Update player bullets
-      ctx.fillStyle = "#00FF00";
-      for (var i = playerBullets.length - 1; i >= 0; i--) {
-        var bullet = playerBullets[i];
-
-        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-        bullet.y -= bullet.speed;
-
-        if (bullet.y < 0) {
-          BulletPool.release(bullet);
-          playerBullets.splice(i, 1);
-          continue;
-        }
-
-        // Check collision with boss
-        if (boss && isColliding(bullet, boss)) {
-          BulletPool.release(bullet);
-          playerBullets.splice(i, 1);
-          damageBoss();
-          continue;
-        }
-
-        // Check collision with enemies (SPATIAL GRID OPTIMIZATION)
-        var candidates = SpatialGrid.retrieve(bullet);
-        for (var j = 0; j < candidates.length; j++) {
-          var enemy = candidates[j];
-          // Double check actual collision (grid is just broad phase)
-          if (isColliding(bullet, enemy)) {
-            // Check if enemy is shielded
-            if (enemy.shielded) {
-              // Track shield hits - shield breaks after 25 hits
-              if (typeof enemy.shieldHits === 'undefined') {
-                enemy.shieldHits = 0;
-              }
-              enemy.shieldHits++;
-
-              // Break shield permanently - 15 hits for levels 1-8, 25 for levels 9+
-              var shieldBreakThreshold = level >= 9 ? 25 : 15;
-              if (enemy.shieldHits >= shieldBreakThreshold) {
-                enemy.shielded = false;
-                enemy.shieldBroken = true; // Mark as broken so cascade doesn't restore it
-              }
-
-              // Bullet stops at shield - destroy bullet but enemy survives
-              BulletPool.release(bullet);
-              playerBullets.splice(i, 1);
-              // Optional: play shield hit sound here later
-              break;
-            } else {
-              // No shield - destroy both bullet and enemy
-              BulletPool.release(bullet);
-              playerBullets.splice(i, 1);
-
-              spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
-              var realIndex = enemies.indexOf(enemy);
-              if (realIndex > -1) {
-                EnemyPool.release(enemy);
-                enemies.splice(realIndex, 1);
-              }
-              score += 10;
-              updateUI();
-              playSound('enemyDead');
-              checkLevelUp();
-              break;
-            }
-          }
-        }
-      }
-
-      // Update enemy bullets
-      ctx.fillStyle = "#FF0000";
-      for (var i = enemyBullets.length - 1; i >= 0; i--) {
-        var bullet = enemyBullets[i];
-
-        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-        bullet.y += bullet.speed;
-
-        if (bullet.y > canvas.height) {
-          BulletPool.release(bullet);
-          enemyBullets.splice(i, 1);
-          continue;
-        }
-
-        if (isColliding(bullet, player)) {
-          BulletPool.release(bullet);
-          enemyBullets.splice(i, 1);
-          var damage = bullet.isBossBullet ? CONFIG.bossDamage : CONFIG.enemyBulletDamage;
-          playerTakeDamage(damage);
-          if (gameOver) return;
-        }
-      }
-
-      // Update power-ups
-      for (var i = powerups.length - 1; i >= 0; i--) {
-        var powerup = powerups[i];
-
-        drawPowerup(powerup);
-        powerup.y += powerup.speed;
-
-        if (powerup.y > canvas.height) {
-          powerups.splice(i, 1);
-          continue;
-        }
-
-        if (isColliding(powerup, player)) {
-          collectPowerup(powerup);
-          powerups.splice(i, 1);
-        }
-      }
-
-      // Boss mode
-      if (bossActive) {
-        updateBoss();
-
-        // Update orbiting soldiers
-        var orbiterGameOver = updateBossOrbiters();
-        if (orbiterGameOver) return;
-
-        // Update side-scrolling minions (enemy2)
-        var minionGameOver = updateBossMinions();
-        if (minionGameOver) return;
-
-        // Smart filler spawning (beat-synced, capped)
-        spawnBossFiller();
-
-        // Random powerup spawn during boss fight
-        if (!powerupsSpawnedThisLevel.health && !powerupsSpawnedThisLevel.doubleLaser) {
-          if (Math.random() < 0.0008) {
-            var powerupType = Math.random() < 0.6 ? POWERUP_TYPES.HEALTH : POWERUP_TYPES.DOUBLE_LASER;
-            if (createPowerup(powerupType)) {
-              if (powerupType === POWERUP_TYPES.HEALTH) {
-                powerupsSpawnedThisLevel.health = true;
-              } else {
-                powerupsSpawnedThisLevel.doubleLaser = true;
-              }
-            }
-          }
-        }
-
-        // Update filler enemies during boss fight
-        for (var i = enemies.length - 1; i >= 0; i--) {
-          var enemy = enemies[i];
-
-          drawEnemy(enemy);
-
-          // Side entry enemies move horizontally
-          if (enemy.sideEntry) {
-            enemy.x += enemy.horizontalSpeed * enemy.horizontalDirection;
-            enemy.y += 0.3; // Slight downward drift
-
-            // Remove if crossed screen
-            if ((enemy.horizontalDirection > 0 && enemy.x > canvas.width) ||
-              (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
-              EnemyPool.release(enemies[i]); // Release
-              enemies.splice(i, 1);
-              continue;
-            }
-          } else {
-            // Top entry enemies
-            enemy.y += enemy.speed;
-
-            // Zigzag movement
-            if (enemy.zigzag) {
-              enemy.x += enemy.zigzagSpeed * enemy.zigzagDirection;
-              enemy.zigzagTimer++;
-              if (enemy.zigzagTimer >= enemy.zigzagInterval) {
-                enemy.zigzagTimer = 0;
-                enemy.zigzagDirection *= -1;
-              }
-              if (enemy.x <= 0) {
-                enemy.x = 0;
-                enemy.zigzagDirection = 1;
-              } else if (enemy.x >= canvas.width - enemy.width) {
-                enemy.x = canvas.width - enemy.width;
-                enemy.zigzagDirection = -1;
-              }
-            }
-
-            // Side-to-side movement
-            if (enemy.sideToSide) {
-              enemy.x += enemy.horizontalSpeed * enemy.horizontalDirection;
-              if (enemy.x <= 0) {
-                enemy.x = 0;
-                enemy.horizontalDirection = 1;
-              } else if (enemy.x >= canvas.width - enemy.width) {
-                enemy.x = canvas.width - enemy.width;
-                enemy.horizontalDirection = -1;
-              }
-            }
-          }
-
-          // Check collision with player
-          if (isColliding(enemy, player)) {
-            EnemyPool.release(enemies[i]); // Release
-            enemies.splice(i, 1);
-            playerTakeDamage(CONFIG.enemyCollisionDamage);
-            if (gameOver) return;
-            continue;
-          }
-
-          // Remove if off screen (bottom)
-          if (enemy.y > canvas.height) {
-            EnemyPool.release(enemies[i]); // Release
-            enemies.splice(i, 1);
-            continue;
-          }
-
-          // Check collision with player bullets
-          for (var j = playerBullets.length - 1; j >= 0; j--) {
-            if (isColliding(playerBullets[j], enemy)) {
-              BulletPool.release(playerBullets[j]);
-              playerBullets.splice(j, 1);
-              spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
-              EnemyPool.release(enemies[i]); // Release
-              enemies.splice(i, 1);
-              score += 10;
-              updateUI();
-              playSound('enemyDead');
-              break;
-            }
-          }
-        }
-
-        // Check boss collision with player
-        if (boss && isColliding(boss, player)) {
-          playerTakeDamage(CONFIG.bossDamage);
-          if (gameOver) return;
-        }
-      } else {
-        // Regular enemy mode - wave-based formations
-        var time = Date.now();
-
-        // Start first wave if not started
-        if (currentWave === 0 && !waveCooldown) {
-          startWave(1);
-        }
-
-        // Update morphing formations
-        if (waveInProgress) {
-          // Move formation center smoothly as a unit (ease-out lerp)
-          if (!formationEntered) {
-            formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * 0.045;
-            if (formationTargetCenterY - formationCurrentCenterY < 1) {
-              formationCurrentCenterY = formationTargetCenterY;
-              formationEntered = true;
-              // Reset morph clock so the first exploded→collapsed transition
-              // starts fresh from this moment rather than snapping instantly.
-              morphStartTime = Date.now();
-              lastMorphTime = Date.now();
-              // Show shield warning (brief after level 1 - players already know)
-              var warningEl = document.getElementById("warningDisplay");
-              warningEl.style.display = "block";
-              if (level > 1) {
-                // Brief 2-second warning for experienced players
-                setTimeout(function () {
-                  warningEl.style.display = "none";
-                }, 2000);
-              }
-              // Mark all formation enemies as reached
-              enemies.forEach(function (e) {
-                if (e.formation && e.formationType === 'morphing') {
-                  e.reachedTarget = true;
-                  e.centerY = formationCurrentCenterY;
-                }
-              });
-            }
-          }
-          updateMorphingFormation(time);
-          updateShieldCascade();
-          updateKamikazeEntry();
-        }
-
-        // Update barrier reinforcements
-        updateBarriers();
-
-        for (var i = enemies.length - 1; i >= 0; i--) {
-          var enemy = enemies[i];
-
-          // Skip drawing enemies that are entirely above the canvas
-          if (enemy.y + enemy.height > 0) {
-            drawEnemy(enemy);
-          }
-
-          // Formation enemies - position relative to formation center
-          if (enemy.formation) {
-            // During entry, update position based on moving formation center
-            if (!formationEntered && enemy.formationType === 'morphing') {
-              var baseX = enemy.centerX + enemy.currentPos.x * enemy.spreadRadius;
-              var baseY = formationCurrentCenterY + enemy.currentPos.y * enemy.spreadRadius * 0.8;
-              enemy.x = baseX - enemy.width / 2;
-              enemy.y = baseY - enemy.height / 2;
-            }
-
-            // Legacy formation types (spiral, pincer, sineWave) for variety
-            var beatPhase = ((time + (enemy.breathPhase || 0) * BPM_INTERVAL) % BPM_INTERVAL) / BPM_INTERVAL;
-
-            if (enemy.formationType === 'spiral' && enemy.reachedTarget) {
-              enemy.spiralAngle += 0.02;
-              var pulseFactor = 1 + Math.sin(beatPhase * Math.PI * 2) * 0.3;
-              var currentRadius = enemy.spiralBaseRadius * pulseFactor;
-              enemy.x = enemy.spiralCenterX + Math.cos(enemy.spiralAngle) * currentRadius - enemy.width / 2;
-              enemy.y = enemy.spiralCenterY + Math.sin(enemy.spiralAngle) * currentRadius - enemy.height / 2;
-            }
-
-            if (enemy.formationType === 'pincer') {
-              if (!enemy.reachedTarget) {
-                if (enemy.pincerSide === 'left' && enemy.x < enemy.pincerTargetX) {
-                  enemy.x += enemy.pincerSpeed;
-                  if (enemy.x >= enemy.pincerTargetX) enemy.reachedTarget = true;
-                } else if (enemy.pincerSide === 'right' && enemy.x > enemy.pincerTargetX) {
-                  enemy.x -= enemy.pincerSpeed;
-                  if (enemy.x <= enemy.pincerTargetX) enemy.reachedTarget = true;
-                }
-              } else {
-                var pulseDist = Math.sin(beatPhase * Math.PI * 2) * 30;
-                if (enemy.pincerSide === 'left') {
-                  enemy.x = enemy.pincerBaseX + pulseDist;
-                } else {
-                  enemy.x = enemy.pincerBaseX - pulseDist;
-                }
-              }
-            }
-
-            if (enemy.formationType === 'sineWave' && enemy.reachedTarget) {
-              var wavePhase = (time / BPM_INTERVAL) * Math.PI * 2;
-              enemy.x = enemy.baseX + Math.sin(wavePhase + enemy.sinePhase) * enemy.sineAmplitude;
-              var vertBounce = Math.abs(Math.sin(beatPhase * Math.PI)) * 15;
-              enemy.y = enemy.baseY + vertBounce;
-              if (enemy.x < 0) enemy.x = 0;
-              if (enemy.x > canvas.width - enemy.width) enemy.x = canvas.width - enemy.width;
-            }
-
-            // Morphing formations are handled by updateMorphingFormation()
-          } else {
-            // Regular non-formation enemies (fillers and kamikazes)
-
-            // Kamikaze enemies dive toward player
-            if (enemy.kamikaze) {
-              // Still descending with the group center — position handled by updateKamikazeEntry
-              if (enemy.kamikazeEntering) continue;
-
-              enemy.x += enemy.kamikazeVelX;
-              enemy.y += enemy.kamikazeVelY;
-
-              // Remove if off screen
-              if (enemy.y > canvas.height || enemy.x < -enemy.width || enemy.x > canvas.width) {
-                EnemyPool.release(enemies[i]); // Release
-                enemies.splice(i, 1);
-                continue;
-              }
-            }
-            // Side entry enemies move horizontally across screen
-            else if (enemy.sideEntry) {
-              enemy.x += enemy.horizontalSpeed * enemy.horizontalDirection;
-              enemy.y += 0.3; // Slight downward drift
-
-              // Remove if crossed screen
-              if ((enemy.horizontalDirection > 0 && enemy.x > canvas.width) ||
-                (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
-                EnemyPool.release(enemies[i]); // Release
-                enemies.splice(i, 1);
-                continue;
-              }
-            } else {
-              // Top entry enemies move down
-              enemy.y += enemy.speed;
-
-              // Zigzag movement
-              if (enemy.zigzag) {
-                enemy.x += enemy.zigzagSpeed * enemy.zigzagDirection;
-                enemy.zigzagTimer++;
-                if (enemy.zigzagTimer >= enemy.zigzagInterval) {
-                  enemy.zigzagTimer = 0;
-                  enemy.zigzagDirection *= -1;
-                }
-                if (enemy.x <= 0) {
-                  enemy.x = 0;
-                  enemy.zigzagDirection = 1;
-                } else if (enemy.x >= canvas.width - enemy.width) {
-                  enemy.x = canvas.width - enemy.width;
-                  enemy.zigzagDirection = -1;
-                }
-              }
-
-              // Side-to-side movement
-              if (enemy.sideToSide) {
-                enemy.x += enemy.horizontalSpeed * enemy.horizontalDirection;
-                if (enemy.x <= 0) {
-                  enemy.x = 0;
-                  enemy.horizontalDirection = 1;
-                } else if (enemy.x >= canvas.width - enemy.width) {
-                  enemy.x = canvas.width - enemy.width;
-                  enemy.horizontalDirection = -1;
-                }
-              }
-            }
-          }
-
-          if (isColliding(enemy, player)) {
-            EnemyPool.release(enemies[i]); // Release
-            enemies.splice(i, 1);
-            playerTakeDamage(CONFIG.enemyCollisionDamage);
-            if (gameOver) return;
-            continue;
-          }
-
-          // Remove non-formation enemies (barriers, kamikazes) if off screen
-          if (!enemy.formation && enemy.y > canvas.height) {
-            EnemyPool.release(enemies[i]); // Release
-            enemies.splice(i, 1);
-            continue;
-          }
-
-          // Enemy shooting (level 2+)
-          // Shielded enemies don't shoot
-          var canShoot = level >= 2 && !enemy.shielded && !enemy.kamikaze;
-          if (canShoot) {
-            var now = Date.now();
-            if (enemy.nextShootTime && now >= enemy.nextShootTime) {
-              shootEnemyBullet(enemy);
-              // Cooldown: random interval based on level
-              // Purple phase: shorter gaps (more aggressive), earlier phases: slower
-              var minGap = purplePhase ? 1200 : (redPhase ? 1800 : 2500);
-              var maxGap = purplePhase ? 3000 : (redPhase ? 4500 : 6000);
-              enemy.nextShootTime = now + minGap + Math.random() * (maxGap - minGap);
-            } else if (!enemy.nextShootTime) {
-              // Fallback for enemies that didn't get nextShootTime on spawn (fillers, barriers)
-              var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
-              if (Math.random() < shootChance) {
-                shootEnemyBullet(enemy);
-              }
-            }
-          }
-        }
-
-        // Check wave completion
-        checkWaveCompletion();
-
-        // Spawn power-ups
-        trySpawnPowerup();
-      }
-
-      // Update and draw explosion effects
-      updateExplosions();
-
-      requestAnimationFrame(draw);
-    }
-
-    // ============================================
-    // GAME START
-    // ============================================
-    /**
-     * Renders the four power-up icon previews into the intro card's small
-     * `<canvas>` elements using the same shapes as the in-game pickups.
-     * Called once at page load so the icons are visible before any game starts.
-     */
-    function drawCardPowerupIcons() {
-      (function () {
-        var c = document.getElementById('puHealth');
-        var g = c.getContext('2d');
-        var w = c.width, h = c.height;
-        g.fillStyle = '#FF3333';
-        g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w, h / 2); g.lineTo(w / 2, h); g.lineTo(0, h / 2); g.closePath(); g.fill();
-        g.strokeStyle = '#FF0000'; g.lineWidth = 2; g.stroke();
-        g.fillStyle = '#FFFFFF';
-        g.fillRect(w / 2 - 2, h / 4, 4, h / 2);
-        g.fillRect(w / 4, h / 2 - 2, w / 2, 4);
-      })();
-      (function () {
-        var c = document.getElementById('puLaser');
-        var g = c.getContext('2d');
-        var w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 1;
-        g.fillStyle = '#9933FF';
-        g.beginPath();
-        for (var i = 0; i < 6; i++) {
-          var a = (Math.PI / 3) * i - Math.PI / 2;
-          if (i === 0) g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
-          else g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
-        }
-        g.closePath(); g.fill();
-        g.strokeStyle = '#6600CC'; g.lineWidth = 2; g.stroke();
-        g.fillStyle = '#FFFFFF';
-        g.fillRect(cx - 7, cy - 7, 3, 14);
-        g.fillRect(cx + 4, cy - 7, 3, 14);
-      })();
-      (function () {
-        var c = document.getElementById('puShield');
-        var g = c.getContext('2d');
-        var w = c.width, h = c.height;
-        g.fillStyle = '#00FFFF';
-        g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
-        g.strokeStyle = '#00CCCC'; g.lineWidth = 2; g.stroke();
-        g.beginPath(); g.arc(w / 2, h / 2 + 5, 6, 0, Math.PI * 2);
-        g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.stroke();
-      })();
-      (function () {
-        var c = document.getElementById('puQuad');
-        var g = c.getContext('2d');
-        var w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 1;
-        g.fillStyle = '#9933FF';
-        g.beginPath();
-        for (var i = 0; i < 6; i++) {
-          var a = (Math.PI / 3) * i - Math.PI / 2;
-          if (i === 0) g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
-          else g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
-        }
-        g.closePath(); g.fill();
-        g.strokeStyle = '#6600CC'; g.lineWidth = 2; g.stroke();
-        g.fillStyle = '#FFFFFF';
-        var offsets = [-9, -3, 3, 9];
-        for (var j = 0; j < 4; j++) { g.fillRect(cx + offsets[j], cy - 6, 2, 12); }
-      })();
-    }
-
-    drawCardPowerupIcons();
-
-    /**
-     * Initializes the game session from the intro card.
-     *
-     * This function is triggered by the "Start Game" button and performs the
-     * following initialization sequence:
-     * 1. Preloads all sound effects to satisfy browser autoplay policies
-     *    (user interaction is required to unlock Web Audio API)
-     * 2. Hides the intro card and reveals the game interface
-     * 3. Programmatically triggers the start button to begin gameplay
-     */
-    function startFromCard() {
-      // Preload all sound effects to unlock browser audio context
-      // (requires user interaction per browser autoplay policies)
-      for (var key in sounds) {
-        if (sounds[key]) {
-          sounds[key].load();
-        }
-      }
-
-      // Transition from intro card to active game state
-      document.getElementById('introCard').style.display = 'none';
-      var sb = document.getElementById('startButton');
-      sb.style.display = 'block';
-      sb.innerText = 'Pause';
-      sb.classList.add('game-active');
-      sb.click();
-    }
-
-    // ── Start / Pause button listener ────────────────────────────────────────
-    // Dual-purpose: when `gameOver` is true it fully resets and starts a new
-    // game session; otherwise it toggles the pause state. All mutable game
-    // state variables are explicitly reset here to avoid leftover values from
-    // the previous run affecting the new session.
-    var startButton = document.getElementById("startButton");
-    startButton.addEventListener("click", function () {
-      this.blur();
-
-      if (gameOver) {
-        // Reset game state
-        stopBossMusic();
-        stopCreditsMusic();
-        gameOver = false;
-        score = 0;
-        level = 1;
-        health = CONFIG.startingHealth;
-        hasDoubleLaser = false;
-        laserLevel = 1;
-        hasShield = false;
-        shieldHitsRemaining = 0;
-        powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
-        lastPowerupSpawnTime = 0;
-        playerBlinking = false;
-        playerVisible = true;
-        touchActive = false;
-        touchShootActive = false;
-        bossActive = false;
-        bossDefeated = false;
-        boss = null;
-        bossBlinking = false;
-        bossVisible = true;
-
-        // Reset phase tracking
-        currentBoss = 0;
-        boss1Defeated = false;
-        boss2Defeated = false;
-        boss3Defeated = false;
-        redPhase = false;
-        redPhaseStartScore = 0;
-        purplePhase = false;
-        purplePhaseStartScore = 0;
-
-        // Reset wave state
-        currentWave = 0;
-        waveEnemiesRemaining = 0;
-        waveInProgress = false;
-        waveCooldown = false;
-        lastWaveEndTime = 0;
-        morphStartTime = 0;
-        currentMorphShape = 0;
-        formationRotation = 0;
-        targetFormationRotation = 0;
-        lastMorphTime = 0;
-        morphCount = 0;
-        barrierSpawned = false;
-        barrierEnemies = [];
-        pendingKamikazeCount = 0;
-        kamikazesLaunched = false;
-        kamikazeCenterY = -80;
-        kamikazeCenterActive = false;
-        formationEntered = false;
-        formationCurrentCenterY = -200;
-        shieldCascadeStarted = false;
-        shieldCascadeTime = 0;
-        shieldsDropped = 0;
-        allShieldsDown = false;
-        shieldRegenTime = 0;
-
-        player.x = canvas.width / 2;
-        player.y = canvas.height - PLAYER_START_Y_OFFSET;
-        player.width = PLAYER_SPRITE_W;
-        player.height = PLAYER_SPRITE_H;
-        enemies = [];
-        playerBullets = [];
-        enemyBullets = [];
-        powerups = [];
-        explosions = [];
-        bossMinions = [];
-        bossOrbiters = [];
-        orbitersInitialized = false;
-        lastOrbiterDeathTime = 0;
-        lastBossFillerBeat = 0;
-
-        // Update UI
-        updateUI();
-        document.getElementById("levelDisplay").style.display = "none";
-        document.getElementById("powerupDisplay").style.display = "none";
-        document.getElementById("bonusDisplay").style.display = "none";
-        document.getElementById("warningDisplay").style.display = "none";
-        document.getElementById("pauseDisplay").style.display = "none";
-        document.getElementById("gameOver").style.display = "none";
-        document.getElementById("victory").style.display = "none";
-        paused = false;
-
-
-        // Change button to Pause and move to corner on mobile
-        startButton.innerText = "Pause";
-        startButton.classList.add('game-active');
-
-        // Track game start.
-        // is_replay distinguishes Play Again sessions from fresh page-load starts.
-        // games_played gives lifetime context — is this their 1st or 50th game?
-        // Session timer starts here; duration is calculated on player_death / player_won.
-        gameSessionStart = Date.now();
-        fireEvent('game_start', {
-          'ab_music_group': userABGroup,
-          'platform': 'mobile',
-          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-          'is_replay': isReplay,
-          'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1
-        });
-
-        // Reset replay flag — next start from this session will be a replay
-        isReplay = false;
-
-        // Increment game play counter for survey trigger
-        var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1;
-        localStorage.setItem('nonx_game_count', String(gameCount));
-
-        // Level Display
-        showAnnouncement("levelDisplay", "Level 1", 2000);
-        startBackgroundMusic();
-        draw();
-      } else {
-        // Game is running - toggle pause
-        paused = !paused;
-        document.getElementById("pauseDisplay").style.display = paused ? "block" : "none";
-        startButton.innerText = paused ? "Resume" : "Pause";
-        if (paused) {
-          bgMusic.pause();
-        } else {
-          bgMusic.play();
-        }
-      }
-    });
-
-    // ── Mute button listener ──────────────────────────────────────────────
-    var muteButton = document.getElementById("muteButton");
-    muteButton.addEventListener("click", function () {
-      this.blur();
-      toggleMusic();
-    });
-  </script>
-</body>
-
-</html>
+>
