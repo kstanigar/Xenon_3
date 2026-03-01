@@ -1,0 +1,102 @@
+name: Game Integrity Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check-game-html:
+    runs-on: ubuntu-latest
+    name: Verify game.html functions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required functions exist
+        run: |
+          FAIL=0
+          FILE="game.html"
+          check() {
+            if grep -q "$1" "$FILE"; then
+              echo "✅ $FILE: $1"
+            else
+              echo "❌ MISSING in $FILE: $1"
+              FAIL=1
+            fi
+          }
+          check "function startFromCard"
+          check "function showSurveyBanner"
+          check "function collapseSurveyBanner"
+          check "function submitSurvey"
+          check "function dismissSurvey"
+          check "function playerTakeDamage"
+          check "function shouldShowSurvey"
+          check "function buildBugButtonHTML"
+          check "function fireEvent"
+          check "if (playerBlinking) return"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
+
+      - name: Check banned patterns are absent
+        run: |
+          FAIL=0
+          FILE="game.html"
+          banned() {
+            if grep -q "$1" "$FILE"; then
+              echo "❌ BANNED pattern found in $FILE: $1"
+              FAIL=1
+            else
+              echo "✅ $FILE clean: $1"
+            fi
+          }
+          banned "buildSurveyHTML"
+          banned "phase.*standard"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
+
+  check-game-mobile-html:
+    runs-on: ubuntu-latest
+    name: Verify game_mobile.html functions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required functions exist
+        run: |
+          FAIL=0
+          FILE="game_mobile.html"
+          check() {
+            if grep -q "$1" "$FILE"; then
+              echo "✅ $FILE: $1"
+            else
+              echo "❌ MISSING in $FILE: $1"
+              FAIL=1
+            fi
+          }
+          check "function startFromCard"
+          check "function showSurveyBanner"
+          check "function collapseSurveyBanner"
+          check "function submitSurvey"
+          check "function dismissSurvey"
+          check "function playerTakeDamage"
+          check "function shouldShowSurvey"
+          check "function buildBugButtonHTML"
+          check "function fireEvent"
+          check "if (playerBlinking) return"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
+
+      - name: Check banned patterns are absent
+        run: |
+          FAIL=0
+          FILE="game_mobile.html"
+          banned() {
+            if grep -q "$1" "$FILE"; then
+              echo "❌ BANNED pattern found in $FILE: $1"
+              FAIL=1
+            else
+              echo "✅ $FILE clean: $1"
+            fi
+          }
+          banned "buildSurveyHTML"
+          banned "phase.*standard"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
