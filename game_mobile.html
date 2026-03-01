@@ -821,6 +821,21 @@
      * Saves the preference to localStorage for persistence across sessions.
      * Music preference now persists whether changed in-game, victory, game over, or main menu.
      */
+    /**
+     * Hides the intro card and starts the game — called by the card's Start button.
+     * Shows the start button, sets it to Pause state, then programmatically clicks
+     * it to begin the first game session.
+     */
+    function startFromCard() {
+      document.getElementById('introCard').style.display = 'none';
+      var sb = document.getElementById('startButton');
+      sb.style.display = 'block';
+      sb.innerText = 'Pause';
+      sb.classList.add('game-active');
+      // Trigger the game start branch (gameOver is true on page load)
+      sb.click();
+    }
+
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
       var victoryMuteBtn = document.getElementById('victoryMuteBtn');
