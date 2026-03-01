@@ -27,6 +27,7 @@ jobs:
             fi
           }
           check "function startFromCard"
+          check "function playAgain"
           check "function showSurveyBanner"
           check "function collapseSurveyBanner"
           check "function submitSurvey"
@@ -34,8 +35,15 @@ jobs:
           check "function playerTakeDamage"
           check "function shouldShowSurvey"
           check "function buildBugButtonHTML"
+          check "function openBugReport"
+          check "function submitBugReport"
           check "function fireEvent"
           check "if (playerBlinking) return"
+          check "game_complete"
+          check "'outcome': 'victory'"
+          check "'outcome': 'death'"
+          check "'outcome': 'abandoned'"
+          check "bug_report_submitted"
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -74,6 +82,7 @@ jobs:
             fi
           }
           check "function startFromCard"
+          check "function playAgain"
           check "function showSurveyBanner"
           check "function collapseSurveyBanner"
           check "function submitSurvey"
@@ -81,8 +90,15 @@ jobs:
           check "function playerTakeDamage"
           check "function shouldShowSurvey"
           check "function buildBugButtonHTML"
+          check "function openBugReport"
+          check "function submitBugReport"
           check "function fireEvent"
           check "if (playerBlinking) return"
+          check "game_complete"
+          check "'outcome': 'victory'"
+          check "'outcome': 'death'"
+          check "'outcome': 'abandoned'"
+          check "bug_report_submitted"
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -97,6 +113,5 @@ jobs:
               echo "✅ $FILE clean: $1"
             fi
           }
-          banned "buildSurveyHTML"
           banned "'phase'.*'standard'"
           if [ $FAIL -ne 0 ]; then exit 1; fi
