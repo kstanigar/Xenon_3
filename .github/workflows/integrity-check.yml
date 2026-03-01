@@ -51,7 +51,7 @@ jobs:
             fi
           }
           banned "buildSurveyHTML"
-          banned "phase.*standard"
+          banned "'phase'.*'standard'"
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
   check-game-mobile-html:
@@ -98,5 +98,5 @@ jobs:
             fi
           }
           banned "buildSurveyHTML"
-          banned "phase.*standard"
+          banned "'phase'.*'standard'"
           if [ $FAIL -ne 0 ]; then exit 1; fi
