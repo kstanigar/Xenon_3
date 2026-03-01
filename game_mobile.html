@@ -1,4 +1,3 @@
-<!-- v2.1.0 -->
 <!--
   ============================================================
   game_mobile.html — NON-X Mobile Game
@@ -4334,6 +4333,24 @@
 
       // Show leaderboard immediately
       showLeaderboard();
+    }
+
+    /** Hides end screens and restarts the game in place without returning to main menu. */
+    function playAgain() {
+      // Hide both end screens
+      document.getElementById('gameOver').style.display = 'none';
+      document.getElementById('victory').style.display = 'none';
+
+      // Flag this as a replay so game_start can distinguish it from a fresh start
+      isReplay = true;
+
+      // Collapse survey banner if visible
+      collapseSurveyBanner();
+
+      // Trigger the start button reset branch (gameOver is true so it fully resets)
+      var sb = document.getElementById('startButton');
+      sb.style.display = 'block';
+      sb.click();
     }
 
     /** Stops all audio, fires leave_game and game_complete, then navigates back to index.html. */
