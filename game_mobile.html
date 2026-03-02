@@ -771,7 +771,8 @@
       fireEvent('session_start', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
-        'music_variant': musicVariant
+        'music_variant': musicVariant,
+        'analytics_version': '2.0'
       });
 
       if (isFirstVisit) {
@@ -841,6 +842,15 @@
         if (victoryMuteBtn) victoryMuteBtn.textContent = '🔇';
         if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔇';
       }
+
+      // Track music toggle — value reflects the new state after the toggle
+      fireEvent('music_toggled', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'score': score,
+        'level_reached': level
+      });
     }
 
     /**
@@ -889,17 +899,21 @@
       // Save
       localStorage.setItem('nonx_leaderboard', JSON.stringify(leaderboard));
 
+      // Calculate rank for analytics and alert
+      var rank = leaderboard.findIndex(function (e) { return e.score === score; }) + 1;
+
       // Track Leaderboard submissions
       fireEvent('leaderboard_submit', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
         'score': score,
+        'rank': rank,
         'instagram_provided': sanitized !== '',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
       // Show confirmation
-      alert('Score submitted! You rank #' + (leaderboard.findIndex(function (e) { return e.score === score; }) + 1) + ' globally!');
+      alert('Score submitted! You rank #' + rank + ' globally!');
 
       // Hide submit button, show leaderboard
       document.getElementById('leaderboardSubmit').style.display = 'none';
@@ -4498,6 +4512,15 @@
       document.getElementById('gameOver').style.display = 'none';
       document.getElementById('victory').style.display = 'none';
 
+      // Track replay — fired before reset so score/level reflect the just-finished session
+      fireEvent('play_again', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'score': score,
+        'level_reached': level,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
+
       // Flag this as a replay so game_start can distinguish it from a fresh start
       isReplay = true;
 
@@ -5768,7 +5791,8 @@
           'platform': 'mobile',
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'is_replay': isReplay,
-          'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1
+          'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1,
+          'analytics_version': '2.0'
         });
 
         // Reset replay flag — next start from this session will be a replay
