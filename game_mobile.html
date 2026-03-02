@@ -4184,6 +4184,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Check if top 10 score and save
+      var prevBest = highScores.length > 0 ? highScores[0] : null;
       var madeTopTen = isTopTenScore(score);
       var rank = getScoreRank(score);
       if (madeTopTen) {
@@ -4193,11 +4194,18 @@
       // Build victory display
       var victoryEl = document.getElementById("victory");
       var html = "<div style='font-size: 22px; margin-bottom: 15px;'>Thank you for playing NON-X!</div>";
-      html += "<div style='font-size: 20px; margin-bottom: 25px;'>Your Score: <strong>" + score + "</strong>";
+      html += "<div style='font-size: 20px; margin-bottom: 10px;'>Your Score: <strong>" + score + "</strong>";
       if (madeTopTen) {
         html += " <span style='color: #FFD700;'>- TOP 10! Rank #" + rank + "</span>";
       }
       html += "</div>";
+
+      // Personal best callout
+      if (prevBest === null || score > prevBest) {
+        html += "<div style='font-size: 15px; color: #00FFFF; margin-bottom: 18px;'>🏆 New personal best!</div>";
+      } else if (prevBest !== null) {
+        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 18px;'>Your best: " + prevBest + "</div>";
+      }
 
       // Leaderboard submission
       html += "<div id='leaderboardSubmit' style='margin-bottom: 20px;'>";
@@ -4699,6 +4707,7 @@
         // Keep background music playing - don't stop it
 
         // Check if top 10 score and save
+        var prevBest = highScores.length > 0 ? highScores[0] : null;
         var madeTopTen = isTopTenScore(score);
         var rank = getScoreRank(score);
         if (madeTopTen) {
@@ -4711,6 +4720,15 @@
         if (madeTopTen) {
           html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
         }
+
+        // Personal best callout
+        if (prevBest === null || score > prevBest) {
+          html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
+        } else if (prevBest !== null) {
+          var gap = prevBest - score;
+          html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
+        }
+
         html += "<br><br>";
         html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
         html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
@@ -4812,12 +4830,22 @@
           updateUI();
           gameOver = true;
           stopBossMusic();
+          var prevBest = highScores.length > 0 ? highScores[0] : null;
           var madeTopTen = isTopTenScore(score);
           var rank = getScoreRank(score);
           if (madeTopTen) addHighScore(score);
           var gameOverEl = document.getElementById('gameOver');
           var html = "Game Over!<br><br>Your Score: " + score;
           if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+
+          // Personal best callout
+          if (prevBest === null || score > prevBest) {
+            html += "<br><span style='color:#00FFFF;font-size:15px;'>🏆 New personal best!</span>";
+          } else if (prevBest !== null) {
+            var gap = prevBest - score;
+            html += "<br><span style='color:#aaa;font-size:14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
+          }
+
           html += "<br><br>";
           html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
           html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
