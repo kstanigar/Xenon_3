@@ -51,7 +51,7 @@ jobs:
           FAIL=0
           FILE="game.html"
           banned() {
-            if grep -q "$1" "$FILE"; then
+            if grep -qE "$1" "$FILE"; then
               echo "❌ BANNED pattern found in $FILE: $1"
               FAIL=1
             else
@@ -106,12 +106,13 @@ jobs:
           FAIL=0
           FILE="game_mobile.html"
           banned() {
-            if grep -q "$1" "$FILE"; then
+            if grep -qE "$1" "$FILE"; then
               echo "❌ BANNED pattern found in $FILE: $1"
               FAIL=1
             else
               echo "✅ $FILE clean: $1"
             fi
           }
+          banned "buildSurveyHTML"
           banned "'phase'.*'standard'"
           if [ $FAIL -ne 0 ]; then exit 1; fi
