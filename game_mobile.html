@@ -4526,10 +4526,14 @@
     // ============================================
     // REPLAY INCENTIVES
     // ============================================
-    // PORTING NOTE: The full tier system (playAgain, continueFromLevel, deathPhase,
-    // continueFromLevelNum, replayBonusHP logic in game start, and tier buttons in
-    // both game over screens) should be ported to game.html as a matched set.
-    // Search "REPLAY INCENTIVES" in game start block and both game over screens.
+    // PORTING NOTE: The full tier system should be ported to game.html as a matched set.
+    // Variables to port: isReplaySession, deathPhase, continueFromLevelNum (declared near isReplay)
+    // Functions to port: playAgain() tier logic, continueFromLevel()
+    // Game start block: replayBonusHP tier logic + isReplaySession = isReplay line (search REPLAY INCENTIVES)
+    // Game over screens: wasReplay = isReplaySession capture + tier button blocks (both death paths)
+    // CRITICAL: isReplaySession must be set at game start BEFORE isReplay is reset to false —
+    //   isReplay is a one-shot flag; isReplaySession persists for the entire run so death
+    //   screens can correctly identify replay deaths. Missing this causes Tier 2-4 to never fire.
 
     /** Resets and restarts the game in place without returning to main menu. */
     function playAgain() {
