@@ -955,10 +955,13 @@
     // ============================================
     // ── MOBILE TUNING ───────────────────────────────────────────────
     // Adjust these after reviewing on a real device
-    var PLAYER_START_Y_OFFSET = 350;  // px from bottom of canvas
 
     // Vertical constraint — Group B players may not move above the bottom 30% of canvas
     var PLAYER_VERTICAL_MIN = canvas.height * 0.70;
+
+    // Player starts at the top of the vertical zone so Group B has full downward range.
+    // PLAYER_START_Y_OFFSET = canvas.height - PLAYER_VERTICAL_MIN = 30% of canvas height.
+    var PLAYER_START_Y_OFFSET = Math.round(canvas.height * 0.30);  // ~312px from bottom
 
     // Touch target Y — only used in Group B
     var touchTargetY = 0;
@@ -1196,6 +1199,8 @@
     }
     var rightPressed = false;
     var leftPressed = false;
+    var upPressed = false;
+    var downPressed = false;
 
     // Mobile touch state
     var touchActive = false;
@@ -5115,6 +5120,8 @@
 
       if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+      else if (e.key === "Up" || e.key === "ArrowUp") upPressed = true;
+      else if (e.key === "Down" || e.key === "ArrowDown") downPressed = true;
       else if (e.key === " ") {
         e.preventDefault();
         shootBullet();
@@ -5124,6 +5131,8 @@
     document.addEventListener("keyup", function (e) {
       if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+      else if (e.key === "Up" || e.key === "ArrowUp") upPressed = false;
+      else if (e.key === "Down" || e.key === "ArrowDown") downPressed = false;
     });
 
     // ============================================
@@ -5384,6 +5393,14 @@
           player.x += CONFIG.playerSpeed;
         } else if (leftPressed && player.x > 0) {
           player.x -= CONFIG.playerSpeed;
+        }
+        // Group B: vertical keyboard movement constrained to bottom 30%
+        if (movementABGroup === 'B') {
+          if (upPressed && player.y > PLAYER_VERTICAL_MIN) {
+            player.y -= CONFIG.playerSpeed;
+          } else if (downPressed && player.y < canvas.height - player.height) {
+            player.y += CONFIG.playerSpeed;
+          }
         }
       }
 
