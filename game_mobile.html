@@ -737,6 +737,23 @@
     // Initialize A/B test on page load
     var userABGroup = initMusicABTest();
 
+    // ============================================
+    // MOVEMENT A/B TEST
+    // ============================================
+    // Group A: horizontal movement only (default)
+    // Group B: horizontal + vertical movement (bottom 30% of canvas)
+    // Player chooses their style on the game over / victory screen.
+    // Uses same localStorage key as desktop so choice is consistent across platforms.
+    function initMovementABTest() {
+      var group = localStorage.getItem('nonx_ab_movement_group');
+      if (!group) {
+        group = 'A'; // Default to horizontal only until player actively chooses
+        localStorage.setItem('nonx_ab_movement_group', group);
+      }
+      return group;
+    }
+    var movementABGroup = initMovementABTest();
+
     // ── Developer Mode ────────────────────────────────────────────────────────
     // Toggle with Shift+D. Never persists — resets on every page load.
     // Hotkeys active only while devMode is ON:
@@ -939,6 +956,12 @@
     // ── MOBILE TUNING ───────────────────────────────────────────────
     // Adjust these after reviewing on a real device
     var PLAYER_START_Y_OFFSET = 350;  // px from bottom of canvas
+
+    // Vertical constraint — Group B players may not move above the bottom 30% of canvas
+    var PLAYER_VERTICAL_MIN = canvas.height * 0.70;
+
+    // Touch target Y — only used in Group B
+    var touchTargetY = 0;
     var PLAYER_SPRITE_W = 75;         // player sprite width
     var PLAYER_SPRITE_H = 75;         // player sprite height
     // ────────────────────────────────────────────────────────────────
@@ -4182,6 +4205,7 @@
       fireEvent('game_complete', {
         'outcome': 'victory',
         'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
         'platform': 'mobile',
         'level_reached': level,
         'score': score,
@@ -4233,6 +4257,7 @@
       html += "</div>";
 
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+      html += buildMovementToggleHTML('victory');
       html += buildBugButtonHTML('victory');
 
       victoryEl.innerHTML = html;
@@ -4421,6 +4446,79 @@
         "</div>";
     }
 
+    /**
+     * Builds the control style toggle shown on game over and victory screens.
+     * Displays the current movement group and a button to switch to the other.
+     * Switching saves to localStorage, updates movementABGroup, and rebuilds
+     * the screen so the label updates immediately.
+     */
+    function buildMovementToggleHTML(screen) {
+      var isVertical = movementABGroup === 'B';
+      var currentLabel = isVertical ? '◀▶▲▼ Horizontal + Vertical' : '◀▶ Horizontal only';
+      var switchLabel  = isVertical ? 'Switch to ◀▶' : 'Switch to ◀▶▲▼';
+      var switchGroup  = isVertical ? 'A' : 'B';
+      return "<div style='margin-top: 14px; font-size: 13px; color: #aaa;'>" +
+        "Controls: <span style='color: #00FFFF;'>" + currentLabel + "</span> &nbsp;" +
+        "<button onclick='setMovementGroup(\"" + switchGroup + "\",\"" + screen + "\")' " +
+        "style='padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #00FFFF; background: transparent; color: #00FFFF; cursor: pointer;'>" +
+        switchLabel + "</button></div>";
+    }
+
+    /**
+     * Switches the movement group, persists to localStorage, and rebuilds
+     * the current end screen so the toggle label refreshes without a reload.
+     * @param {string} group  - 'A' or 'B'
+     * @param {string} screen - 'game_over' or 'victory'
+     */
+    function setMovementGroup(group, screen) {
+      movementABGroup = group;
+      localStorage.setItem('nonx_ab_movement_group', group);
+      if (screen === 'victory') {
+        showVictory();
+      } else {
+        rebuildGameOverScreen();
+      }
+    }
+
+    /**
+     * Rebuilds the game over screen in place after a movement group switch.
+     * Mirrors the main death screen build logic so the toggle label refreshes.
+     */
+    function rebuildGameOverScreen() {
+      var prevBest = highScores.length > 0 ? highScores[0] : null;
+      var madeTopTen = isTopTenScore(score);
+      var rank = getScoreRank(score);
+      var wasReplay = isReplaySession;
+      var gameOverEl = document.getElementById('gameOver');
+      var html = "Game Over!<br><br>Your Score: " + score;
+      if (madeTopTen) html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
+      if (prevBest === null || score > prevBest) {
+        html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
+      } else if (prevBest !== null) {
+        var gap = prevBest - score;
+        html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
+      }
+      html += "<br><br>";
+      html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+      if (!wasReplay) {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+      } else if (level >= 2 && level <= 4) {
+        html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
+      } else if (redPhase) {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+      } else if (purplePhase) {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+      } else {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+      }
+      html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
+      html += "</div>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+      html += buildMovementToggleHTML('game_over');
+      html += buildBugButtonHTML('game_over');
+      gameOverEl.innerHTML = html;
+    }
+
     function openBugReport(source) {
       var existing = document.getElementById('nonxBugModal');
       if (existing) { existing.style.display = 'flex'; return; }
@@ -4505,6 +4603,7 @@
       fireEvent('game_complete', {
         'outcome': 'abandoned',
         'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
         'platform': 'mobile',
         'level_reached': level,
         'score': score,
@@ -4817,6 +4916,7 @@
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+        html += buildMovementToggleHTML('game_over');
         html += buildBugButtonHTML('game_over');
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
@@ -4833,6 +4933,7 @@
         // (from game_start to death), enabling time-based engagement analysis.
         fireEvent('player_death', {
           'ab_music_group': userABGroup,
+          'movement_group': movementABGroup,
           'platform': 'mobile',
           'level_reached': level,
           'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
@@ -4844,6 +4945,7 @@
         fireEvent('game_complete', {
           'outcome': 'death',
           'ab_music_group': userABGroup,
+          'movement_group': movementABGroup,
           'platform': 'mobile',
           'level_reached': level,
           'score': score,
@@ -4950,6 +5052,7 @@
 
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
+          html += buildMovementToggleHTML('game_over');
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
@@ -5059,12 +5162,19 @@
       return (touch.clientX - rect.left) * scaleX;
     }
 
+    function getTouchCanvasY(touch) {
+      var rect = canvas.getBoundingClientRect();
+      var scaleY = canvas.height / rect.height;
+      return (touch.clientY - rect.top) * scaleY;
+    }
+
     canvas.addEventListener("touchstart", function (e) {
       e.preventDefault();
       if (gameOver || paused) return;
       var touch = e.touches[0];
       touchActive = true;
       touchTargetX = getTouchCanvasX(touch);
+      if (movementABGroup === 'B') touchTargetY = getTouchCanvasY(touch);
       // Begin shoot cycle on first touch
       touchShootCycleStart = Date.now();
       touchShootActive = true;
@@ -5076,6 +5186,7 @@
       if (!touchActive) return;
       var touch = e.touches[0];
       touchTargetX = getTouchCanvasX(touch);
+      if (movementABGroup === 'B') touchTargetY = getTouchCanvasY(touch);
     }, { passive: false });
 
     canvas.addEventListener("touchend", function (e) {
@@ -5114,6 +5225,19 @@
         player.x += diff;
       }
       player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+      // Group B: move player toward touch Y, constrained to bottom 30% of canvas
+      if (movementABGroup === 'B') {
+        var targetCenterY = touchTargetY;
+        var playerCenterY = player.y + player.height / 2;
+        var diffY = targetCenterY - playerCenterY;
+        if (Math.abs(diffY) > 10) {
+          player.y += (diffY / Math.abs(diffY)) * Math.min(Math.abs(diffY), 10);
+        } else {
+          player.y += diffY;
+        }
+        player.y = Math.max(PLAYER_VERTICAL_MIN, Math.min(canvas.height - player.height, player.y));
+      }
 
       // Shoot cycle: 5s on, 1.5s cooldown, repeat
       var elapsed = now - touchShootCycleStart;
@@ -5908,6 +6032,7 @@
 
         player.x = canvas.width / 2;
         player.y = canvas.height - PLAYER_START_Y_OFFSET;
+        touchTargetY = player.y + player.height / 2; // reset touch Y to starting position
         player.width = PLAYER_SPRITE_W;
         player.height = PLAYER_SPRITE_H;
         enemies = [];
@@ -5944,6 +6069,7 @@
         gameSessionStart = Date.now();
         fireEvent('game_start', {
           'ab_music_group': userABGroup,
+          'movement_group': movementABGroup,
           'platform': 'mobile',
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'is_replay': isReplay,

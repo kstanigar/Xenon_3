@@ -688,6 +688,23 @@
 
     var userABGroup = initMusicABTest();
 
+    // ============================================
+    // MOVEMENT A/B TEST
+    // ============================================
+    // Group A: horizontal movement only (default)
+    // Group B: horizontal + vertical movement (bottom 30% of canvas)
+    // Player chooses their style on the game over / victory screen.
+    // Choice persists in localStorage.
+    function initMovementABTest() {
+      var group = localStorage.getItem('nonx_ab_movement_group');
+      if (!group) {
+        group = 'A'; // Default to horizontal only until player actively chooses
+        localStorage.setItem('nonx_ab_movement_group', group);
+      }
+      return group;
+    }
+    var movementABGroup = initMovementABTest();
+
     // ── Developer Mode ────────────────────────────────────────────────────────
     // Toggle with Shift+D. Never persists — resets on every page load.
     // Hotkeys active only while devMode is ON:
@@ -937,6 +954,11 @@
     }
     var rightPressed = false;
     var leftPressed = false;
+    var upPressed = false;
+    var downPressed = false;
+
+    // Vertical constraint — player may not move above the bottom 30% of canvas
+    var PLAYER_VERTICAL_MIN = canvas.height * 0.70;
 
     // Mouse controls (desktop only)
     var mouseX = 0;
@@ -3720,6 +3742,7 @@
       fireEvent('game_complete', {
         'outcome': 'victory',
         'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
         'platform': 'desktop',
         'level_reached': level,
         'score': score,
@@ -3763,6 +3786,7 @@
       html += "</div>";
 
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+      html += buildMovementToggleHTML('victory');
       html += buildBugButtonHTML('victory');
 
       victoryEl.innerHTML = html;
@@ -3954,6 +3978,55 @@
         "</div>";
     }
 
+    /**
+     * Builds the control style toggle shown on game over and victory screens.
+     * Displays the current movement group and a button to switch to the other.
+     */
+    function buildMovementToggleHTML(screen) {
+      var isVertical = movementABGroup === 'B';
+      var currentLabel = isVertical ? '◀▶▲▼ Horizontal + Vertical' : '◀▶ Horizontal only';
+      var switchLabel  = isVertical ? 'Switch to ◀▶' : 'Switch to ◀▶▲▼';
+      var switchGroup  = isVertical ? 'A' : 'B';
+      return "<div style='margin-top: 14px; font-size: 13px; color: #aaa;'>" +
+        "Controls: <span style='color: #00FFFF;'>" + currentLabel + "</span> &nbsp;" +
+        "<button onclick='setMovementGroup(\"" + switchGroup + "\",\"" + screen + "\")' " +
+        "style='padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #00FFFF; background: transparent; color: #00FFFF; cursor: pointer;'>" +
+        switchLabel + "</button></div>";
+    }
+
+    /**
+     * Switches the movement group, persists to localStorage, and rebuilds
+     * the current end screen so the toggle label refreshes without a reload.
+     */
+    function setMovementGroup(group, screen) {
+      movementABGroup = group;
+      localStorage.setItem('nonx_ab_movement_group', group);
+      if (screen === 'victory') {
+        showVictory();
+      } else {
+        rebuildGameOverScreen();
+      }
+    }
+
+    /**
+     * Rebuilds the game over screen in place after a movement group switch.
+     */
+    function rebuildGameOverScreen() {
+      var madeTopTen = isTopTenScore(score);
+      var rank = getScoreRank(score);
+      var gameOverEl = document.getElementById('gameOver');
+      var html = "Game Over!<br><br>Your Score: " + score;
+      if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+      html += "<br><br>";
+      html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+      html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+      html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
+      html += "</div>";
+      html += buildMovementToggleHTML('game_over');
+      html += buildBugButtonHTML('game_over');
+      gameOverEl.innerHTML = html;
+    }
+
     /** Opens the bug report modal. */
     function openBugReport(source) {
       var existing = document.getElementById('nonxBugModal');
@@ -4040,6 +4113,7 @@
       fireEvent('game_complete', {
         'outcome': 'abandoned',
         'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
         'platform': 'desktop',
         'level_reached': level,
         'score': score,
@@ -4265,6 +4339,7 @@
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+        html += buildMovementToggleHTML('game_over');
         html += buildBugButtonHTML('game_over');
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
@@ -4281,6 +4356,7 @@
         // (from game_start to death), enabling time-based engagement analysis.
         fireEvent('player_death', {
           'ab_music_group': userABGroup,
+          'movement_group': movementABGroup,
           'platform': 'desktop',
           'level_reached': level,
           'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
@@ -4292,6 +4368,7 @@
         fireEvent('game_complete', {
           'outcome': 'death',
           'ab_music_group': userABGroup,
+          'movement_group': movementABGroup,
           'platform': 'desktop',
           'level_reached': level,
           'score': score,
@@ -4499,6 +4576,7 @@
           html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
+          html += buildMovementToggleHTML('game_over');
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
@@ -4526,6 +4604,8 @@
 
       if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+      else if (e.key === "Up" || e.key === "ArrowUp") upPressed = true;
+      else if (e.key === "Down" || e.key === "ArrowDown") downPressed = true;
       else if (e.key === " ") {
         e.preventDefault();
         spacebarPressed = true;
@@ -4573,6 +4653,8 @@
     document.addEventListener("keyup", function (e) {
       if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
       else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+      else if (e.key === "Up" || e.key === "ArrowUp") upPressed = false;
+      else if (e.key === "Down" || e.key === "ArrowDown") downPressed = false;
       else if (e.key === " ") spacebarPressed = false;
     });
 
@@ -4690,6 +4772,13 @@
         targetX = Math.max(0, Math.min(targetX, canvas.width - player.width));
         player.x += (targetX - player.x) * 0.3; // Smooth follow
 
+        // Group B: vertical mouse movement constrained to bottom 30%
+        if (movementABGroup === 'B') {
+          var targetY = mouseY - player.height / 2;
+          targetY = Math.max(PLAYER_VERTICAL_MIN, Math.min(targetY, canvas.height - player.height));
+          player.y += (targetY - player.y) * 0.3;
+        }
+
         // Mouse shooting with cooldown
         if (mouseDown) {
           var now = Date.now();
@@ -4704,6 +4793,15 @@
         player.x += CONFIG.playerSpeed;
       } else if (leftPressed && player.x > 0) {
         player.x -= CONFIG.playerSpeed;
+      }
+
+      // Group B: vertical keyboard movement constrained to bottom 30%
+      if (movementABGroup === 'B') {
+        if (upPressed && player.y > PLAYER_VERTICAL_MIN) {
+          player.y -= CONFIG.playerSpeed;
+        } else if (downPressed && player.y < canvas.height - player.height) {
+          player.y += CONFIG.playerSpeed;
+        }
       }
 
       // Update player bullets
@@ -5315,6 +5413,7 @@
         gameSessionStart = Date.now();
         fireEvent('game_start', {
           'ab_music_group': userABGroup,
+          'movement_group': movementABGroup,
           'platform': 'desktop',
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'is_replay': isReplay,
