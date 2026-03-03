@@ -956,15 +956,18 @@
     // ── MOBILE TUNING ───────────────────────────────────────────────
     // Adjust these after reviewing on a real device
 
-    // Vertical constraint — Group B players may not move above the bottom 30% of canvas
-    var PLAYER_VERTICAL_MIN = canvas.height * 0.70;
+    var PLAYER_START_Y_OFFSET = 350;  // px from bottom of canvas — player starts at y=690
 
-    // Player starts at the top of the vertical zone so Group B has full downward range.
-    // PLAYER_START_Y_OFFSET = canvas.height - PLAYER_VERTICAL_MIN = 30% of canvas height.
-    var PLAYER_START_Y_OFFSET = Math.round(canvas.height * 0.30);  // ~312px from bottom
+    // Vertical constraint for Group B:
+    // Player starts at y=690 (bottom bound) and can move up to y=490 (upper bound).
+    // PLAYER_VERTICAL_MIN is the highest (smallest Y) the player can reach.
+    // PLAYER_VERTICAL_MAX is the lowest (largest Y) — locked to starting position.
+    var PLAYER_VERTICAL_MAX = 1040 - 350;        // 690 — starting position, no moving down
+    var PLAYER_VERTICAL_MIN = PLAYER_VERTICAL_MAX - 200; // 490 — max upward movement
 
-    // Touch target Y — only used in Group B
+    // Touch Y delta tracking — only used in Group B
     var touchTargetY = 0;
+    var touchLastY = 0;
     var PLAYER_SPRITE_W = 75;         // player sprite width
     var PLAYER_SPRITE_H = 75;         // player sprite height
     // ────────────────────────────────────────────────────────────────
@@ -5183,7 +5186,9 @@
       var touch = e.touches[0];
       touchActive = true;
       touchTargetX = getTouchCanvasX(touch);
-      if (movementABGroup === 'B') touchTargetY = getTouchCanvasY(touch);
+      if (movementABGroup === 'B') {
+        touchLastY = getTouchCanvasY(touch); // record start Y for delta tracking
+      }
       // Begin shoot cycle on first touch
       touchShootCycleStart = Date.now();
       touchShootActive = true;
@@ -5195,7 +5200,11 @@
       if (!touchActive) return;
       var touch = e.touches[0];
       touchTargetX = getTouchCanvasX(touch);
-      if (movementABGroup === 'B') touchTargetY = getTouchCanvasY(touch);
+      if (movementABGroup === 'B') {
+        var currentY = getTouchCanvasY(touch);
+        touchTargetY = currentY - touchLastY; // delta: positive = finger moved down, negative = up
+        touchLastY = currentY;               // update for next frame
+      }
     }, { passive: false });
 
     canvas.addEventListener("touchend", function (e) {
@@ -5235,17 +5244,11 @@
       }
       player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
 
-      // Group B: move player toward touch Y, constrained to bottom 30% of canvas
-      if (movementABGroup === 'B') {
-        var targetCenterY = touchTargetY;
-        var playerCenterY = player.y + player.height / 2;
-        var diffY = targetCenterY - playerCenterY;
-        if (Math.abs(diffY) > 10) {
-          player.y += (diffY / Math.abs(diffY)) * Math.min(Math.abs(diffY), 10);
-        } else {
-          player.y += diffY;
-        }
-        player.y = Math.max(PLAYER_VERTICAL_MIN, Math.min(canvas.height - player.height, player.y));
+      // Group B: apply touch Y delta to player position, constrained between 490 and 690
+      if (movementABGroup === 'B' && touchTargetY !== 0) {
+        player.y += touchTargetY;
+        player.y = Math.max(PLAYER_VERTICAL_MIN, Math.min(PLAYER_VERTICAL_MAX, player.y));
+        touchTargetY = 0; // consume delta — reset until next touchmove
       }
 
       // Shoot cycle: 5s on, 1.5s cooldown, repeat
@@ -5394,11 +5397,11 @@
         } else if (leftPressed && player.x > 0) {
           player.x -= CONFIG.playerSpeed;
         }
-        // Group B: vertical keyboard movement constrained to bottom 30%
+        // Group B: vertical keyboard movement constrained between 490 and 690
         if (movementABGroup === 'B') {
           if (upPressed && player.y > PLAYER_VERTICAL_MIN) {
             player.y -= CONFIG.playerSpeed;
-          } else if (downPressed && player.y < canvas.height - player.height) {
+          } else if (downPressed && player.y < PLAYER_VERTICAL_MAX) {
             player.y += CONFIG.playerSpeed;
           }
         }
@@ -6049,7 +6052,8 @@
 
         player.x = canvas.width / 2;
         player.y = canvas.height - PLAYER_START_Y_OFFSET;
-        touchTargetY = player.y + player.height / 2; // reset touch Y to starting position
+        touchTargetY = 0;
+        touchLastY = player.y + player.height / 2; // reset to player center
         player.width = PLAYER_SPRITE_W;
         player.height = PLAYER_SPRITE_H;
         enemies = [];
