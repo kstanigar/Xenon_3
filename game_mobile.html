@@ -824,8 +824,6 @@
      */
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
-      var victoryMuteBtn = document.getElementById('victoryMuteBtn');
-      var gameOverMuteBtn = document.getElementById('gameOverMuteBtn');
 
       if (bgMusic.paused) {
         bgMusic.play().catch(function (e) {
@@ -833,14 +831,10 @@
         });
         localStorage.setItem('nonex_music', 'on');
         if (muteBtn) muteBtn.textContent = '🔊';
-        if (victoryMuteBtn) victoryMuteBtn.textContent = '🔊';
-        if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔊';
       } else {
         bgMusic.pause();
         localStorage.setItem('nonex_music', 'off');
         if (muteBtn) muteBtn.textContent = '🔇';
-        if (victoryMuteBtn) victoryMuteBtn.textContent = '🔇';
-        if (gameOverMuteBtn) gameOverMuteBtn.textContent = '🔇';
       }
 
       // Track music toggle — value reflects the new state after the toggle
@@ -4233,7 +4227,6 @@
 
       // Buttons row (mute + play again + leave game)
       html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-      html += "<button id='victoryMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
       html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
       html += "<button onclick='leaveGame(\"victory\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
@@ -4800,7 +4793,6 @@
 
         html += "<br><br>";
         html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-        html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
 
         // REPLAY INCENTIVES — PORTING NOTE: port this tier block to game.html game over screen
         // Tier-based replay buttons
@@ -4940,7 +4932,6 @@
 
           html += "<br><br>";
           html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-          html += "<button id='gameOverMuteBtn' onclick='toggleMusic()' style='padding: 12px 20px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; margin-right: 10px; font-weight: bold;'>" + (bgMusic.paused ? '🔇' : '🔊') + "</button>";
 
           // REPLAY INCENTIVES — PORTING NOTE: port this tier block to game.html game over screen
           // Tier-based replay buttons
