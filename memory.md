@@ -166,6 +166,50 @@ Dimension will appear in picker 24-48 hours after first live event containing `a
 - ROWS: Powerup Type | VALUES: Event count
 - FILTER: Event name exactly matches powerup_collected
 
+### Exploration 3: NON-X Replay Funnel (Funnel exploration)
+Measures whether the replay incentive system is moving players forward.
+
+**Dimensions to import:** Event name, Replay Tier, Is Replay, Platform
+**Metrics to import:** Event count, Active users
+
+**Funnel steps:**
+1. **Game Started** — Event name exactly matches `game_start`
+2. **Died** — Event name exactly matches `player_death`
+3. **Chose to Replay** — Event name exactly matches `play_again`
+4. **Started Replay** — Event name exactly matches `game_start`
+
+**Breakdown:** Replay Tier (splits each step by tier — shows drop-off per incentive)
+**Filter:** Is Replay exactly matches `true`
+
+Key insight: drop-off between Step 2→3 by tier shows which death contexts most motivate a replay. Drop-off between Step 3→4 should be near zero — if not, something is broken in the flow.
+
+### Exploration 4: NON-X Replay Incentive Breakdown (Free form, 4 tabs)
+Answers which tier drives the most replays and whether higher bonuses correlate with better survival.
+
+**Tab 1 — Tier Uptake**
+- ROWS: Replay Tier | VALUES: Event count
+- FILTER: Event name exactly matches play_again
+
+**Tab 2 — Continue vs Play Again**
+- ROWS: Continue | COLUMNS: Replay Tier | VALUES: Event count
+- FILTER: Event name exactly matches play_again
+
+**Tab 3 — Bonus HP vs Level Reached**
+- ROWS: Bonus HP | COLUMNS: Level Reached | VALUES: Event count
+- FILTER: Event name exactly matches game_complete
+
+**Tab 4 — Death Phase Distribution**
+- ROWS: Death Phase | COLUMNS: Platform | VALUES: Event count
+- FILTER: Event name exactly matches play_again
+
+### Exploration 5: NON-X Phase Retention (Free form)
+Answers where players drop off across phases and whether replaying changes that. Most direct measure of whether the incentive system is getting players into red and purple phases.
+
+- ROWS: Death Phase
+- COLUMNS: Is Replay
+- VALUES: Event count
+- FILTER: Event name exactly matches player_death
+
 ---
 
 ## Mobile-Only Features (game_mobile.html)
