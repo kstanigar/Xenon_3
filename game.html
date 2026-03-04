@@ -389,6 +389,52 @@
       padding: 20px;
     }
   </style>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp }
+      from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDumeBRk__-lcKFJA2WLD7Wi-0y6OuFZlo",
+      authDomain: "nonx---game.firebaseapp.com",
+      projectId: "nonx---game",
+      storageBucket: "nonx---game.firebasestorage.app",
+      messagingSenderId: "404220834268",
+      appId: "1:404220834268:web:6cb71367bf62569ad5df19",
+      measurementId: "G-3WT4JX5MSG"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.firebaseSubmitScore = async function(scoreData) {
+      try {
+        const docRef = await addDoc(collection(db, "leaderboard"), {
+          score: scoreData.score,
+          instagram: scoreData.instagram,
+          platform: scoreData.platform,
+          movement_group: scoreData.movement_group,
+          date: serverTimestamp()
+        });
+        return { success: true, id: docRef.id };
+      } catch (e) {
+        console.error("Firebase submit error:", e);
+        return { success: false, error: e };
+      }
+    };
+
+    window.firebaseGetTopScores = async function() {
+      try {
+        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(function(doc) { return doc.data(); });
+      } catch (e) {
+        console.error("Firebase fetch error:", e);
+        return [];
+      }
+    };
+  </script>
 </head>
 
 <body>
@@ -830,58 +876,91 @@
      * Submits score to the global leaderboard with optional Instagram handle.
      * Leaderboard is stored in localStorage and can sync to backend.
      */
+    /**
+     * Submits score to Firebase global leaderboard.
+     * Falls back gracefully if Firebase is unavailable.
+     */
     function submitToLeaderboard() {
       var igHandle = document.getElementById('igInput').value.trim();
-
       var sanitized = igHandle.replace(/[@<>'"]/g, '').substring(0, 30);
 
-      var leaderboard = JSON.parse(localStorage.getItem('nonx_leaderboard')) || [];
+      // Disable button to prevent double submit
+      var submitBtn = document.querySelector('#leaderboardSubmit button');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+      }
 
-      leaderboard.push({
+      var scoreData = {
         score: score,
         instagram: sanitized || 'Anonymous',
-        date: new Date().toISOString(),
-        platform: 'desktop'
-      });
+        platform: 'desktop',
+        movement_group: movementABGroup
+      };
 
-      leaderboard.sort(function (a, b) { return b.score - a.score; });
-      leaderboard = leaderboard.slice(0, 100);
-
-      //Save
-      localStorage.setItem('nonx_leaderboard', JSON.stringify(leaderboard));
-
-      // Calculate rank for analytics and alert
-      var rank = leaderboard.findIndex(function (e) { return e.score === score; }) + 1;
-
-      //Track leaderboard submission
+      // Track submission in GA4
       fireEvent('leaderboard_submit', {
         'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
         'platform': 'desktop',
         'score': score,
-        'rank': rank,
         'instagram_provided': sanitized !== '',
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
-      alert('Score submitted! You rank #' + rank + ' globally!');
-
-      document.getElementById('leaderboardSubmit').style.display = 'none';
-      showLeaderboard();
+      if (typeof window.firebaseSubmitScore === 'function') {
+        window.firebaseSubmitScore(scoreData).then(function(result) {
+          document.getElementById('leaderboardSubmit').style.display = 'none';
+          if (result.success) {
+            showLeaderboard();
+          } else {
+            document.getElementById('leaderboardDisplay').innerHTML =
+              "<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Could not reach leaderboard. Check your connection.</div>";
+          }
+        });
+      } else {
+        document.getElementById('leaderboardSubmit').style.display = 'none';
+        document.getElementById('leaderboardDisplay').innerHTML =
+          "<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Leaderboard unavailable. Try again later.</div>";
+      }
     }
 
+    /**
+     * Fetches and displays top 10 global scores from Firebase.
+     */
     function showLeaderboard() {
-      var leaderboard = JSON.parse(localStorage.getItem('nonx_leaderboard')) || [];
-      var top10 = leaderboard.slice(0, 10);
+      var display = document.getElementById('leaderboardDisplay');
+      if (!display) return;
+      display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Loading leaderboard...</div>";
 
-      var html = '<div style="margin-top: 20px; text-align: left; display: inline-block;"><strong>Top 10 Global Scores:</strong><br>';
-      for (var i = 0; i < top10.length; i++) {
-        var entry = top10[i];
-        var igText = entry.instagram !== 'Anonymous' ? '@' + entry.instagram : entry.instagram;
-        html += (i + 1) + '. ' + entry.score + ' - ' + igText + '<br>';
+      if (typeof window.firebaseGetTopScores !== 'function') {
+        display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Leaderboard unavailable.</div>";
+        return;
       }
-      html += '</div>';
 
-      document.getElementById('leaderboardDisplay').innerHTML = html;
+      window.firebaseGetTopScores().then(function(top10) {
+        if (!top10 || top10.length === 0) {
+          display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>No scores yet — be the first!</div>";
+          return;
+        }
+        var html = "<div style='margin-top:16px;text-align:left;display:inline-block;min-width:220px;'>";
+        html += "<div style='color:#FFD700;font-weight:bold;margin-bottom:8px;font-size:14px;'>🏆 Global Top 10</div>";
+        for (var i = 0; i < top10.length; i++) {
+          var entry = top10[i];
+          var igText = entry.instagram && entry.instagram !== 'Anonymous'
+            ? '@' + entry.instagram : 'Anonymous';
+          var platformIcon = entry.platform === 'mobile' ? '📱' : '🖥';
+          var isCurrentScore = entry.score === score;
+          var rowStyle = isCurrentScore
+            ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
+          html += "<div style='" + rowStyle + "font-size:13px;margin-bottom:4px;'>";
+          html += (i + 1) + ". " + entry.score + " &nbsp;";
+          html += "<span style='color:#aaa;'>" + igText + "</span> " + platformIcon;
+          html += "</div>";
+        }
+        html += "</div>";
+        display.innerHTML = html;
+      });
     }
 
     // ============================================
@@ -3979,6 +4058,22 @@
     }
 
     /**
+     * Builds the leaderboard submission form for the game over screen.
+     * Only shown if score > 0 AND level >= 2.
+     * Returns empty string if conditions not met.
+     */
+    function buildGameOverLeaderboardHTML() {
+      if (score <= 0 || level < 2) return "";
+      var html = "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
+      html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
+      html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
+      html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
+      html += "</div>";
+      html += "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
+      return html;
+    }
+
+    /**
      * Builds the control style toggle shown on game over and victory screens.
      * Displays the current movement group and a button to switch to the other.
      */
@@ -4022,9 +4117,11 @@
       html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
+      html += buildGameOverLeaderboardHTML();
       html += buildMovementToggleHTML('game_over');
       html += buildBugButtonHTML('game_over');
       gameOverEl.innerHTML = html;
+      if (score > 0 && level >= 2) showLeaderboard();
     }
 
     /** Opens the bug report modal. */
@@ -4339,11 +4436,13 @@
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+        html += buildGameOverLeaderboardHTML();
         html += buildMovementToggleHTML('game_over');
         html += buildBugButtonHTML('game_over');
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
+        if (score > 0 && level >= 2) showLeaderboard();
 
         // Show survey banner after 5th game (once only)
         if (shouldShowSurvey()) {
@@ -4576,10 +4675,12 @@
           html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
+          html += buildGameOverLeaderboardHTML();
           html += buildMovementToggleHTML('game_over');
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
+          if (score > 0 && level >= 2) showLeaderboard();
         }
         return;
       }
