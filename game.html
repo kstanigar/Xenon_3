@@ -912,6 +912,8 @@
         window.firebaseSubmitScore(scoreData).then(function(result) {
           document.getElementById('leaderboardSubmit').style.display = 'none';
           if (result.success) {
+            // Save this score as the player's submitted high score
+            localStorage.setItem('nonx_submitted_score', String(score));
             showLeaderboard();
           } else {
             document.getElementById('leaderboardDisplay').innerHTML =
@@ -1009,6 +1011,18 @@
     // deathPhase: phase the player was in when they died ('green', 'red', 'purple').
     // Used to determine the replay incentive tier shown on the game over screen.
     var deathPhase = 'green';
+
+    /**
+     * Returns the score ceiling for leaderboard submission gating.
+     * Takes the higher of: the player's previously submitted Firebase score
+     * and their local personal best (xenonHighScores[0]).
+     * This prevents submitting a lower score even if they've never submitted to Firebase.
+     */
+    function getEffectiveSubmittedScore() {
+      var firebaseSubmitted = parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
+      var localBest = highScores.length > 0 ? highScores[0] : 0;
+      return Math.max(firebaseSubmitted, localBest);
+    }
 
     /**
      * Inserts a score into the top-10 leaderboard, sorts descending, trims to
@@ -1391,10 +1405,16 @@
             laserLevel = 4;
             showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
           } else {
-            // Already at max power
+            // Already at max power in purple phase
             score += 50;
+            updateUI();
             showAnnouncement("powerupDisplay", "MAX POWER +50", 1500);
           }
+        } else if (hasDoubleLaser && !purplePhase) {
+          // Green/red phase already has double laser — bonus score instead
+          score += 50;
+          updateUI();
+          showAnnouncement("powerupDisplay", "DOUBLE LASER BONUS +50", 1500);
         } else {
           hasDoubleLaser = true;
           laserLevel = 2;
@@ -3862,12 +3882,17 @@
       }
       html += "</div>";
 
-      // Leaderboard submission
-      html += "<div id='leaderboardSubmit' style='margin-bottom: 20px; text-align: center;'>";
-      html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
-      html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
-      html += "<button onclick='submitToLeaderboard()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
-      html += "</div>";
+      // Leaderboard submission — only if this beats player's previously submitted score
+      var submittedScore = getEffectiveSubmittedScore();
+      if (score > submittedScore) {
+        html += "<div id='leaderboardSubmit' style='margin-bottom: 20px; text-align: center;'>";
+        html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
+        html += "<button onclick='submitToLeaderboard()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
+        html += "</div>";
+      } else {
+        html += "<div id='leaderboardSubmit' style='display:none;'></div>";
+      }
 
       // Leaderboard display
       html += "<div id='leaderboardDisplay' style='margin-bottom: 25px;'></div>";
@@ -3885,6 +3910,7 @@
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
       document.getElementById("startButton").style.display = "none";
+      showLeaderboard();
 
       // Show survey banner after 5th game (once only)
       if (shouldShowSurvey()) {
@@ -4073,11 +4099,18 @@
 
     /**
      * Builds the leaderboard submission form for the game over screen.
-     * Only shown if score > 0 AND level >= 2.
+     * Only shown if score > 0 AND level >= 2 AND score beats the player's
+     * previously submitted high score (or they haven't submitted yet).
      * Returns empty string if conditions not met.
      */
     function buildGameOverLeaderboardHTML() {
       if (score <= 0 || level < 2) return "";
+      var submittedScore = getEffectiveSubmittedScore();
+      if (score <= submittedScore) {
+        // Already submitted a higher or equal score — show read-only leaderboard
+        return "<div id='leaderboardSubmit' style='display:none;'></div>" +
+               "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
+      }
       var html = "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
       html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
       html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
@@ -4149,10 +4182,10 @@
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
-      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
       html += buildGameOverLeaderboardHTML();
       html += buildMovementToggleHTML('game_over');
       html += buildBugButtonHTML('game_over');
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
       gameOverEl.innerHTML = html;
       if (score > 0 && level >= 2) showLeaderboard();
     }
@@ -4544,10 +4577,10 @@
         }
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
-        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
         html += buildGameOverLeaderboardHTML();
         html += buildMovementToggleHTML('game_over');
         html += buildBugButtonHTML('game_over');
+        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
@@ -4798,6 +4831,7 @@
           html += "</div>";
           html += buildGameOverLeaderboardHTML();
           html += buildMovementToggleHTML('game_over');
+          html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
