@@ -1,0 +1,131 @@
+name: Game Integrity Check
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  check-game-html:
+    runs-on: ubuntu-latest
+    name: Verify game.html functions
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required functions exist
+        run: |
+          FAIL=0
+          FILE="game.html"
+          check() {
+            if grep -q "$1" "$FILE"; then
+              echo "✅ $FILE: $1"
+            else
+              echo "❌ MISSING in $FILE: $1"
+              FAIL=1
+            fi
+          }
+          check "function startFromCard"
+          check "function playAgain"
+          check "function showSurveyBanner"
+          check "function collapseSurveyBanner"
+          check "function submitSurvey"
+          check "function dismissSurvey"
+          check "function playerTakeDamage"
+          check "function shouldShowSurvey"
+          check "function buildBugButtonHTML"
+          check "function buildGameOverLeaderboardHTML"
+          check "function buildMovementToggleHTML"
+          check "function setMovementGroup"
+          check "function rebuildGameOverScreen"
+          check "function openBugReport"
+          check "function submitBugReport"
+          check "function fireEvent"
+          check "function submitToLeaderboard"
+          check "function showLeaderboard"
+          check "window.firebaseSubmitScore"
+          check "window.firebaseGetTopScores"
+          check "if (playerBlinking) return"
+          check "game_complete"
+          check "'outcome': 'victory'"
+          check "'outcome': 'death'"
+          check "'outcome': 'abandoned'"
+          check "bug_report_submitted"
+          check "movement_group"
+          check "nonx---game"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
+      - name: Check banned patterns are absent
+        run: |
+          FAIL=0
+          FILE="game.html"
+          banned() {
+            if grep -qE "$1" "$FILE"; then
+              echo "❌ BANNED pattern found in $FILE: $1"
+              FAIL=1
+            else
+              echo "✅ $FILE clean: $1"
+            fi
+          }
+          banned "buildSurveyHTML"
+          banned "'phase'.*'standard'"
+          banned "nonx_leaderboard"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
+  check-game-mobile-html:
+    runs-on: ubuntu-latest
+    name: Verify game_mobile.html functions
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required functions exist
+        run: |
+          FAIL=0
+          FILE="game_mobile.html"
+          check() {
+            if grep -q "$1" "$FILE"; then
+              echo "✅ $FILE: $1"
+            else
+              echo "❌ MISSING in $FILE: $1"
+              FAIL=1
+            fi
+          }
+          check "function startFromCard"
+          check "function playAgain"
+          check "function showSurveyBanner"
+          check "function collapseSurveyBanner"
+          check "function submitSurvey"
+          check "function dismissSurvey"
+          check "function playerTakeDamage"
+          check "function shouldShowSurvey"
+          check "function buildBugButtonHTML"
+          check "function buildGameOverLeaderboardHTML"
+          check "function buildMovementToggleHTML"
+          check "function setMovementGroup"
+          check "function rebuildGameOverScreen"
+          check "function openBugReport"
+          check "function submitBugReport"
+          check "function fireEvent"
+          check "function submitToLeaderboard"
+          check "function showLeaderboard"
+          check "window.firebaseSubmitScore"
+          check "window.firebaseGetTopScores"
+          check "if (playerBlinking) return"
+          check "game_complete"
+          check "'outcome': 'victory'"
+          check "'outcome': 'death'"
+          check "'outcome': 'abandoned'"
+          check "bug_report_submitted"
+          check "movement_group"
+          check "nonx---game"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
+      - name: Check banned patterns are absent
+        run: |
+          FAIL=0
+          FILE="game_mobile.html"
+          banned() {
+            if grep -qE "$1" "$FILE"; then
+              echo "❌ BANNED pattern found in $FILE: $1"
+              FAIL=1
+            else
+              echo "✅ $FILE clean: $1"
+            fi
+          }
+          banned "buildSurveyHTML"
+          banned "'phase'.*'standard'"
+          banned "nonx_leaderboard"
+          if [ $FAIL -ne 0 ]; then exit 1; fi
