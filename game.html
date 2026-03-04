@@ -996,6 +996,20 @@
     //   distinguished from first-time starts in GA4 reports.
     var isReplay = false;
 
+    // isReplaySession: true for the entire duration of a replay run.
+    // Unlike isReplay (which is a one-shot flag reset at game start),
+    // isReplaySession stays true until the next game start, so death
+    // screens can correctly show tier-based replay buttons.
+    var isReplaySession = false;
+
+    // continueFromLevelNum: when > 0, the next game start will resume from this level
+    // instead of level 1. Set by continueFromLevel(), cleared after use.
+    var continueFromLevelNum = 0;
+
+    // deathPhase: phase the player was in when they died ('green', 'red', 'purple').
+    // Used to determine the replay incentive tier shown on the game over screen.
+    var deathPhase = 'green';
+
     /**
      * Inserts a score into the top-10 leaderboard, sorts descending, trims to
      * 10 entries, and persists to `localStorage` under `xenonHighScores`.
@@ -4107,16 +4121,35 @@
      * Rebuilds the game over screen in place after a movement group switch.
      */
     function rebuildGameOverScreen() {
+      var prevBest = highScores.length > 0 ? highScores[0] : null;
       var madeTopTen = isTopTenScore(score);
       var rank = getScoreRank(score);
+      var wasReplay = isReplaySession;
       var gameOverEl = document.getElementById('gameOver');
       var html = "Game Over!<br><br>Your Score: " + score;
       if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+      if (prevBest === null || score > prevBest) {
+        html += "<br><span style='color:#00FFFF;font-size:15px;'>🏆 New personal best!</span>";
+      } else if (prevBest !== null) {
+        var gap = prevBest - score;
+        html += "<br><span style='color:#aaa;font-size:14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
+      }
       html += "<br><br>";
       html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-      html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+      if (!wasReplay) {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+      } else if (level >= 2 && level <= 4) {
+        html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
+      } else if (redPhase) {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+      } else if (purplePhase) {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+      } else {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+      }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
       html += buildGameOverLeaderboardHTML();
       html += buildMovementToggleHTML('game_over');
       html += buildBugButtonHTML('game_over');
@@ -4230,12 +4263,29 @@
       document.getElementById('gameOver').style.display = 'none';
       document.getElementById('victory').style.display = 'none';
 
+      // Determine tier and bonus HP for analytics
+      var tier, bonusHP;
+      if (!isReplaySession) {
+        tier = 1; bonusHP = 15;
+      } else if (deathPhase === 'purple') {
+        tier = 4; bonusHP = 50;
+      } else if (deathPhase === 'red') {
+        tier = 3; bonusHP = 25;
+      } else {
+        tier = 1; bonusHP = 15; // green phase level 1 fallback
+      }
+
       // Track replay — fired before reset so score/level reflect the just-finished session
       fireEvent('play_again', {
         'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
         'platform': 'desktop',
         'score': score,
         'level_reached': level,
+        'death_phase': deathPhase,
+        'replay_tier': tier,
+        'bonus_hp': bonusHP,
+        'continue': false,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
@@ -4243,6 +4293,34 @@
       isReplay = true;
 
       // Trigger the start button reset branch (gameOver is true so it fully resets)
+      var sb = document.getElementById('startButton');
+      sb.style.display = 'block';
+      sb.click();
+    }
+
+    /**
+     * Tier 2 continue — resumes from the level the player died on (levels 2-4 only).
+     * Sets continueFromLevelNum so the game start block skips the level reset.
+     */
+    function continueFromLevel(lvl) {
+      document.getElementById('gameOver').style.display = 'none';
+
+      fireEvent('play_again', {
+        'ab_music_group': userABGroup,
+        'movement_group': movementABGroup,
+        'platform': 'desktop',
+        'score': score,
+        'level_reached': level,
+        'death_phase': deathPhase,
+        'replay_tier': 2,
+        'bonus_hp': 15,
+        'continue': true,
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+      });
+
+      continueFromLevelNum = lvl;
+      isReplay = true;
+
       var sb = document.getElementById('startButton');
       sb.style.display = 'block';
       sb.click();
@@ -4418,11 +4496,16 @@
         // Keep background music playing - don't stop it
 
         // Check if top 10 score and save
+        var prevBest = highScores.length > 0 ? highScores[0] : null;
         var madeTopTen = isTopTenScore(score);
         var rank = getScoreRank(score);
         if (madeTopTen) {
           addHighScore(score);
         }
+
+        // Capture phase at death for tier logic
+        deathPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+        var wasReplay = isReplaySession;
 
         // Build game over display
         var gameOverEl = document.getElementById("gameOver");
@@ -4430,9 +4513,35 @@
         if (madeTopTen) {
           html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
         }
+
+        // Personal best callout
+        if (prevBest === null || score > prevBest) {
+          html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
+        } else if (prevBest !== null) {
+          var gap = prevBest - score;
+          html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
+        }
+
         html += "<br><br>";
         html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+
+        // Tier-based replay buttons
+        if (!wasReplay) {
+          // Tier 1 — first visit death, any level
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+        } else if (level >= 2 && level <= 4) {
+          // Tier 2 — replay death in green phase levels 2-4
+          html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
+        } else if (redPhase) {
+          // Tier 3 — replay death in red phase
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+        } else if (purplePhase) {
+          // Tier 4 — replay death in purple phase
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+        } else {
+          // Tier 1 fallback — replay death on level 1
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+        }
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
@@ -4664,6 +4773,8 @@
           updateUI();
           gameOver = true;
           stopBossMusic();
+          deathPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+          var wasReplay = isReplaySession;
           var madeTopTen = isTopTenScore(score);
           var rank = getScoreRank(score);
           if (madeTopTen) addHighScore(score);
@@ -4672,7 +4783,17 @@
           if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
           html += "<br><br>";
           html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
-          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
+          if (!wasReplay) {
+            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+          } else if (level >= 2 && level <= 4) {
+            html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
+          } else if (redPhase) {
+            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+          } else if (purplePhase) {
+            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+          } else {
+            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
+          }
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
           html += buildGameOverLeaderboardHTML();
@@ -5431,6 +5552,34 @@
         score = 0;
         level = 1;
         health = CONFIG.startingHealth;
+
+        // REPLAY INCENTIVES — tiered HP bonus based on phase at death
+        // Tier 1: first visit death any level → +15 HP, start level 1
+        // Tier 2: replay death levels 2-4 → +15 HP, continue from death level
+        // Tier 3: replay death red phase → +25 HP, start level 1
+        // Tier 4: replay death purple phase → +50 HP, start level 1
+        var replayBonusHP = 0;
+        var replayBonusLabel = '';
+        if (!isReplaySession) {
+          replayBonusHP = 15;
+          replayBonusLabel = '+15 Replay Bonus HP!';
+        } else if (deathPhase === 'purple') {
+          replayBonusHP = 50;
+          replayBonusLabel = '+50 Replay Bonus HP!';
+        } else if (deathPhase === 'red') {
+          replayBonusHP = 25;
+          replayBonusLabel = '+25 Replay Bonus HP!';
+        } else {
+          replayBonusHP = 15;
+          replayBonusLabel = '+15 Replay Bonus HP!';
+        }
+        health = Math.min(health + replayBonusHP, CONFIG.maxHealth);
+
+        // Tier 2 continue — resume from death level
+        if (continueFromLevelNum > 0) {
+          level = continueFromLevelNum;
+          continueFromLevelNum = 0;
+        }
         hasDoubleLaser = false;
         laserLevel = 1;
         hasShield = false;
@@ -5523,13 +5672,19 @@
         });
 
         // Reset replay flag — next start from this session will be a replay
+        // CRITICAL: capture isReplaySession BEFORE resetting isReplay
+        isReplaySession = isReplay; // true for full replay run duration
         isReplay = false;
 
         // Increment game play counter for survey trigger
         var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1;
         localStorage.setItem('nonx_game_count', String(gameCount));
 
-        showAnnouncement("levelDisplay", "Level 1", 2000);
+        // Show level and replay bonus announcements
+        showAnnouncement("levelDisplay", "Level " + level, 2000);
+        setTimeout(function() {
+          showAnnouncement("bonusDisplay", replayBonusLabel, 2200);
+        }, 600);
         startBackgroundMusic();
         draw();
       } else {
