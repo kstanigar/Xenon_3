@@ -4341,7 +4341,7 @@
 
       // Leaderboard submission — only if this beats player's previously submitted score
       var submittedScore = getEffectiveSubmittedScore();
-      if (score > submittedScore) {
+      if (score >= submittedScore) {
         html += "<div id='leaderboardSubmit' style='margin-bottom: 20px; text-align: center;'>";
         html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
         html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
@@ -4553,8 +4553,8 @@
     function buildGameOverLeaderboardHTML() {
       if (score <= 0 || level < 2) return "";
       var submittedScore = getEffectiveSubmittedScore();
-      if (score <= submittedScore) {
-        // Already submitted a higher or equal score — show read-only leaderboard
+      if (score < submittedScore) {
+        // Already submitted a higher score — show read-only leaderboard
         return "<div id='leaderboardSubmit' style='display:none;'></div>" +
           "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
       }
