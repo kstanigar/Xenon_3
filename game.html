@@ -45,7 +45,7 @@
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    function gtag(){window.dataLayer.push(arguments);}
+    function gtag() { window.dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-9ECFZ9JBE5', {
       'send_page_view': true,
@@ -408,7 +408,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    window.firebaseSubmitScore = async function(scoreData) {
+    window.firebaseSubmitScore = async function (scoreData) {
       try {
         const docRef = await addDoc(collection(db, "leaderboard"), {
           score: scoreData.score,
@@ -424,11 +424,11 @@
       }
     };
 
-    window.firebaseGetTopScores = async function() {
+    window.firebaseGetTopScores = async function () {
       try {
         const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(function(doc) { return doc.data(); });
+        return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
         console.error("Firebase fetch error:", e);
         return [];
@@ -909,7 +909,7 @@
       });
 
       if (typeof window.firebaseSubmitScore === 'function') {
-        window.firebaseSubmitScore(scoreData).then(function(result) {
+        window.firebaseSubmitScore(scoreData).then(function (result) {
           document.getElementById('leaderboardSubmit').style.display = 'none';
           if (result.success) {
             // Save this score as the player's submitted high score
@@ -940,7 +940,7 @@
         return;
       }
 
-      window.firebaseGetTopScores().then(function(top10) {
+      window.firebaseGetTopScores().then(function (top10) {
         if (!top10 || top10.length === 0) {
           display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>No scores yet — be the first!</div>";
           return;
@@ -1414,7 +1414,7 @@
           // Green/red phase already has double laser — bonus score instead
           score += 50;
           updateUI();
-          showAnnouncement("powerupDisplay", "DOUBLE LASER BONUS +50", 1500);
+          showAnnouncement("powerupDisplay", "MAX POWER +50", 1500);
         } else {
           hasDoubleLaser = true;
           laserLevel = 2;
@@ -1434,8 +1434,8 @@
         'ab_music_group': userABGroup,
         'platform': 'desktop',
         'powerup_type': powerup.type === POWERUP_TYPES.HEALTH ? 'health'
-                      : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
-                      : 'shield',
+          : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
+            : 'shield',
         'level_number': level,
         'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
         'score': score,
@@ -1901,14 +1901,14 @@
         // Offset rows to form hex grid — 20 positions to cover max count
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0],  [0.5, 0],
-          [-1, 0.5],  [0, 0.5],  [1, 0.5],
+          [-0.5, 0], [0.5, 0],
+          [-1, 0.5], [0, 0.5], [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1],  [0.5, 1],
-          [0, -1.5],  [0, 1.5],
+          [-0.5, 1], [0.5, 1],
+          [0, -1.5], [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5],  [1, 1.5],
-          [-1.5, 0],  [1.5, 0]
+          [-1, 1.5], [1, 1.5],
+          [-1.5, 0], [1.5, 0]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           positions.push({ x: layout[i][0] * spacing, y: layout[i][1] * spacing });
@@ -1922,14 +1922,14 @@
         var explode = 2.8;
         var layout = [
           [-1, -0.5], [0, -0.5], [1, -0.5],
-          [-0.5, 0],  [0.5, 0],
-          [-1, 0.5],  [0, 0.5],  [1, 0.5],
+          [-0.5, 0], [0.5, 0],
+          [-1, 0.5], [0, 0.5], [1, 0.5],
           [-0.5, -1], [0.5, -1],
-          [-0.5, 1],  [0.5, 1],
-          [0, -1.5],  [0, 1.5],
+          [-0.5, 1], [0.5, 1],
+          [0, -1.5], [0, 1.5],
           [-1, -1.5], [1, -1.5],
-          [-1, 1.5],  [1, 1.5],
-          [-1.5, 0],  [1.5, 0]
+          [-1, 1.5], [1, 1.5],
+          [-1.5, 0], [1.5, 0]
         ];
         for (var i = 0; i < Math.min(count, layout.length); i++) {
           var x = layout[i][0] * spacing;
@@ -3912,7 +3912,7 @@
 
       // Show survey banner after 5th game (once only)
       if (shouldShowSurvey()) {
-        setTimeout(function() { showSurveyBanner('desktop'); }, 1800);
+        setTimeout(function () { showSurveyBanner('desktop'); }, 1800);
       }
     }
 
@@ -3949,18 +3949,18 @@
       var banner = document.createElement('div');
       banner.id = 'nonxSurveyBanner';
       banner.style.cssText = [
-        'position:fixed','top:0','left:50%','transform:translateX(-50%)',
-        'width:500px','max-width:96vw','z-index:9999',
+        'position:fixed', 'top:0', 'left:50%', 'transform:translateX(-50%)',
+        'width:500px', 'max-width:96vw', 'z-index:9999',
         'font-family:Arial,sans-serif',
         'box-shadow:0 4px 28px rgba(0,255,255,0.15)',
-        'border-radius:0 0 12px 12px','overflow:hidden'
+        'border-radius:0 0 12px 12px', 'overflow:hidden'
       ].join(';');
 
       var panel = document.createElement('div');
       panel.id = 'nonxSurveyPanel';
       panel.style.cssText = [
-        'background:#0d1f1f','border:1px solid #00FFFF','border-top:none','border-bottom:none',
-        'max-height:0','overflow:hidden',
+        'background:#0d1f1f', 'border:1px solid #00FFFF', 'border-top:none', 'border-bottom:none',
+        'max-height:0', 'overflow:hidden',
         'transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1)',
         'padding:0 26px'
       ].join(';');
@@ -3975,7 +3975,7 @@
 
       var inner = "<div style='padding:18px 0 4px;'>";
       inner += "<div style='font-size:13px;color:#00FFFF99;text-align:center;margin-bottom:18px;letter-spacing:0.4px;'>5 games in — we appreciate you ✨</div>";
-      questions.forEach(function(q) {
+      questions.forEach(function (q) {
         inner += "<div style='margin-bottom:13px;display:flex;align-items:center;justify-content:space-between;gap:14px;'>";
         inner += "<span style='font-size:14px;color:#ddd;flex:1;line-height:1.4;'>" + q.text + "</span>";
         inner += "<span style='white-space:nowrap;flex-shrink:0;'>";
@@ -3998,16 +3998,16 @@
       var teaser = document.createElement('div');
       teaser.id = 'nonxSurveyTeaser';
       teaser.style.cssText = [
-        'background:#0d1f1f','border:1px solid #00FFFF','border-top:none',
-        'border-radius:0 0 12px 12px','padding:11px 22px',
-        'display:flex','align-items:center','justify-content:space-between',
-        'cursor:pointer','user-select:none'
+        'background:#0d1f1f', 'border:1px solid #00FFFF', 'border-top:none',
+        'border-radius:0 0 12px 12px', 'padding:11px 22px',
+        'display:flex', 'align-items:center', 'justify-content:space-between',
+        'cursor:pointer', 'user-select:none'
       ].join(';');
       teaser.innerHTML = "<span style='color:#00FFFF;font-size:14px;font-weight:bold;letter-spacing:0.3px;'>&#128203; Enjoying NON-X? Help us improve</span>" +
         "<span id='nonxSurveyChevron' style='color:#00FFFF;font-size:20px;margin-left:12px;transition:transform 0.35s;display:inline-block;'>&#8964;</span>";
 
       var expanded = false;
-      teaser.addEventListener('click', function() {
+      teaser.addEventListener('click', function () {
         expanded = !expanded;
         var chev = document.getElementById('nonxSurveyChevron');
         panel.style.maxHeight = expanded ? '560px' : '0';
@@ -4018,7 +4018,7 @@
       banner.appendChild(teaser);
       document.body.appendChild(banner);
 
-      setTimeout(function() {
+      setTimeout(function () {
         expanded = true;
         panel.style.maxHeight = '560px';
         var chev = document.getElementById('nonxSurveyChevron');
@@ -4032,7 +4032,7 @@
       var chev = document.getElementById('nonxSurveyChevron');
       if (panel) panel.style.maxHeight = '0';
       if (chev) chev.style.transform = 'rotate(0deg)';
-      setTimeout(function() {
+      setTimeout(function () {
         var b = document.getElementById('nonxSurveyBanner');
         if (b) b.remove();
       }, 500);
@@ -4043,23 +4043,23 @@
       var answers = {
         'Enjoyed gameplay': document.querySelector('input[name="q1"]:checked'),
         'Would play again': document.querySelector('input[name="q2"]:checked'),
-        'Easy to pick up':  document.querySelector('input[name="q3"]:checked'),
-        'Enjoyed music':    document.querySelector('input[name="q4"]:checked'),
-        'Want more music':  document.querySelector('input[name="q5"]:checked'),
-        'Suggestions':      (document.getElementById('surveyComments') || {}).value || '',
-        'Platform':         platform,
-        'AB Music Group':   userABGroup,
-        'Music Variant':    localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-        'Games Played':     localStorage.getItem('nonx_game_count') || '5'
+        'Easy to pick up': document.querySelector('input[name="q3"]:checked'),
+        'Enjoyed music': document.querySelector('input[name="q4"]:checked'),
+        'Want more music': document.querySelector('input[name="q5"]:checked'),
+        'Suggestions': (document.getElementById('surveyComments') || {}).value || '',
+        'Platform': platform,
+        'AB Music Group': userABGroup,
+        'Music Variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'Games Played': localStorage.getItem('nonx_game_count') || '5'
       };
       var body = {};
-      Object.keys(answers).forEach(function(k) { body[k] = answers[k] ? answers[k].value : 'No answer'; });
+      Object.keys(answers).forEach(function (k) { body[k] = answers[k] ? answers[k].value : 'No answer'; });
       body['Suggestions'] = answers['Suggestions'];
       fetch(FORMSUBMIT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(body)
-      }).then(function() {
+      }).then(function () {
         localStorage.setItem('nonx_survey_done', 'true');
         fireEvent('survey_submitted', {
           'platform': platform, 'ab_music_group': userABGroup,
@@ -4068,12 +4068,12 @@
         });
         var p = document.getElementById('nonxSurveyPanel');
         if (p) p.innerHTML = "<div style='padding:24px;text-align:center;color:#00FFFF;font-size:15px;font-weight:bold;'>\u2713 Thanks for your feedback!</div>";
-        setTimeout(function() { collapseSurveyBanner(); }, 2200);
-      }).catch(function() {
+        setTimeout(function () { collapseSurveyBanner(); }, 2200);
+      }).catch(function () {
         localStorage.setItem('nonx_survey_done', 'true');
         var p = document.getElementById('nonxSurveyPanel');
         if (p) p.innerHTML = "<div style='padding:24px;text-align:center;color:#555;font-size:14px;'>Could not send — but thanks anyway!</div>";
-        setTimeout(function() { collapseSurveyBanner(); }, 2200);
+        setTimeout(function () { collapseSurveyBanner(); }, 2200);
       });
     }
 
@@ -4088,7 +4088,7 @@
       collapseSurveyBanner();
     }
 
-        /** Builds the bug report button HTML. */
+    /** Builds the bug report button HTML. */
     function buildBugButtonHTML(source) {
       return "<div style='margin-top: 10px;'>" +
         "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
@@ -4107,7 +4107,7 @@
       if (score <= submittedScore) {
         // Already submitted a higher or equal score — show read-only leaderboard
         return "<div id='leaderboardSubmit' style='display:none;'></div>" +
-               "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
+          "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
       }
       var html = "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
       html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
@@ -4125,8 +4125,8 @@
     function buildMovementToggleHTML(screen) {
       var isVertical = movementABGroup === 'B';
       var currentLabel = isVertical ? '◀▶▲▼ Horizontal + Vertical' : '◀▶ Horizontal only';
-      var switchLabel  = isVertical ? 'Switch to ◀▶' : 'Switch to ◀▶▲▼';
-      var switchGroup  = isVertical ? 'A' : 'B';
+      var switchLabel = isVertical ? 'Switch to ◀▶' : 'Switch to ◀▶▲▼';
+      var switchGroup = isVertical ? 'A' : 'B';
       return "<div style='margin-top: 14px; font-size: 13px; color: #aaa;'>" +
         "Controls: <span style='color: #00FFFF;'>" + currentLabel + "</span> &nbsp;" +
         "<button onclick='setMovementGroup(\"" + switchGroup + "\",\"" + screen + "\")' " +
@@ -4200,20 +4200,20 @@
         "<div style='background:#111;border:1px solid #00FFFF;border-radius:8px;padding:24px;max-width:400px;width:90%;color:#fff;font-family:monospace;'>" +
         "<div style='font-size:16px;color:#00FFFF;margin-bottom:16px;font-weight:bold;'>🐛 Report a Bug</div>" +
         "<div style='margin-bottom:10px;'>" +
-          "<label style='font-size:13px;display:block;margin-bottom:4px;'>What happened?</label>" +
-          "<textarea id='bugDescription' rows='3' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='Describe the bug...'></textarea>" +
+        "<label style='font-size:13px;display:block;margin-bottom:4px;'>What happened?</label>" +
+        "<textarea id='bugDescription' rows='3' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='Describe the bug...'></textarea>" +
         "</div>" +
         "<div style='margin-bottom:10px;'>" +
-          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Steps to reproduce (optional):</label>" +
-          "<textarea id='bugSteps' rows='2' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='e.g. Level 3, used shield, then...'></textarea>" +
+        "<label style='font-size:13px;display:block;margin-bottom:4px;'>Steps to reproduce (optional):</label>" +
+        "<textarea id='bugSteps' rows='2' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;resize:vertical;box-sizing:border-box;' placeholder='e.g. Level 3, used shield, then...'></textarea>" +
         "</div>" +
         "<div style='margin-bottom:16px;'>" +
-          "<label style='font-size:13px;display:block;margin-bottom:4px;'>Your email (optional, for follow-up):</label>" +
-          "<input type='email' id='bugEmail' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;box-sizing:border-box;' placeholder='you@example.com'>" +
+        "<label style='font-size:13px;display:block;margin-bottom:4px;'>Your email (optional, for follow-up):</label>" +
+        "<input type='email' id='bugEmail' style='width:100%;padding:6px;font-size:13px;border-radius:4px;border:none;background:#1a1a1a;color:#fff;box-sizing:border-box;' placeholder='you@example.com'>" +
         "</div>" +
         "<div style='text-align:right; white-space: nowrap;'>" +
-          "<button onclick='submitBugReport(\"" + source + "\")' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;margin-right:10px;'>Submit</button>" +
-          "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 14px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Cancel</button>" +
+        "<button onclick='submitBugReport(\"" + source + "\")' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#00FFFF;color:#000;cursor:pointer;font-weight:bold;margin-right:10px;'>Submit</button>" +
+        "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 14px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Cancel</button>" +
         "</div>" +
         "</div>";
       document.body.appendChild(modal);
@@ -4221,7 +4221,7 @@
 
     /** Submits bug report to Formspree. */
     function submitBugReport(source) {
-      var desc  = (document.getElementById('bugDescription') || {}).value || '';
+      var desc = (document.getElementById('bugDescription') || {}).value || '';
       var steps = (document.getElementById('bugSteps') || {}).value || '';
       var email = (document.getElementById('bugEmail') || {}).value || '';
 
@@ -4243,7 +4243,7 @@
           'Level': localStorage.getItem('nonx_game_count') || '?',
           'AB Music Group': userABGroup
         })
-      }).then(function() {
+      }).then(function () {
         fireEvent('bug_report_submitted', {
           'platform': 'desktop',
           'source': source,
@@ -4256,7 +4256,7 @@
           "✓ Bug report sent!<br><br>" +
           "<button onclick='document.getElementById(\"nonxBugModal\").style.display=\"none\"' style='padding:8px 18px;font-size:13px;border-radius:4px;border:none;background:#333;color:#aaa;cursor:pointer;'>Close</button>" +
           "</div>";
-      }).catch(function() {
+      }).catch(function () {
         alert('Could not send bug report. Please try again later.');
       });
     }
@@ -4586,7 +4586,7 @@
 
         // Show survey banner after 5th game (once only)
         if (shouldShowSurvey()) {
-          setTimeout(function() { showSurveyBanner('desktop'); }, 1800);
+          setTimeout(function () { showSurveyBanner('desktop'); }, 1800);
         }
 
         // player_death fires when health reaches zero.
@@ -5714,7 +5714,7 @@
 
         // Show level and replay bonus announcements
         showAnnouncement("levelDisplay", "Level " + level, 2000);
-        setTimeout(function() {
+        setTimeout(function () {
           showAnnouncement("bonusDisplay", replayBonusLabel, 2200);
         }, 600);
         startBackgroundMusic();
