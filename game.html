@@ -3910,7 +3910,7 @@
       html += "<div id='leaderboardDisplay' style='margin-bottom: 25px;'></div>";
 
       // Buttons row (mute + play again + leave game)
-      html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+      html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
       html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again</button>";
       html += "<button onclick='leaveGame(\"victory\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
@@ -4123,14 +4123,15 @@
      * Returns the submit form (placed below buttons).
      * Only shown if score beats personal best and meets minimum threshold.
      */
-    function buildLeaderboardSubmitHTML() {
-      var submittedScore = getEffectiveSubmittedScore();
+    function buildLeaderboardSubmitHTML(submittedScore) {
+      // submittedScore must be captured BEFORE addHighScore() runs,
+      // otherwise highScores[0] already equals the current score.
       var html = "";
-      if (score > 0 && level >= 2 && score > submittedScore) {
-        html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
-        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
-        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
-        html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
+      if (score > submittedScore) {
+        html += "<div id='leaderboardSubmit' style='margin-top: 18px; margin-bottom: 18px; text-align: center;'>";
+        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 18px;'>Submit to Global Leaderboard:</div>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; display: block; margin-left: auto; margin-right: auto; margin-bottom: 18px;'>";
+        html += "<button onclick='submitToLeaderboard()' style='padding: 8px 18px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
         html += "</div>";
       } else {
         html += "<div id='leaderboardSubmit' style='display:none;'></div>";
@@ -4150,18 +4151,21 @@
      */
     function rebuildGameOverScreen() {
       var prevBest = highScores.length > 0 ? highScores[0] : null;
+      var submittedScoreCapture = getEffectiveSubmittedScore();
       var madeTopTen = isTopTenScore(score);
       var rank = getScoreRank(score);
       var wasReplay = isReplaySession;
       var gameOverEl = document.getElementById('gameOver');
-      var html = "Game Over!<br><br>Your Score: " + score;
-      if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+      var html = "Game Over!";
       if (prevBest === null || score > prevBest) {
         html += "<br><span style='color:#00FFFF;font-size:15px;'>🏆 New personal best!</span>";
       }
+      html += "<br><span style='font-size: 22px;'>Your Score: " + score + "</span>";
+      if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
-      html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+      html += buildLeaderboardSubmitHTML(submittedScoreCapture);
+      html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
       if (!wasReplay) {
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
       } else if (level >= 2 && level <= 4) {
@@ -4175,7 +4179,6 @@
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
-      html += buildLeaderboardSubmitHTML();
       html += buildBugButtonHTML('game_over');
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
       gameOverEl.innerHTML = html;
@@ -4539,6 +4542,7 @@
 
         // Check if top 10 score and save
         var prevBest = highScores.length > 0 ? highScores[0] : null;
+        var submittedScoreCapture = getEffectiveSubmittedScore();
         var madeTopTen = isTopTenScore(score);
         var rank = getScoreRank(score);
         if (madeTopTen) {
@@ -4551,19 +4555,19 @@
 
         // Build game over display
         var gameOverEl = document.getElementById("gameOver");
-        var html = "Game Over!<br><br>Your Score: " + score;
-        if (madeTopTen) {
-          html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
-        }
-
-        // Personal best callout
+        var html = "Game Over!";
+        // Personal best callout first
         if (prevBest === null || score > prevBest) {
           html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
         }
-
+        html += "<br><span style='font-size: 22px;'>Your Score: " + score + "</span>";
+        if (madeTopTen) {
+          html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
+        }
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
-        html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+        html += buildLeaderboardSubmitHTML(submittedScoreCapture);
+        html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
 
         // Tier-based replay buttons
         if (!wasReplay) {
@@ -4584,7 +4588,6 @@
         }
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
-        html += buildLeaderboardSubmitHTML();
         html += buildBugButtonHTML('game_over');
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
         gameOverEl.innerHTML = html;
@@ -4814,6 +4817,7 @@
           stopBossMusic();
           deathPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
           var wasReplay = isReplaySession;
+          var submittedScoreCapture = getEffectiveSubmittedScore();
           var madeTopTen = isTopTenScore(score);
           var rank = getScoreRank(score);
           if (madeTopTen) addHighScore(score);
@@ -4821,7 +4825,7 @@
           var html = "Game Over!<br><br>Your Score: " + score;
           if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
           html += "<br><br>";
-          html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
+          html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
           if (!wasReplay) {
             html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
           } else if (level >= 2 && level <= 4) {
@@ -4835,7 +4839,7 @@
           }
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
-          html += buildLeaderboardSubmitHTML();
+          html += buildLeaderboardSubmitHTML(submittedScoreCapture);
           html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
