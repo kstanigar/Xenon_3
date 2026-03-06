@@ -567,8 +567,11 @@
         content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
         return;
       }
+      // Two-column grid: entries laid out left column (1-5) then right column (6-10).
+      // flex-wrap means narrow screens fall back to a single column automatically.
       var localBest = parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
-      var html = "<div style='display:inline-block;text-align:left;min-width:240px;'>";
+      var half = Math.ceil(top10.length / 2);
+      var cols = ['', ''];
       for (var i = 0; i < top10.length; i++) {
         var entry = top10[i];
         var igText = entry.instagram && entry.instagram !== 'Anonymous'
@@ -576,12 +579,16 @@
         var platformIcon = entry.platform === 'mobile' ? '📱' : '🖥';
         var isYours = localBest > 0 && entry.score === localBest;
         var rowStyle = isYours ? "color:#00FFFF;font-weight:bold;" : "color:#ddd;";
-        html += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
-        html += (i + 1) + ". &nbsp;<strong>" + entry.score + "</strong>&nbsp; ";
-        html += "<span style='color:#888;font-size:12px;'>" + igText + "</span> " + platformIcon;
-        if (isYours) html += " <span style='font-size:11px;color:#00FFFF;'>← you</span>";
-        html += "</div>";
+        var col = i < half ? 0 : 1;
+        cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
+        cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
+        cols[col] += "<span style='color:#888;font-size:12px;'>" + igText + "</span> " + platformIcon;
+        if (isYours) cols[col] += " <span style='font-size:11px;color:#00FFFF;'>← you</span>";
+        cols[col] += "</div>";
       }
+      var html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 28px;text-align:left;padding:4px 0;'>";
+      html += "<div style='min-width:170px;'>" + cols[0] + "</div>";
+      html += "<div style='min-width:170px;'>" + cols[1] + "</div>";
       html += "</div>";
       content.innerHTML = html;
     }

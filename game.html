@@ -947,22 +947,29 @@
           display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>No scores yet — be the first!</div>";
           return;
         }
-        var html = "<div style='margin-top:16px;text-align:left;display:inline-block;min-width:220px;'>";
-        html += "<div style='color:#FFD700;font-weight:bold;margin-bottom:8px;font-size:14px;'>🏆 Global Top 10</div>";
+        // Two-column grid: entries laid out left column (1-5) then right column (6-10).
+        // flex-wrap means narrow screens fall back to a single column automatically.
+        var half = Math.ceil(top10.length / 2);
+        var cols = ['', ''];
         for (var i = 0; i < top10.length; i++) {
           var entry = top10[i];
           var igText = entry.instagram && entry.instagram !== 'Anonymous'
             ? '@' + entry.instagram : 'Anonymous';
           var platformIcon = entry.platform === 'mobile' ? '📱' : '🖥';
           var isCurrentScore = entry.score === score;
-          var rowStyle = isCurrentScore
-            ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
-          html += "<div style='" + rowStyle + "font-size:13px;margin-bottom:4px;'>";
-          html += (i + 1) + ". " + entry.score + " &nbsp;";
-          html += "<span style='color:#aaa;'>" + igText + "</span> " + platformIcon;
-          html += "</div>";
+          var rowStyle = isCurrentScore ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
+          var col = i < half ? 0 : 1;
+          cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
+          cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
+          cols[col] += "<span style='color:#aaa;font-size:11px;'>" + igText + "</span> " + platformIcon;
+          cols[col] += "</div>";
         }
-        html += "</div>";
+        var html = "<div style='margin-top:12px;text-align:center;'>";
+        html += "<div style='color:#FFD700;font-weight:bold;margin-bottom:8px;font-size:14px;'>🏆 Global Top 10</div>";
+        html += "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;'>";
+        html += "<div style='min-width:160px;'>" + cols[0] + "</div>";
+        html += "<div style='min-width:160px;'>" + cols[1] + "</div>";
+        html += "</div></div>";
         display.innerHTML = html;
       });
     }
