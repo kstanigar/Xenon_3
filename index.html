@@ -304,6 +304,36 @@
       /* Tactile press feedback */
     }
   </style>
+
+  <!-- Firebase SDK — read-only leaderboard access -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, query, orderBy, limit }
+      from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDumeBRk__-lcKFJA2WLD7Wi-0y6OuFZlo",
+      authDomain: "nonx---game.firebaseapp.com",
+      projectId: "nonx---game",
+      storageBucket: "nonx---game.firebasestorage.app",
+      messagingSenderId: "404220834268",
+      appId: "1:404220834268:web:6cb71367bf62569ad5df19"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.firebaseGetTopScores = async function () {
+      try {
+        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(function (doc) { return doc.data(); });
+      } catch (e) {
+        console.error("Firebase fetch error:", e);
+        return [];
+      }
+    };
+  </script>
 </head>
 
 <body>
@@ -317,6 +347,32 @@
     <!-- Game title -->
     <div class="title">NON-X</div>
 
+    <!-- Global Leaderboard dropdown -->
+    <div id="leaderboardDropdown" style="width:420px;max-width:96vw;">
+      <div id="leaderboardTeaser"
+        onclick="toggleLeaderboard()"
+        style="background:rgba(0,255,255,0.05);border:1px solid #1e3a3a;border-radius:8px;
+               padding:13px 18px;display:flex;align-items:center;justify-content:space-between;
+               cursor:pointer;user-select:none;transition:border-color 0.2s,background 0.2s;"
+        onmouseover="this.style.borderColor='#00FFFF';this.style.background='rgba(0,255,255,0.08)'"
+        onmouseout="this.style.borderColor='#1e3a3a';this.style.background='rgba(0,255,255,0.05)'">
+        <span style="color:#00FFFF;font-size:14px;font-weight:bold;letter-spacing:0.3px;">
+          🏆 Global Leaderboard
+        </span>
+        <span id="leaderboardChevron"
+          style="color:#00FFFF;font-size:20px;margin-left:12px;
+                 transition:transform 0.35s;display:inline-block;">&#8964;</span>
+      </div>
+      <div id="leaderboardPanel"
+        style="background:#0a1515;border:1px solid #1e3a3a;border-top:none;
+               border-radius:0 0 8px 8px;overflow:hidden;
+               max-height:0;transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1);">
+        <div id="leaderboardContent"
+          style="padding:14px 20px 18px;text-align:center;color:#aaa;font-size:13px;">
+          Loading...
+        </div>
+      </div>
+    </div>
     <!-- Platform selector: determines which game file is loaded on Play -->
     <div class="platform-group">
       <button class="platform-btn selected" id="btnComputer" onclick="selectPlatform('computer')">
@@ -356,7 +412,8 @@
 
     </div>
 
-    <!-- Play button: saves prefs, fires analytics event, navigates to game -->
+
+    <!-- Play button -->
     <button id="playBtn" onclick="launchGame()">Play</button>
 
   </div>
@@ -492,6 +549,64 @@
      *
      * @param {string} p - Platform identifier: 'computer' or 'mobile'.
      */
+    // ============================================================
+    // LEADERBOARD DROPDOWN
+    // ============================================================
+    var leaderboardOpen = false;
+    var leaderboardLoaded = false;
+
+    function renderLeaderboard(top10) {
+      var content = document.getElementById('leaderboardContent');
+      if (!content) return;
+      if (!top10 || top10.length === 0) {
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
+        return;
+      }
+      var localBest = parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
+      var html = "<div style='display:inline-block;text-align:left;min-width:240px;'>";
+      for (var i = 0; i < top10.length; i++) {
+        var entry = top10[i];
+        var igText = entry.instagram && entry.instagram !== 'Anonymous'
+          ? '@' + entry.instagram : 'Anonymous';
+        var platformIcon = entry.platform === 'mobile' ? '📱' : '🖥';
+        var isYours = localBest > 0 && entry.score === localBest;
+        var rowStyle = isYours ? "color:#00FFFF;font-weight:bold;" : "color:#ddd;";
+        html += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
+        html += (i + 1) + ". &nbsp;<strong>" + entry.score + "</strong>&nbsp; ";
+        html += "<span style='color:#888;font-size:12px;'>" + igText + "</span> " + platformIcon;
+        if (isYours) html += " <span style='font-size:11px;color:#00FFFF;'>← you</span>";
+        html += "</div>";
+      }
+      html += "</div>";
+      content.innerHTML = html;
+    }
+
+    function toggleLeaderboard() {
+      leaderboardOpen = !leaderboardOpen;
+      var panel = document.getElementById('leaderboardPanel');
+      var chev  = document.getElementById('leaderboardChevron');
+      panel.style.maxHeight = leaderboardOpen ? '480px' : '0';
+      if (chev) chev.style.transform = leaderboardOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+
+      // Fetch scores on first open
+      if (leaderboardOpen && !leaderboardLoaded) {
+        leaderboardLoaded = true;
+        if (typeof window.firebaseGetTopScores === 'function') {
+          window.firebaseGetTopScores().then(renderLeaderboard);
+        } else {
+          // Firebase module may still be loading — retry once after a short delay
+          setTimeout(function () {
+            if (typeof window.firebaseGetTopScores === 'function') {
+              window.firebaseGetTopScores().then(renderLeaderboard);
+            } else {
+              var content = document.getElementById('leaderboardContent');
+              if (content) content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+            }
+          }, 1200);
+        }
+      }
+    }
+
     function selectPlatform(p) {
       var prev = selectedPlatform;
       selectedPlatform = p;

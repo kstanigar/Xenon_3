@@ -289,6 +289,8 @@
       text-shadow: 0 0 20px #00FF00, 0 0 40px #00FF00;
       z-index: 3;
       animation: levelPulse 0.5s ease-in-out;
+      text-align: center;
+      white-space: nowrap;
     }
 
     @keyframes levelPulse {
@@ -4102,18 +4104,19 @@
      * Returns empty string if conditions not met.
      */
     function buildGameOverLeaderboardHTML() {
-      if (score <= 0 || level < 2) return "";
       var submittedScore = getEffectiveSubmittedScore();
-      if (score < submittedScore) {
-        // Already submitted a higher score — show read-only leaderboard
-        return "<div id='leaderboardSubmit' style='display:none;'></div>" +
-          "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
+      var html = "";
+      // Only show submit form if score beats personal best and meets minimum threshold
+      if (score > 0 && level >= 2 && score > submittedScore) {
+        html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
+        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
+        html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
+        html += "</div>";
+      } else {
+        html += "<div id='leaderboardSubmit' style='display:none;'></div>";
       }
-      var html = "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
-      html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
-      html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
-      html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
-      html += "</div>";
+      // Always show the leaderboard display
       html += "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
       return html;
     }
@@ -4185,7 +4188,7 @@
       html += buildBugButtonHTML('game_over');
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
       gameOverEl.innerHTML = html;
-      if (score > 0 && level >= 2) showLeaderboard();
+      showLeaderboard();
     }
 
     /** Opens the bug report modal. */
@@ -4582,7 +4585,7 @@
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
-        if (score > 0 && level >= 2) showLeaderboard();
+        showLeaderboard();
 
         // Show survey banner after 5th game (once only)
         if (shouldShowSurvey()) {
@@ -4833,7 +4836,7 @@
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
-          if (score > 0 && level >= 2) showLeaderboard();
+          showLeaderboard();
         }
         return;
       }
