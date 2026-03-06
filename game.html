@@ -3469,7 +3469,7 @@
 
       // Check collision with player (separate loop since array may have changed)
       for (var i = bossMinions.length - 1; i >= 0; i--) {
-        if (isColliding(bossMinions[i], player)) {
+        if (isCollidingPlayer(bossMinions[i])) {
           bossMinions.splice(i, 1);
           playerTakeDamage(CONFIG.enemyCollisionDamage);
           if (gameOver) return true; // Signal game over
@@ -4114,7 +4114,7 @@
      */
     /** Returns just the leaderboard display container (placed above buttons). */
     function buildLeaderboardDisplayHTML() {
-      return "<div id='leaderboardDisplay' style='margin-top: 12px; margin-bottom: 4px;'></div>";
+      return "<div id='leaderboardDisplay' style='margin-top: 12px; margin-bottom: 20px;'></div>";
     }
 
     /**
@@ -4179,9 +4179,6 @@
       if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
       if (prevBest === null || score > prevBest) {
         html += "<br><span style='color:#00FFFF;font-size:15px;'>🏆 New personal best!</span>";
-      } else if (prevBest !== null) {
-        var gap = prevBest - score;
-        html += "<br><span style='color:#aaa;font-size:14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
       }
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
@@ -4478,6 +4475,23 @@
         a.y + a.height > b.y;
     }
 
+    /**
+     * Collision check against the player using a 10px inset hitbox on each side.
+     * The player sprite is 75x75 but the visual ship hull is narrower — this
+     * makes hits feel fair without making the player unkillable.
+     */
+    function isCollidingPlayer(other) {
+      var inset = 10;
+      var px = player.x + inset;
+      var py = player.y + inset;
+      var pw = player.width - inset * 2;
+      var ph = player.height - inset * 2;
+      return other.x < px + pw &&
+        other.x + other.width > px &&
+        other.y < py + ph &&
+        other.y + other.height > py;
+    }
+
     // ============================================
     // PLAYER DAMAGE
     // ============================================
@@ -4567,9 +4581,6 @@
         // Personal best callout
         if (prevBest === null || score > prevBest) {
           html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
-        } else if (prevBest !== null) {
-          var gap = prevBest - score;
-          html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
         }
 
         html += "<br><br>";
@@ -5152,7 +5163,7 @@
           continue;
         }
 
-        if (isColliding(bullet, player)) {
+        if (isCollidingPlayer(bullet)) {
           enemyBullets.splice(i, 1);
           var damage = bullet.isBossBullet ? CONFIG.bossDamage : CONFIG.enemyBulletDamage;
           playerTakeDamage(damage);
@@ -5172,7 +5183,7 @@
           continue;
         }
 
-        if (isColliding(powerup, player)) {
+        if (isCollidingPlayer(powerup)) {
           collectPowerup(powerup);
           powerups.splice(i, 1);
         }
@@ -5259,7 +5270,7 @@
           }
 
           // Check collision with player
-          if (isColliding(enemy, player)) {
+          if (isCollidingPlayer(enemy)) {
             enemies.splice(i, 1);
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
@@ -5290,7 +5301,7 @@
         }
 
         // Check boss collision with player
-        if (boss && isColliding(boss, player)) {
+        if (boss && isCollidingPlayer(boss)) {
           playerTakeDamage(CONFIG.bossDamage);
           if (gameOver) return;
         }
@@ -5455,7 +5466,7 @@
             }
           }
 
-          if (isColliding(enemy, player)) {
+          if (isCollidingPlayer(enemy)) {
             enemies.splice(i, 1);
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;

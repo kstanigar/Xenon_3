@@ -576,13 +576,12 @@
         var entry = top10[i];
         var igText = entry.instagram && entry.instagram !== 'Anonymous'
           ? '@' + entry.instagram : 'Anonymous';
-        var platformIcon = entry.platform === 'mobile' ? '📱' : '🖥';
         var isYours = localBest > 0 && entry.score === localBest;
         var rowStyle = isYours ? "color:#00FFFF;font-weight:bold;" : "color:#ddd;";
         var col = i < half ? 0 : 1;
         cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
         cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-        cols[col] += "<span style='color:#888;font-size:12px;'>" + igText + "</span> " + platformIcon;
+        cols[col] += "<span style='color:#888;font-size:12px;'>" + igText + "</span>";
         if (isYours) cols[col] += " <span style='font-size:11px;color:#00FFFF;'>← you</span>";
         cols[col] += "</div>";
       }
