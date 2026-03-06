@@ -126,8 +126,15 @@ Register all of these in GA4 → Admin → Custom definitions → Create custom 
 ## GA4 Explorations Built
 
 ### Filtering for clean data
-Apply `Analytics Version exactly matches 2.0` filter to every tab in every exploration.
+Apply `Analytics Version exactly matches 3.0` filter to every tab in every exploration and as a report-level filter in Looker Studio.
 Dimension will appear in picker 24-48 hours after first live event containing `analytics_version` is received.
+
+**Version history:**
+| Version | Status | Notes |
+|---------|--------|-------|
+| (none) | ❌ discard | Pre-analytics, QA/test data |
+| 2.0 | ❌ discard | Boss spawn broken (score threshold gate), indestructible mobile minions, hitbox untuned, movement was random A/B not player choice |
+| 3.0 | ✅ use | Current — boss fix, hitbox inset, minion fix, movement as player preference, clean main menu UX |
 
 ### Exploration 1: NON-X Completion Funnel (Funnel exploration)
 10-step funnel:
@@ -286,11 +293,105 @@ If a full reset is ever required:
 - Mobile difficulty tuned: bullet speeds, enemy counts, arrowheadExploded formation fix
 - Personal best callout added to all mobile end screens
 - Tiered replay incentive system added to mobile (Tiers 1-4) with full analytics and porting comments; `isReplaySession` introduced to fix timing bug (isReplay resets before death screen renders); Tier 2 button label shortened to "↩ Resume Level X (+15 HP)"
+- **analytics_version bumped to 3.0** across game.html, game_mobile.html, and index.html — filters all explorations and Looker Studio to exclude 2.0 data (broken boss spawn, indestructible minions, untuned hitbox, random movement A/B)
 
 ---
 
 ## Pending / Deferred
 - ⚠️ Register 4 new GA4 custom dimensions: `death_phase`, `replay_tier`, `bonus_hp`, `continue`
-- ⚠️ Add `analytics_version = 2.0` filter to all 7 exploration tabs once dimension populates
+- ⚠️ Update `analytics_version = 3.0` filter on all explorations and Looker Studio dashboard (replaces 2.0)
 - Port replay incentive system to game.html (search `REPLAY INCENTIVES` in game_mobile.html)
 - Song choice feature on victory screen replay (pending audio asset decisions)
+
+---
+
+## Next Session: How-To-Play Screen Updates
+
+The how-to-play screen needs updating to reflect the current UI. Add or update the following sections:
+
+### Leaderboard
+- Global Top 10 is visible on the main menu before you play — see how you stack up before starting
+- After submitting a score your entry is highlighted in cyan with a "← you" marker
+- Scores can be submitted from the game over screen if you beat your personal best
+- Only one submission per personal best (no score farming)
+- The leaderboard also appears on the game over screen so you can see your rank immediately
+
+### Settings (main menu toggles)
+- **Music** — toggles background music on/off; persists between sessions
+- **Full Movement** — ON (default) = full directional control (←→↑↓); OFF = horizontal only (←→), simpler one-thumb mobile play; persists between sessions
+- **Analytics** — opt-in anonymous data sharing to help improve the game; no personal info collected; persists between sessions
+- All settings are saved automatically — no need to re-set on each visit
+
+### Controls (update to reflect Full Movement toggle)
+- The controls that apply during gameplay match the Full Movement setting chosen on the main menu
+- Desktop: Arrow keys to move, spacebar to shoot (auto-fire available)
+- Mobile: Tap/swipe to move, auto-fire enabled
+
+---
+
+## Next Session: Analytics Dashboard Build (Portfolio)
+
+Build a public-facing Looker Studio dashboard connected to GA4 that tells the full player journey story. Goal: demonstrate product analytics skills to recruiters and collaborators.
+
+### Dashboard Pages
+
+**Page 1 — Overview (headline numbers)**
+- Total sessions, unique players, avg session duration (scorecards)
+- Platform split: desktop vs mobile (donut chart)
+- Play sessions over time (daily line chart)
+- Game complete outcomes: victory / death / abandoned (stacked bar or donut)
+- Key callout: % of sessions that reach Boss 1 (funnel entry rate)
+
+**Page 2 — Player Funnel**
+- Full 10-step completion funnel visualised as a waterfall/bar
+- Drop-off % at each stage — annotate the single biggest drop-off point
+- Side-by-side: desktop funnel vs mobile funnel (segment comparison)
+- Boss kill rate table: boss_attempt vs boss_defeated per boss_id (Boss 1/2/3)
+- Callout: overall victory rate (player_won / game_start)
+
+**Page 3 — Difficulty & Level Analysis**
+- Deaths by level (horizontal bar chart) — where do players struggle most?
+- Average score at death by level (line chart overlay)
+- Level reached distribution: how far do most players get? (histogram)
+- Phase drop-off: % of players who reach green → red → purple (3 scorecards)
+
+**Page 4 — Engagement & Retention**
+- Replay rate: avg game_start events per session (are players coming back?)
+- Session duration distribution (histogram, bucket by minute)
+- Music on vs off: compare avg level_reached and session_duration_seconds
+- movement_group comparison: Full Movement vs Horizontal Only — avg score and level_reached
+- Replay tier breakdown: which tier drives the most replays? (bar chart)
+
+**Page 5 — Leaderboard & Score Analysis**
+- leaderboard_submit count over time (line chart)
+- Score distribution at submission (histogram — what scores make the leaderboard?)
+- Platform comparison: avg score desktop vs mobile (scorecard pair)
+- Rank distribution at submission (bar chart — are most submissions rank 10 or rank 1?)
+
+**Page 6 — Feature & Settings Usage**
+- Power-up collection by type (donut chart)
+- Analytics opt-in rate (% of sessions with consent = on) — scorecard
+- movement_toggled event count (how many players change from the default?)
+- music_toggled event count (mid-session music changes)
+- Bug reports over time (quality/stability signal)
+
+### Key Metrics to Highlight for Portfolio
+These are the most compelling numbers to feature prominently — they tell the strongest product story:
+
+| Metric | How to calculate | Why it matters |
+|--------|-----------------|----------------|
+| Funnel completion rate | boss_attempt(1) / game_start | Core engagement depth |
+| Boss kill rate | boss_defeated / boss_attempt per boss_id | Difficulty balance signal |
+| Replay rate | play_again / player_death | Retention / game feel signal |
+| Platform parity | level_reached desktop vs mobile avg | UX equity signal |
+| Music impact | session_duration music_on vs music_off | A/B test result |
+| Movement preference | % Full Movement vs Horizontal Only | Player behaviour insight |
+| Victory rate | player_won / game_start | Ultimate completion rate |
+
+### Looker Studio Setup Notes
+- Data source: GA4 property G-9ECFZ9JBE5
+- Apply `analytics_version = 2.0` filter at report level to exclude all QA/test data
+- Use date range control on every page (default: last 28 days)
+- Add platform filter control so viewers can drill down by desktop/mobile
+- Use NON-X colour palette: #00FFFF (cyan) primary, #000 background, #FF0055 accent for deaths, #00FF88 accent for victories
+- Host dashboard publicly and link from portfolio/GitHub README
