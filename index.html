@@ -57,21 +57,20 @@
     html,
     body {
       overscroll-behavior: none;
-      touch-action: none;
+      touch-action: pan-y;
     }
 
-    /* Full-screen centered layout; overflow hidden to prevent any scroll */
+    /* Full-screen layout; scrollable so leaderboard expansion never clips content */
     body {
       background: #000;
       color: #fff;
       font-family: Arial, sans-serif;
-      overflow: hidden;
+      overflow-y: auto;
       width: 100vw;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       gap: 36px;
     }
 
@@ -91,7 +90,9 @@
     }
 
     /* ── Content wrapper ────────────────────────────────────────────────────
-       Sits above the starfield canvas via z-index.                          */
+       Sits above the starfield canvas via z-index.
+       min-height + justify-content keeps items centred when content is short;
+       padding ensures breathing room when the page needs to scroll.         */
     .menu-wrap {
       position: relative;
       z-index: 1;
@@ -99,6 +100,10 @@
       flex-direction: column;
       align-items: center;
       gap: 36px;
+      min-height: 100vh;
+      justify-content: center;
+      padding: 48px 20px;
+      box-sizing: border-box;
     }
 
     /* ── Title ──────────────────────────────────────────────────────────────
