@@ -955,13 +955,12 @@
           var entry = top10[i];
           var igText = entry.instagram && entry.instagram !== 'Anonymous'
             ? '@' + entry.instagram : 'Anonymous';
-          var platformIcon = entry.platform === 'mobile' ? '📱' : '🖥';
           var isCurrentScore = entry.score === score;
           var rowStyle = isCurrentScore ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
           var col = i < half ? 0 : 1;
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:#aaa;font-size:11px;'>" + igText + "</span> " + platformIcon;
+          cols[col] += "<span style='color:#aaa;font-size:11px;'>" + igText + "</span>";
           cols[col] += "</div>";
         }
         var html = "<div style='margin-top:12px;text-align:center;'>";
@@ -2752,7 +2751,7 @@
      */
     function advanceLevel() {
       // Check for boss triggers
-      if (!redPhase && level >= 4 && score >= CONFIG.boss1ScoreThreshold && !boss1Defeated) {
+      if (!redPhase && level >= 4 && !boss1Defeated) {
         currentBoss = 1;
         // boss_attempt fires when the boss spawns — paired with boss_defeated to
         // calculate kill rate: boss_defeated / boss_attempt per boss_id.
@@ -2769,7 +2768,7 @@
         return;
       }
 
-      if (redPhase && !purplePhase && level >= 8 && score >= CONFIG.boss2ScoreThreshold && !boss2Defeated) {
+      if (redPhase && !purplePhase && level >= 8 && !boss2Defeated) {
         currentBoss = 2;
         fireEvent('boss_attempt', {
           'ab_music_group': userABGroup,
@@ -2784,7 +2783,7 @@
         return;
       }
 
-      if (purplePhase && level >= 12 && score >= CONFIG.boss3ScoreThreshold && !boss3Defeated) {
+      if (purplePhase && level >= 12 && !boss3Defeated) {
         currentBoss = 3;
         fireEvent('boss_attempt', {
           'ab_music_group': userABGroup,
