@@ -2309,7 +2309,7 @@
       5: {
         enemyType: 'enemy1_red',
         waves: [
-          { count: 14, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
+          { count: 16, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
         ]
       },
       6: {
@@ -3940,7 +3940,7 @@
 
       // Check collision with player (separate loop since array may have changed)
       for (var i = bossMinions.length - 1; i >= 0; i--) {
-        if (isColliding(bossMinions[i], player)) {
+        if (isCollidingPlayer(bossMinions[i])) {
           bossMinions.splice(i, 1);
           playerTakeDamage(CONFIG.enemyCollisionDamage);
           if (gameOver) return true; // Signal game over
@@ -4343,8 +4343,6 @@
       // Personal best callout
       if (prevBest === null || score > prevBest) {
         html += "<div style='font-size: 15px; color: #00FFFF; margin-bottom: 18px;'>🏆 New personal best!</div>";
-      } else if (prevBest !== null) {
-        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 18px;'>Your best: " + prevBest + "</div>";
       }
 
       // Leaderboard submission — only if this beats player's previously submitted score
@@ -4560,7 +4558,7 @@
      */
     /** Returns just the leaderboard display container (placed above buttons). */
     function buildLeaderboardDisplayHTML() {
-      return "<div id='leaderboardDisplay' style='margin-top: 12px; margin-bottom: 4px;'></div>";
+      return "<div id='leaderboardDisplay' style='margin-top: 12px; margin-bottom: 20px;'></div>";
     }
 
     /**
@@ -4636,9 +4634,6 @@
       if (madeTopTen) html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
       if (prevBest === null || score > prevBest) {
         html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
-      } else if (prevBest !== null) {
-        var gap = prevBest - score;
-        html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
       }
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
@@ -4943,6 +4938,23 @@
         a.y + a.height > b.y;
     }
 
+    /**
+     * Collision check against the player using a 10px inset hitbox on each side.
+     * The player sprite is 75x75 but the visual ship hull is narrower — this
+     * makes hits feel fair without making the player unkillable.
+     */
+    function isCollidingPlayer(other) {
+      var inset = 10;
+      var px = player.x + inset;
+      var py = player.y + inset;
+      var pw = player.width - inset * 2;
+      var ph = player.height - inset * 2;
+      return other.x < px + pw &&
+        other.x + other.width > px &&
+        other.y < py + ph &&
+        other.y + other.height > py;
+    }
+
     // ============================================
     // PLAYER DAMAGE
     // ============================================
@@ -5031,9 +5043,6 @@
         // Personal best callout
         if (prevBest === null || score > prevBest) {
           html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
-        } else if (prevBest !== null) {
-          var gap = prevBest - score;
-          html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
         }
 
         html += "<br><br>";
@@ -5176,9 +5185,6 @@
           // Personal best callout
           if (prevBest === null || score > prevBest) {
             html += "<br><span style='color:#00FFFF;font-size:15px;'>🏆 New personal best!</span>";
-          } else if (prevBest !== null) {
-            var gap = prevBest - score;
-            html += "<br><span style='color:#aaa;font-size:14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
           }
 
           html += "<br><br>";
@@ -5446,12 +5452,11 @@
       for (var i = 0; i < enemies.length; i++) {
         SpatialGrid.insert(enemies[i]);
       }
-      // Also insert boss minions if active
-      if (bossActive) {
-        for (var i = 0; i < bossMinions.length; i++) {
-          SpatialGrid.insert(bossMinions[i]);
-        }
-      }
+      // Note: boss minions are NOT inserted into the SpatialGrid —
+      // they are handled exclusively by updateBossMinions() which has
+      // its own bullet collision loop. Inserting them here caused bullets
+      // to be consumed by the grid path (which looks them up in enemies[])
+      // while the minion survived, making them appear indestructible.
 
       // Update player blink effect
       updatePlayerBlink();
@@ -5564,8 +5569,8 @@
           continue;
         }
 
-        // Check collision with boss
-        if (boss && isColliding(bullet, boss)) {
+        // Check collision with boss (only when fully on screen)
+        if (boss && !boss.entering && isColliding(bullet, boss)) {
           BulletPool.release(bullet);
           playerBullets.splice(i, 1);
           damageBoss();
@@ -5633,7 +5638,7 @@
           continue;
         }
 
-        if (isColliding(bullet, player)) {
+        if (isCollidingPlayer(bullet)) {
           BulletPool.release(bullet);
           enemyBullets.splice(i, 1);
           var damage = bullet.isBossBullet ? CONFIG.bossDamage : CONFIG.enemyBulletDamage;
@@ -5654,7 +5659,7 @@
           continue;
         }
 
-        if (isColliding(powerup, player)) {
+        if (isCollidingPlayer(powerup)) {
           collectPowerup(powerup);
           powerups.splice(i, 1);
         }
@@ -5742,7 +5747,7 @@
           }
 
           // Check collision with player
-          if (isColliding(enemy, player)) {
+          if (isCollidingPlayer(enemy)) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
             playerTakeDamage(CONFIG.enemyCollisionDamage);
@@ -5774,7 +5779,7 @@
         }
 
         // Check boss collision with player
-        if (boss && isColliding(boss, player)) {
+        if (boss && isCollidingPlayer(boss)) {
           playerTakeDamage(CONFIG.bossDamage);
           if (gameOver) return;
         }
@@ -5948,7 +5953,7 @@
             }
           }
 
-          if (isColliding(enemy, player)) {
+          if (isCollidingPlayer(enemy)) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
             playerTakeDamage(CONFIG.enemyCollisionDamage);
