@@ -187,47 +187,34 @@
       color: rgba(0, 255, 255, 0.7);
     }
 
-    /* ── Toggle rows ────────────────────────────────────────────────────────
-       Container for the Music and Analytics toggle settings.                */
-    .toggles {
+    /* ── Settings bar ────────────────────────────────────────────────────────
+       Single compact row housing all three toggle switches.                  */
+    .settings-bar {
       display: flex;
-      flex-direction: column;
-      gap: 14px;
-      align-items: stretch;
-      width: 260px;
-    }
-
-    /* Each toggle row is a <label> wrapping the text and the pill switch.
-       Using <label> makes the entire row clickable for accessibility.       */
-    .toggle-row {
-      display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 14px 18px;
+      justify-content: center;
+      gap: 24px;
+      padding: 12px 20px;
       border: 1px solid #2a2a2a;
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.03);
+      flex-wrap: wrap;
+    }
+
+    /* Each toggle item: label on top, pill switch below */
+    .toggle-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
       user-select: none;
     }
 
-    .toggle-row:hover {
-      border-color: #555;
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .toggle-label {
-      font-size: 15px;
-      color: #ccc;
-    }
-
-    /* Descriptive sub-text below each toggle label */
-    .toggle-label small {
-      display: block;
-      font-size: 11px;
-      color: #555;
-      margin-top: 2px;
+    .toggle-item-label {
+      font-size: 13px;
+      color: #aaa;
+      white-space: nowrap;
     }
 
     /* ── Pill switch ────────────────────────────────────────────────────────
@@ -388,27 +375,27 @@
       </button>
     </div>
 
-    <!-- Settings toggles: Music and Anonymous Analytics -->
-    <div class="toggles">
+    <!-- Settings bar: compact single-row toggles -->
+    <div class="settings-bar">
 
-      <!-- Music toggle: controls whether bgMusic plays during gameplay -->
-      <label class="toggle-row" for="musicSwitch">
-        <div class="toggle-label">
-          Music
-          <small>Background music during gameplay</small>
-        </div>
+      <label class="toggle-item" for="musicSwitch" title="Background music during gameplay">
+        <span class="toggle-item-label">Music</span>
         <div class="switch">
           <input type="checkbox" id="musicSwitch" checked onchange="onMusicToggle()" />
           <div class="slider"></div>
         </div>
       </label>
 
-      <!-- Analytics toggle: opt-in consent gate for event tracking -->
-      <label class="toggle-row" for="analyticsSwitch">
-        <div class="toggle-label">
-          Anonymous Data
-          <small>Help improve the game — no personal info collected</small>
+      <label class="toggle-item" for="movementSwitch" title="Enable up/down controls in addition to left/right">
+        <span class="toggle-item-label">Full Movement</span>
+        <div class="switch">
+          <input type="checkbox" id="movementSwitch" checked onchange="onMovementToggle()" />
+          <div class="slider"></div>
         </div>
+      </label>
+
+      <label class="toggle-item" for="analyticsSwitch" title="Help improve the game — no personal info collected">
+        <span class="toggle-item-label">Analytics</span>
         <div class="switch">
           <input type="checkbox" id="analyticsSwitch" onchange="onAnalyticsToggle()" />
           <div class="slider"></div>
@@ -635,6 +622,7 @@
      */
     function savePrefs() {
       localStorage.setItem('nonex_music', document.getElementById('musicSwitch').checked ? 'on' : 'off');
+      localStorage.setItem('nonex_movement', document.getElementById('movementSwitch').checked ? 'on' : 'off');
       localStorage.setItem('nonex_analytics', document.getElementById('analyticsSwitch').checked ? 'on' : 'off');
       localStorage.setItem('nonex_platform', selectedPlatform);
     }
@@ -647,6 +635,16 @@
       var val = document.getElementById('musicSwitch').checked ? 'on' : 'off';
       savePrefs();
       trackEvent('music_toggled', { value: val });
+    }
+
+    /**
+     * Handles the Full Movement toggle change event.
+     * Saves preference and fires analytics. 'B' = full movement (on), 'A' = horizontal only (off).
+     */
+    function onMovementToggle() {
+      var val = document.getElementById('movementSwitch').checked ? 'on' : 'off';
+      savePrefs();
+      trackEvent('movement_toggled', { value: val, movement_group: val === 'on' ? 'B' : 'A' });
     }
 
     /**
@@ -670,6 +668,9 @@
       var platform = localStorage.getItem('nonex_platform');
 
       if (music !== null) document.getElementById('musicSwitch').checked = (music === 'on');
+      // Default Full Movement to ON for first-time visitors
+      var movement = localStorage.getItem('nonex_movement');
+      document.getElementById('movementSwitch').checked = (movement === 'on' || movement === null);
       // Default analytics to ON for first-time visitors
       document.getElementById('analyticsSwitch').checked = (analytics === 'on' || analytics === null);
       if (platform) selectPlatform(platform);

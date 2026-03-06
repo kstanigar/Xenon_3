@@ -793,13 +793,16 @@
     // Group B: horizontal + vertical movement (bottom 30% of canvas)
     // Player chooses their style on the game over / victory screen.
     // Uses same localStorage key as desktop so choice is consistent across platforms.
+    /**
+     * Reads the player's Full Movement preference set on the main menu.
+     * 'B' = full movement (horizontal + vertical), 'A' = horizontal only.
+     * Defaults to 'B' (full movement on) if no preference saved yet.
+     */
     function initMovementABTest() {
-      var group = localStorage.getItem('nonx_ab_movement_group');
-      if (!group) {
-        group = 'A'; // Default to horizontal only until player actively chooses
-        localStorage.setItem('nonx_ab_movement_group', group);
-      }
-      return group;
+      var pref = localStorage.getItem('nonex_movement');
+      // nonex_movement 'on' / null  → group B (full movement)
+      // nonex_movement 'off'        → group A (horizontal only)
+      return (pref === 'off') ? 'A' : 'B';
     }
     var movementABGroup = initMovementABTest();
 
@@ -4367,7 +4370,6 @@
       html += "</div>";
 
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
-      html += buildMovementToggleHTML('victory');
       html += buildBugButtonHTML('victory');
 
       victoryEl.innerHTML = html;
@@ -4592,33 +4594,8 @@
      * Switching saves to localStorage, updates movementABGroup, and rebuilds
      * the screen so the label updates immediately.
      */
-    function buildMovementToggleHTML(screen) {
-      var isVertical = movementABGroup === 'B';
-      var currentLabel = isVertical ? '◀▶▲▼ Horizontal + Vertical' : '◀▶ Horizontal only';
-      var switchLabel = isVertical ? 'Switch to ◀▶' : 'Switch to ◀▶▲▼';
-      var switchGroup = isVertical ? 'A' : 'B';
-      return "<div style='margin-top: 14px; font-size: 13px; color: #aaa;'>" +
-        "Controls: <span style='color: #00FFFF;'>" + currentLabel + "</span> &nbsp;" +
-        "<button onclick='setMovementGroup(\"" + switchGroup + "\",\"" + screen + "\")' " +
-        "style='padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #00FFFF; background: transparent; color: #00FFFF; cursor: pointer;'>" +
-        switchLabel + "</button></div>";
-    }
+    // buildMovementToggleHTML removed — controls are set on the main menu
 
-    /**
-     * Switches the movement group, persists to localStorage, and rebuilds
-     * the current end screen so the toggle label refreshes without a reload.
-     * @param {string} group  - 'A' or 'B'
-     * @param {string} screen - 'game_over' or 'victory'
-     */
-    function setMovementGroup(group, screen) {
-      movementABGroup = group;
-      localStorage.setItem('nonx_ab_movement_group', group);
-      if (screen === 'victory') {
-        showVictory();
-      } else {
-        rebuildGameOverScreen();
-      }
-    }
 
     /**
      * Rebuilds the game over screen in place after a movement group switch.
@@ -4652,7 +4629,6 @@
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
       html += buildLeaderboardSubmitHTML();
-      html += buildMovementToggleHTML('game_over');
       html += buildBugButtonHTML('game_over');
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
       gameOverEl.innerHTML = html;
@@ -5071,7 +5047,6 @@
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
         html += buildLeaderboardSubmitHTML();
-        html += buildMovementToggleHTML('game_over');
         html += buildBugButtonHTML('game_over');
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
         gameOverEl.innerHTML = html;
@@ -5207,7 +5182,6 @@
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
           html += buildLeaderboardSubmitHTML();
-          html += buildMovementToggleHTML('game_over');
           html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
