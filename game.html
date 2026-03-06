@@ -792,7 +792,7 @@
         'ab_music_group': userABGroup,
         'platform': 'desktop',
         'music_variant': musicVariant,
-        'analytics_version': '2.0'
+        'analytics_version': '3.0'
       });
 
       if (isFirstVisit) {
@@ -5707,7 +5707,7 @@
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'is_replay': isReplay,
           'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1,
-          'analytics_version': '2.0'
+          'analytics_version': '3.0'
         });
 
         // Reset replay flag — next start from this session will be a replay
