@@ -4559,10 +4559,18 @@
      * previously submitted high score (or they haven't submitted yet).
      * Returns empty string if conditions not met.
      */
-    function buildGameOverLeaderboardHTML() {
+    /** Returns just the leaderboard display container (placed above buttons). */
+    function buildLeaderboardDisplayHTML() {
+      return "<div id='leaderboardDisplay' style='margin-top: 12px; margin-bottom: 4px;'></div>";
+    }
+
+    /**
+     * Returns the submit form (placed below buttons).
+     * Only shown if score beats personal best and meets minimum threshold.
+     */
+    function buildLeaderboardSubmitHTML() {
       var submittedScore = getEffectiveSubmittedScore();
       var html = "";
-      // Only show submit form if score beats personal best and meets minimum threshold
       if (score > 0 && level >= 2 && score > submittedScore) {
         html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
         html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
@@ -4572,8 +4580,6 @@
       } else {
         html += "<div id='leaderboardSubmit' style='display:none;'></div>";
       }
-      // Always show the leaderboard display
-      html += "<div id='leaderboardDisplay' style='margin-bottom: 12px;'></div>";
       return html;
     }
 
@@ -4636,6 +4642,7 @@
         html += "<br><span style='color: #aaa; font-size: 14px;'>Your best: " + prevBest + " — " + gap + " away</span>";
       }
       html += "<br><br>";
+      html += buildLeaderboardDisplayHTML();
       html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
       if (!wasReplay) {
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
@@ -4650,9 +4657,7 @@
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
-      html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
-      html += "</div>";
-      html += buildGameOverLeaderboardHTML();
+      html += buildLeaderboardSubmitHTML();
       html += buildMovementToggleHTML('game_over');
       html += buildBugButtonHTML('game_over');
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
@@ -5033,6 +5038,7 @@
         }
 
         html += "<br><br>";
+        html += buildLeaderboardDisplayHTML();
         html += "<div style='margin-bottom: 20px; white-space: nowrap;'>";
 
         // REPLAY INCENTIVES — PORTING NOTE: port this tier block to game.html game over screen
@@ -5056,7 +5062,7 @@
 
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
-        html += buildGameOverLeaderboardHTML();
+        html += buildLeaderboardSubmitHTML();
         html += buildMovementToggleHTML('game_over');
         html += buildBugButtonHTML('game_over');
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
@@ -5195,7 +5201,7 @@
 
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
-          html += buildGameOverLeaderboardHTML();
+          html += buildLeaderboardSubmitHTML();
           html += buildMovementToggleHTML('game_over');
           html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
           gameOverEl.innerHTML = html;
