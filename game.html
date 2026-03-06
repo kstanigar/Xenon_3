@@ -3521,6 +3521,9 @@
         boss.y += 1;
         if (boss.y >= 30) {
           boss.entering = false;
+          // Reset shield timer once boss is fully on screen —
+          // prevents the shield expiring during the entrance slide
+          boss.shieldStartTime = Date.now();
         }
       } else {
         // Move side to side
@@ -5081,8 +5084,8 @@
           continue;
         }
 
-        // Check collision with boss
-        if (boss && isColliding(bullet, boss)) {
+        // Check collision with boss (only when fully on screen)
+        if (boss && !boss.entering && isColliding(bullet, boss)) {
           playerBullets.splice(i, 1);
           damageBoss();
           continue;

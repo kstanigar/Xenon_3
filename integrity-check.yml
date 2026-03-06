@@ -24,6 +24,7 @@ jobs:
           }
           check "function startFromCard"
           check "function playAgain"
+          check "function continueFromLevel"
           check "function showSurveyBanner"
           check "function collapseSurveyBanner"
           check "function submitSurvey"
@@ -40,8 +41,17 @@ jobs:
           check "function fireEvent"
           check "function submitToLeaderboard"
           check "function showLeaderboard"
+          check "function getEffectiveSubmittedScore"
+          check "function spawnBoss"
+          check "function updateBoss"
+          check "function damageBoss"
           check "window.firebaseSubmitScore"
           check "window.firebaseGetTopScores"
+          check "var isReplaySession"
+          check "var continueFromLevelNum"
+          check "var deathPhase"
+          check "boss.shieldStartTime = Date.now"
+          check "!boss.entering && isColliding"
           check "if (playerBlinking) return"
           check "game_complete"
           check "'outcome': 'victory'"
@@ -50,6 +60,7 @@ jobs:
           check "bug_report_submitted"
           check "movement_group"
           check "nonx---game"
+          check "nonx_submitted_score"
           if [ $FAIL -ne 0 ]; then exit 1; fi
       - name: Check banned patterns are absent
         run: |
@@ -86,6 +97,7 @@ jobs:
           }
           check "function startFromCard"
           check "function playAgain"
+          check "function continueFromLevel"
           check "function showSurveyBanner"
           check "function collapseSurveyBanner"
           check "function submitSurvey"
@@ -102,8 +114,15 @@ jobs:
           check "function fireEvent"
           check "function submitToLeaderboard"
           check "function showLeaderboard"
+          check "function getEffectiveSubmittedScore"
+          check "function spawnBoss"
+          check "function updateBoss"
+          check "function damageBoss"
           check "window.firebaseSubmitScore"
           check "window.firebaseGetTopScores"
+          check "var isReplaySession"
+          check "var continueFromLevelNum"
+          check "var deathPhase"
           check "if (playerBlinking) return"
           check "game_complete"
           check "'outcome': 'victory'"
@@ -112,6 +131,7 @@ jobs:
           check "bug_report_submitted"
           check "movement_group"
           check "nonx---game"
+          check "nonx_submitted_score"
           if [ $FAIL -ne 0 ]; then exit 1; fi
       - name: Check banned patterns are absent
         run: |
