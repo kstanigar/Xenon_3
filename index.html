@@ -341,9 +341,7 @@
 
     <!-- Global Leaderboard dropdown -->
     <div id="leaderboardDropdown" style="width:420px;max-width:96vw;">
-      <div id="leaderboardTeaser"
-        onclick="toggleLeaderboard()"
-        style="background:rgba(0,255,255,0.05);border:1px solid #1e3a3a;border-radius:8px;
+      <div id="leaderboardTeaser" onclick="toggleLeaderboard()" style="background:rgba(0,255,255,0.05);border:1px solid #1e3a3a;border-radius:8px;
                padding:13px 18px;display:flex;align-items:center;justify-content:space-between;
                cursor:pointer;user-select:none;transition:border-color 0.2s,background 0.2s;"
         onmouseover="this.style.borderColor='#00FFFF';this.style.background='rgba(0,255,255,0.08)'"
@@ -351,16 +349,13 @@
         <span style="color:#00FFFF;font-size:14px;font-weight:bold;letter-spacing:0.3px;">
           🏆 Global Leaderboard
         </span>
-        <span id="leaderboardChevron"
-          style="color:#00FFFF;font-size:20px;margin-left:12px;
-                 transition:transform 0.35s;display:inline-block;">&#8964;</span>
+        <span id="leaderboardChevron" style="color:#00FFFF;font-size:20px;margin-left:12px;
+                 transition:transform 0.35s;display:inline-block;transform:rotate(180deg);">&#8964;</span>
       </div>
-      <div id="leaderboardPanel"
-        style="background:#0a1515;border:1px solid #1e3a3a;border-top:none;
+      <div id="leaderboardPanel" style="background:#0a1515;border:1px solid #1e3a3a;border-top:none;
                border-radius:0 0 8px 8px;overflow:hidden;
-               max-height:0;transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1);">
-        <div id="leaderboardContent"
-          style="padding:14px 20px 18px;text-align:center;color:#aaa;font-size:13px;">
+               max-height:480px;transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1);">
+        <div id="leaderboardContent" style="padding:14px 20px 18px;text-align:center;color:#aaa;font-size:13px;">
           Loading...
         </div>
       </div>
@@ -544,7 +539,7 @@
     // ============================================================
     // LEADERBOARD DROPDOWN
     // ============================================================
-    var leaderboardOpen = false;
+    var leaderboardOpen = true;
     var leaderboardLoaded = false;
 
     function renderLeaderboard(top10) {
@@ -582,7 +577,7 @@
     function toggleLeaderboard() {
       leaderboardOpen = !leaderboardOpen;
       var panel = document.getElementById('leaderboardPanel');
-      var chev  = document.getElementById('leaderboardChevron');
+      var chev = document.getElementById('leaderboardChevron');
       panel.style.maxHeight = leaderboardOpen ? '480px' : '0';
       if (chev) chev.style.transform = leaderboardOpen ? 'rotate(180deg)' : 'rotate(0deg)';
 
@@ -697,6 +692,23 @@
     // Restore saved preferences and log the menu view on page load
 
     loadPrefs();
+
+    // Fetch leaderboard immediately on page load (open by default)
+    if (typeof window.firebaseGetTopScores === 'function') {
+      window.firebaseGetTopScores().then(renderLeaderboard);
+      leaderboardLoaded = true;
+    } else {
+      setTimeout(function () {
+        if (typeof window.firebaseGetTopScores === 'function') {
+          window.firebaseGetTopScores().then(renderLeaderboard);
+        } else {
+          var content = document.getElementById('leaderboardContent');
+          if (content) content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+        }
+        leaderboardLoaded = true;
+      }, 1200);
+    }
+
     trackEvent('menu_view', {
       referrer: document.referrer || 'direct',
       music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
