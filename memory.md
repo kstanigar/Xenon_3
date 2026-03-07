@@ -305,6 +305,73 @@ If a full reset is ever required:
 
 ---
 
+## Post-Mortem: Leaderboard Submission Bug (March 2026, ~2.5 hrs lost)
+
+### What happened
+Asking "how do I reset the leaderboard?" led to advice to delete the Firebase collection. That triggered a cascade:
+1. Deleting the collection caused `showLeaderboard()` to return empty — "No scores yet" on every game over screen
+2. The submit form stopped appearing. Root cause was a **timing bug**: `addHighScore(score)` ran *before* `buildLeaderboardSubmitHTML()`, so `highScores[0]` already equalled the current score, making `score > submittedScore` always false
+3. Claude misdiagnosed the cause as the `level >= 2` gate (without asking what level the player was on) and removed it prematurely
+4. Then over-corrected `getEffectiveSubmittedScore()` by stripping the `highScores` comparison — wrong fix
+5. Three bad fixes in a row, each masking the previous one
+
+### Actual fix
+Capture `submittedScore = getEffectiveSubmittedScore()` **before** `addHighScore(score)` runs, then pass it as a parameter into `buildLeaderboardSubmitHTML(submittedScore)`. The timing was the only bug.
+
+### Communication rules going forward
+- **Always state level + score + first game or replay** when reporting a game over screen bug
+- **When something breaks after a specific action**, lead with that action: *"I deleted X and now Y is broken"* — the sequence is the clue
+- **Claude rule**: never recommend a destructive operation (deleting collections, clearing localStorage, resetting properties) without first tracing all code that depends on it and documenting what will break
+- **Claude rule**: never diagnose a game over screen bug without first asking what level the player was on and what action preceded the bug
+- **Claude rule**: the Firebase collection deletion was Claude's bad advice — the recommendation said "it will auto-recreate, no code changes needed" which was incorrect. Responsibility for that cascade sits with Claude, not the user
+
+---
+
+## Sensitive Code — Do Not Modify Without Full Trace
+
+The following areas have caused multi-hour regressions. Treat as high-risk — always read the full function and its call sites before changing anything:
+
+### ⚠️ Leaderboard Submit Form (`buildLeaderboardSubmitHTML`)
+- `submittedScore` MUST be captured before `addHighScore()` runs — passed as parameter, never fetched internally
+- `getEffectiveSubmittedScore()` reads only `nonx_submitted_score` (Firebase submitted) — not `highScores[]`
+- Gate is `score > submittedScore` only — no level or score minimum gates
+- Called in 3 places per file: main death, `rebuildGameOverScreen`, dev mode death
+- The Firebase `leaderboard` collection must exist (even with one dummy doc) for `showLeaderboard()` to work
+- **Never delete the Firebase collection** — archive instead (export first, then delete individual docs)
+
+### ⚠️ Boss Spawn Trigger (`advanceLevel`)
+- Boss spawns when `level >= 4/8/12` and `!boss1/2/3Defeated` — NO score threshold gate
+- Score threshold was removed because levels 1-4 only yield ~370 pts max, causing boss to never spawn
+- `boss.shieldStartTime` resets when `boss.entering = false` — not at spawn time
+- Bullet collision checks `!boss.entering` guard — bullets must not damage boss while off-screen
+
+### ⚠️ Mobile Boss Minions (`updateBossMinions`)
+- Minions must NOT be inserted into `SpatialGrid` — they have their own collision loop
+- Inserting them causes bullets consumed by grid path (looks them up in `enemies[]`), making minions indestructible and causing infinite score ticks
+
+### ⚠️ Analytics Version
+- Current version: `3.0` — filter ALL explorations and Looker Studio to `analytics_version = 3.0`
+- Bump version whenever gameplay mechanics change (hitbox, boss logic, scoring)
+- Set in: `session_start` + `game_start` in both game files; `menu_view` + `play_clicked` in index.html
+
+### ⚠️ `isReplay` / `isReplaySession` timing (mobile)
+- `isReplay` is a one-shot flag reset immediately after `game_start` fires
+- `isReplaySession` captured from `isReplay` BEFORE the reset — persists for the full run
+- Without `isReplaySession`, Tiers 2-4 of the replay incentive system never fire
+
+---
+
+## Code Comments Debt
+The codebase has grown rapidly and comments are inconsistent. A dedicated comments pass is needed. Priority areas:
+- Leaderboard submission flow (timing, gates, parameter passing)
+- Boss spawn and shield logic
+- Replay incentive tier system (`isReplay` vs `isReplaySession`)
+- Analytics event firing (what fires where, version tagging)
+- Mobile SpatialGrid exclusions
+- Player hitbox inset (`isCollidingPlayer`)
+
+---
+
 ## Next Session: How-To-Play Screen Updates
 
 The how-to-play screen needs updating to reflect the current UI. Add or update the following sections:
