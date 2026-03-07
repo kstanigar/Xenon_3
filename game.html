@@ -410,15 +410,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    /**
-     * Writes a score document to the Firestore `leaderboard` collection.
-     * Called from `submitToLeaderboard()` after the player confirms submission.
-     * ⚠️  The collection must exist before this is called — it does NOT
-     * auto-recreate if deleted. Keep at least one document in the collection
-     * (e.g. a dummy {score:0} doc) so `firebaseGetTopScores` always succeeds.
-     * @param {{score:number, instagram:string, platform:string, movement_group:string}} scoreData
-     * @returns {Promise<{success:boolean, id?:string, error?:Error}>}
-     */
     window.firebaseSubmitScore = async function (scoreData) {
       try {
         const docRef = await addDoc(collection(db, "leaderboard"), {
@@ -435,11 +426,6 @@
       }
     };
 
-    /**
-     * Queries the Firestore `leaderboard` collection for the top 10 scores,
-     * ordered descending. Returns an empty array on error (e.g. network failure).
-     * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>}
-     */
     window.firebaseGetTopScores = async function () {
       try {
         const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
@@ -462,12 +448,9 @@
       <div id="introCard">
         <h2>NON-X</h2>
         <p>Can you defeat all 3 Alien Bosses?</p>
-
         <h3>Controls</h3>
         <ul>
-          <li id="introMovementHint">Toggle <strong>ON - Full Movement</strong> on the main menu for both vertical and
-            horizontal control</li>
-          <li>Mouse or ↑ ↓ ← → arrow keys to move</li>
+          <li>Use mouse or ← → Arrow keys to move</li>
           <li>Hold left mouse button or Spacebar to shoot</li>
           <li>P or Escape to pause</li>
         </ul>
@@ -486,23 +469,11 @@
             <canvas class="pu-icon" id="puShield" width="32" height="32"></canvas>
             <span>Shield — absorbs hits</span>
           </div>
+          <div class="powerup-item">
+            <canvas class="pu-icon" id="puQuad" width="32" height="32"></canvas>
+            <span>Quad Laser — four simultaneous shots</span>
+          </div>
         </div>
-
-        <h3>Global Leaderboard</h3>
-        <ul>
-          <li>Check the top 10 on the main menu before you play</li>
-          <li>Beat your personal best to submit your score</li>
-          <li>One submission per personal best</li>
-        </ul>
-
-        <h3>Settings</h3>
-        <ul>
-          <li><strong>Music</strong> — background music on/off</li>
-          <li><strong>Full Movement</strong> — ON: vertical and horizontal control &nbsp;|&nbsp; OFF: horizontal only
-          </li>
-          <li><strong>Analytics</strong> — anonymous data to help improve the game</li>
-          <li>All settings save automatically between sessions</li>
-        </ul>
 
         <button class="card-start-btn" onclick="startFromCard()">Start Game</button>
       </div>
@@ -697,12 +668,6 @@
      * calling play(). Autoplay errors are silently ignored (browser policy).
      * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
      */
-    /**
-     * Plays a one-shot sound effect by name, resetting it to the beginning first
-     * so rapid successive calls (e.g. rapid fire) always play from the start.
-     * Silently ignores unknown names and swallows autoplay-policy errors.
-     * @param {string} soundName - Key in the `sounds` object.
-     */
     function playSound(soundName) {
       var sound = sounds[soundName];
       if (sound) {
@@ -852,10 +817,6 @@
       }
     })();
 
-    /**
-     * Starts the looping background music track from the beginning.
-     * Respects the player's mute preference (`nonex_music` in localStorage).
-     */
     function startBackgroundMusic() {
       if (localStorage.getItem('nonex_music') === 'off') return;
       bgMusic.currentTime = 0;
@@ -871,10 +832,6 @@
     /**
      * Toggles the background music on/off and updates the mute button icon.
      * Saves the preference to localStorage for persistence across sessions.
-     */
-    /**
-     * Toggles background music on/off, persists the preference to localStorage,
-     * and updates the mute button label.
      */
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
@@ -1071,17 +1028,6 @@
      * Takes the higher of: the player's previously submitted Firebase score
      * and their local personal best (xenonHighScores[0]).
      * This prevents submitting a lower score even if they've never submitted to Firebase.
-     */
-    /**
-     * Returns the score the player must beat before the submit form is shown.
-     * Uses the higher of:
-     *   • `nonx_submitted_score` — the last score they actually sent to Firebase
-     *   • `xenonHighScores[0]`   — their local personal best
-     *
-     * ⚠️  TIMING CRITICAL: this must be called BEFORE `addHighScore()` runs.
-     * After `addHighScore()`, `highScores[0]` already equals the current score,
-     * making `score > submittedScore` always false and hiding the form.
-     * See: `buildLeaderboardSubmitHTML(submittedScore)` call sites.
      */
     function getEffectiveSubmittedScore() {
       var firebaseSubmitted = parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
@@ -1327,13 +1273,6 @@
      *   SHIELD      → aqua triangle with inner circle
      * @param {Object} powerup - Power-up object from the `powerups` array.
      */
-    /**
-     * Draws the power-up sprite for the given type:
-     *   HEALTH       → red diamond
-     *   DOUBLE_LASER → purple hexagon (upgrades laser level)
-     *   SHIELD       → aqua triangle
-     * @param {Object} powerup - Power-up object from `powerups[]`.
-     */
     function drawPowerup(powerup) {
       var time = Date.now();
 
@@ -1460,14 +1399,6 @@
      * appropriate HUD announcement. Collecting any power-up also awards 5 pts.
      * @param {Object} powerup - The power-up object being collected.
      */
-    /**
-     * Applies the effect of a collected power-up to the player:
-     *   HEALTH:       restores HP up to the phase maximum.
-     *   DOUBLE_LASER: increments laser level (max 3 in green/red; max 4 in purple).
-     *   SHIELD:       grants 3 shield hits; announces remaining hits on HUD.
-     * Fires a GA4 `powerup_collected` event and plays the collect sound.
-     * @param {Object} powerup
-     */
     function collectPowerup(powerup) {
       playSound('powerUp');
       score += 5;
@@ -1528,12 +1459,6 @@
      * minimum cooldown between drops and a per-level one-of-each limit.
      * Priority: health (40%) → double laser (70%) → shield (level 3+) → health fallback.
      */
-    /**
-     * Probabilistically spawns a power-up, enforcing two constraints:
-     *   1. Each type may spawn at most once per level (`powerupsSpawnedThisLevel`).
-     *   2. A minimum 5 s cooldown between spawns (`powerupSpawnCooldown`).
-     * Spawn chance scales with how many kills have happened this level.
-     */
     function trySpawnPowerup() {
       // Stagger power-ups - minimum 5 seconds between spawns
       var now = Date.now();
@@ -1581,11 +1506,6 @@
      * current level (defined in `CONFIG.levelEnemyTypes`).
      * @returns {string} Enemy type key (e.g. 'enemy1', 'enemy3_red').
      */
-    /**
-     * Returns a random enemy type string weighted by the current level.
-     * Higher levels introduce harder enemy variants at greater probability.
-     * @returns {string} Enemy type key (e.g. 'enemy1', 'enemy2', etc.).
-     */
     function getEnemyType() {
       var availableTypes = CONFIG.levelEnemyTypes[level] || CONFIG.levelEnemyTypes[4];
       var randomIndex = Math.floor(Math.random() * availableTypes.length);
@@ -1600,12 +1520,6 @@
      * @param {number} width  - Candidate rect width.
      * @param {number} height - Candidate rect height.
      * @returns {boolean} True if the rect overlaps any existing enemy.
-     */
-    /**
-     * Returns true if the given rect overlaps any existing enemy.
-     * Used by `createPowerup()` to find a clear spawn position.
-     * @param {number} x @param {number} y @param {number} width @param {number} height
-     * @returns {boolean}
      */
     function isOverlappingEnemy(x, y, width, height) {
       for (var i = 0; i < enemies.length; i++) {
@@ -1626,12 +1540,6 @@
      * current level and phase. Zigzag and side-to-side behaviours are assigned
      * based on `CONFIG.zigzagEnemies` / `CONFIG.sideToSideEnemies`.
      * Returns early (no-op) if no non-overlapping position is found in 10 tries.
-     */
-    /**
-     * Creates a single non-formation enemy with a random position along the
-     * top of the canvas. Assigns speed, health, and visual variant based on
-     * the current level and phase (green / red / purple).
-     * @returns {Object} Enemy object ready to be pushed into `enemies[]`.
      */
     function createEnemy() {
       var speedVariation = 1;
@@ -2199,13 +2107,6 @@
      * `spawnMorphingFormation()` to create the enemy group.
      * @param {number} waveNum - 1-based wave index within the current level.
      */
-    /**
-     * Starts the specified wave within the current level.
-     * Looks up the wave definition in `LEVEL_WAVES[level]`, announces the wave
-     * number, spawns kamikaze enemies if configured, and delegates to
-     * `spawnMorphingFormation()` or `spawnBarrier()` based on the formation type.
-     * @param {number} waveNum - 1-based wave index within the current level.
-     */
     function startWave(waveNum) {
       var levelData = LEVEL_WAVES[level];
       if (!levelData || waveNum > levelData.waves.length) return;
@@ -2272,12 +2173,6 @@
      * `updateMorphingFormation()` knows what to cycle through. All formation
      * enemies start shielded.
      * @param {Object} waveData - Wave descriptor from `LEVEL_WAVES[level].waves`.
-     */
-    /**
-     * Spawns a formation that can animate (morph) between two layouts.
-     * Enemies enter from the top with a staggered delay, then transition to
-     * their final positions in a grid/diamond/V/etc. pattern.
-     * @param {Object} waveData - Wave definition from `LEVEL_WAVES`.
      */
     function spawnMorphingFormation(waveData) {
       var count = waveData.count;
@@ -2365,11 +2260,6 @@
      * center has reached its target Y (handled by `updateKamikazeEntry`).
      * @param {number} count - Number of kamikaze enemies to spawn.
      */
-    /**
-     * Spawns `count` kamikaze enemies that dive straight at the player.
-     * Used as a pressure mechanic at the start of certain waves.
-     * @param {number} count - Number of kamikaze enemies to spawn.
-     */
     function spawnKamikazeWave(count) {
       var levelData = LEVEL_WAVES[level];
       var enemyType = levelData ? levelData.enemyType : 'enemy1';
@@ -2408,11 +2298,6 @@
      * Moves the invisible kamikaze group center downward each frame. Once it
      * reaches its target Y, all kamikazes are given a velocity vector aimed at
      * the player's current position and begin their dive.
-     */
-    /**
-     * Per-frame movement update for kamikaze enemies.
-     * They move at high speed toward the player's position at the time of spawn.
-     * Removed from the array when they leave the screen.
      */
     function updateKamikazeEntry() {
       if (!kamikazeCenterActive) return;
@@ -2459,11 +2344,6 @@
      * @param {number} t - Progress from 0.0 (start) to 1.0 (end).
      * @returns {number} Eased value in the same 0–1 range.
      */
-    /**
-     * Cubic ease-in/out interpolation. Used to smooth formation morph animations.
-     * @param {number} t - Progress value in [0, 1].
-     * @returns {number} Eased value in [0, 1].
-     */
     function easeInOutCubic(t) {
       return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
@@ -2475,12 +2355,6 @@
      * over 70% of the morph interval, then held. Also triggers kamikaze launch
      * after the second morph and shield cascade after the third.
      * @param {number} time - Current timestamp from `Date.now()`.
-     */
-    /**
-     * Per-frame update for morphing formations. Interpolates each enemy from its
-     * spawn position to its final formation slot using `easeInOutCubic`, then
-     * applies oscillation drift once the morph is complete.
-     * @param {number} time - Current `performance.now()` timestamp.
      */
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
@@ -2581,12 +2455,6 @@
      * Once all shields are down they regenerate after 5 seconds. Shields
      * permanently broken by 15+ hits (25+ at level 9+) are excluded from regen.
      */
-    /**
-     * Manages the shield cascade mechanic: after the last unshielded enemy in a
-     * formation is killed, the remaining shielded enemies lose their shields one
-     * by one with a 300 ms stagger. This gives the player a visual reward and
-     * a clear signal to stop shooting through the shield.
-     */
     function updateShieldCascade() {
       var formationEnemies = enemies.filter(function (e) {
         return e.formation && e.formationType === 'morphing';
@@ -2658,12 +2526,6 @@
 
     // Spawn barrier reinforcements (4-8 enemies forming a protective barrier)
     // Barriers stay between player and formation, no further than halfway down screen
-    /**
-     * Spawns a barrier formation — a row or cluster of static/slow-moving enemies
-     * that the player must shoot through. Used in specific wave configurations.
-     * @param {string} barrierType - Formation layout identifier.
-     * @param {number} count       - Number of barrier enemies to create.
-     */
     function spawnBarrier(barrierType, count) {
       if (barrierSpawned) return;
       barrierSpawned = true;
@@ -2804,10 +2666,6 @@
     }
 
     // Update barrier enemy positions
-    /**
-     * Per-frame update for barrier enemies: applies slow vertical drift and
-     * checks bullet collisions. Barriers do not fire back at the player.
-     */
     function updateBarriers() {
       enemies.forEach(function (enemy) {
         if (!enemy.barrier) return;
@@ -2857,11 +2715,6 @@
      * Polls whether all formation enemies have been destroyed. When the wave
      * is cleared, either starts the next wave within the level (after 3 s) or
      * calls `advanceLevel()` to move to the next level (after 2 s).
-     */
-    /**
-     * Checks whether the current wave is finished (all formation enemies dead).
-     * On completion, either starts the next wave after a 3 s cooldown or calls
-     * `advanceLevel()` after 2 s if all waves for this level are done.
      */
     function checkWaveCompletion() {
       if (!waveInProgress) return;
@@ -3028,10 +2881,6 @@
      * right, sliding to fixed x targets then bouncing rhythmically in time with
      * the beat.
      */
-    /**
-     * Spawns a two-pronged pincer: enemies enter from both sides of the screen
-     * and converge toward the centre in matched pairs.
-     */
     function spawnPincerFormation() {
       var enemyType = getEnemyType();
       var count = 3;
@@ -3097,10 +2946,6 @@
      * y=100, then undulate horizontally in a sine-wave pattern synced to the
      * background music BPM.
      */
-    /**
-     * Spawns enemies that travel in a sine-wave path across the screen.
-     * Amplitude and frequency are fixed; stagger delay produces a wave effect.
-     */
     function spawnSineWaveFormation() {
       var enemyType = getEnemyType();
       var count = 8;
@@ -3141,11 +2986,6 @@
      * 123 BPM. Shielded enemies show a brighter, wider gold ripple with an
      * additional inner ring. The ripple colour reflects the enemy's type/phase.
      * @param {Object} enemy - Enemy object from the `enemies` array.
-     */
-    /**
-     * Draws a single enemy sprite, choosing the correct image for its type and
-     * current phase. Applies a golden tint overlay when the enemy is shielded.
-     * @param {Object} enemy - Enemy object from `enemies[]`.
      */
     function drawEnemy(enemy) {
       var img;
@@ -3297,10 +3137,6 @@
      * has finished its entrance animation. Orbiter count: 4 (green), 6 (red),
      * or 8 (purple) based on boss difficulty.
      */
-    /**
-     * Initialises the ring of orbiting soldiers that protect the boss.
-     * Called once per boss spawn; subsequent respawns use `spawnOrbiter()`.
-     */
     function initBossOrbiters() {
       if (orbitersInitialized) return;
       orbitersInitialized = true;
@@ -3318,11 +3154,6 @@
      * into `bossOrbiters`. Orbiters use the same enemy sprite as the current
      * boss phase (enemy1 / enemy1_red / enemy1_purple).
      * @param {number} index - Angular slot (0..total-1).
-     * @param {number} total - Total number of orbiters in the ring.
-     */
-    /**
-     * Creates one orbiting soldier at its initial angle position.
-     * @param {number} index - Slot index (0-based) in the orbiter ring.
      * @param {number} total - Total number of orbiters in the ring.
      */
     function spawnOrbiter(index, total) {
@@ -3350,11 +3181,6 @@
      * player collision, and respawns destroyed orbiters after a 3-second delay.
      * Returns true if a collision killed the player (signals game loop to stop).
      * @returns {boolean}
-     */
-    /**
-     * Per-frame update for orbiting soldiers: rotates each orbiter around the
-     * boss, draws it, checks bullet and player collisions, and schedules
-     * respawns for any orbiters that were destroyed.
      */
     function updateBossOrbiters() {
       if (!boss || boss.entering) return;
@@ -3489,11 +3315,6 @@
      * every 4 beats. The spawn chance scales inversely with the current filler
      * count so the field self-regulates to a comfortable density.
      */
-    /**
-     * Spawns a small wave of regular enemies during the boss fight to keep
-     * the arena busy. Capped at `maxBossFillers` to prevent overcrowding.
-     * Triggered on a BPM-synced beat counter in `updateBoss()`.
-     */
     function spawnBossFiller() {
       var time = Date.now();
 
@@ -3584,14 +3405,6 @@
      * Spawns a single side-scrolling minion that enters from a random edge and
      * travels across the screen. Minions are distinct from `bossOrbiters` and
      * `enemies`; they are tracked in the `bossMinions` array.
-     */
-    /**
-     * Creates a single boss minion that enters from a random side of the screen
-     * and moves horizontally across at `CONFIG.bossMinionSpeed`.
-     * ⚠️  Minions are stored in `bossMinions[]` — they must NOT be pushed into
-     * `enemies[]` or the SpatialGrid. Doing so routes bullet hits through the
-     * enemies[] lookup path (which returns -1 for minions), consuming bullets
-     * without killing the minion and causing infinite score ticks.
      */
     function createBossMinion() {
       // Spawn from left or right side randomly
@@ -3859,16 +3672,6 @@
      *   Boss 2 → purple phase (level 9, score set to 2000)
      *   Boss 3 → victory screen
      */
-    /**
-     * Applies one unit of damage to the boss when hit by a player bullet
-     * (shield must be down). Handles phase-specific reactions:
-     *   • All bosses: blink effect, score increment, explosion/particle burst.
-     *   • On death: triggers defeat sequence — fires `boss_defeated` GA4 event,
-     *     sets the appropriate phase flag (redPhase / purplePhase / gameWon),
-     *     and transitions to the next game phase or the victory screen.
-     * ⚠️  Boss shield is managed in `updateBoss()` via a timed cycle.
-     *   Never call `damageBoss()` while `boss.shielded` is true.
-     */
     function damageBoss() {
       if (!boss) return;
 
@@ -4019,10 +3822,6 @@
      * Handles the boss hit-flash animation. Decrements `bossBlinkTimer` each
      * frame and toggles `bossVisible` to create a rapid strobe effect.
      */
-    /**
-     * Per-frame blink handler for the boss hurt animation.
-     * Toggles `bossVisible` every 100 ms for a total of 500 ms then stops.
-     */
     function updateBossBlink() {
       if (bossBlinking) {
         bossBlinkTimer--;
@@ -4038,13 +3837,6 @@
      * Ends the game in a victory state. Clears all game objects, checks for a
      * top-10 score, builds the victory HTML (score, optional rank badge, email
      * subscription form, return button), and displays the #victory overlay.
-     */
-    /**
-     * Displays the victory screen after boss 3 is defeated.
-     * Builds the end-of-game UI: final score, personal best callout, leaderboard
-     * display + submit form, and Play Again / Leave Game buttons.
-     * Fires `player_won` GA4 event with session duration and movement group.
-     * Also triggers the post-game survey after a 1.8 s delay (once per eligible session).
      */
     function showVictory() {
       gameOver = true;
@@ -4163,11 +3955,6 @@
      * Shows the slide-down survey banner from the top of the screen.
      * Two states: collapsed (teaser bar) and expanded (full questions).
      * Auto-expands 400ms after appearing. Fires 1800ms after game over/victory.
-     */
-    /**
-     * Renders the post-game survey banner (slides in from the bottom of the screen).
-     * Questions are driven by the `questions` array defined inside this function.
-     * @param {string} platform - 'desktop' or 'mobile' (used in GA4 event params).
      */
     function showSurveyBanner(platform) {
       if (document.getElementById('nonxSurveyBanner')) return;
@@ -4637,12 +4424,6 @@
      * Bullet speed scales with the current game phase (red: +40%, purple: +65%).
      * @param {Object} enemy - The firing enemy object.
      */
-    /**
-     * Fires a bullet from the given enemy directed at the player's current
-     * position. Enemy shooting is unlocked at level 2 (`CONFIG.enemyShootLevel`)
-     * and fires at the rate defined by `CONFIG.enemyShootChance` per frame.
-     * @param {Object} enemy - The enemy firing the bullet.
-     */
     function shootEnemyBullet(enemy) {
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       if (purplePhase) {
@@ -4854,11 +4635,6 @@
      * each frame and toggles `playerVisible` every 3 frames to create a
      * strobe effect lasting ~0.5 s (30 frames).
      */
-    /**
-     * Per-frame blink handler for player invincibility frames after taking damage.
-     * Toggles `playerVisible` every 100 ms for 1000 ms of invincibility, then
-     * re-shows the player and clears the blinking flag.
-     */
     function updatePlayerBlink() {
       if (playerBlinking) {
         playerBlinkTimer--;
@@ -4877,13 +4653,6 @@
      * @param {number} y - Center Y position
      * @param {boolean} isBoss - True for boss explosion (triple rings)
      */
-    /**
-     * Adds an explosion animation entry at the given canvas coordinates.
-     * Boss explosions are larger (80x80) than regular explosions (50x50).
-     * @param {number}  x      - Centre X of the explosion.
-     * @param {number}  y      - Centre Y of the explosion.
-     * @param {boolean} isBoss - True for a larger boss-death explosion.
-     */
     function spawnExplosion(x, y, isBoss) {
       explosions.push({
         x: x,
@@ -4898,10 +4667,6 @@
      * Updates and draws all active explosions.
      * Regular enemies: Single expanding ring
      * Boss enemies: Triple concentric rings
-     */
-    /**
-     * Per-frame update for all active explosions. Advances each animation frame
-     * and removes the explosion when the sprite sheet is exhausted.
      */
     function updateExplosions() {
       var now = Date.now();
@@ -4958,13 +4723,6 @@
      * @param {number} x - Center X position
      * @param {number} y - Center Y position
      * @param {number} count - Number of particles to spawn
-     */
-    /**
-     * Emits `count` particles from the given position, each with a random
-     * velocity and a random cyan/gold/white colour. Used for enemy death bursts.
-     * @param {number} x     - Spawn X.
-     * @param {number} y     - Spawn Y.
-     * @param {number} count - Number of particles to emit.
      */
     function spawnParticles(x, y, count) {
       var color = '255, 215, 0'; // Golden color - like shield breaking
@@ -5741,10 +5499,6 @@
      * `<canvas>` elements using the same shapes as the in-game pickups.
      * Called once at page load so the icons are visible before any game starts.
      */
-    /**
-     * Draws the three power-up icon labels (health / laser / shield) onto the
-     * start card canvas. Called once when the card is first rendered.
-     */
     function drawCardPowerupIcons() {
       // Health — red diamond with white plus
       (function () {
@@ -5813,10 +5567,6 @@
      * Called by the intro card's "Start Game" button. Hides the card, shows the
      * Pause button in game-active state, then programmatically clicks the start
      * button to begin the first game session.
-     */
-    /**
-     * Called when the player clicks "Play" on the start card overlay.
-     * Hides the card, reveals the game canvas, and triggers the Start button.
      */
     function startFromCard() {
       document.getElementById('introCard').style.display = 'none';
