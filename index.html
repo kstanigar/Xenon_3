@@ -315,6 +315,13 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    /**
+     * Queries the Firestore `leaderboard` collection for the top 10 scores,
+     * ordered descending. Returns an empty array on error.
+     * Shared signature with the game files — index.html uses it to populate
+     * the main menu leaderboard dropdown on page load.
+     * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>}
+     */
     window.firebaseGetTopScores = async function () {
       try {
         const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
@@ -542,6 +549,13 @@
     var leaderboardOpen = true;
     var leaderboardLoaded = false;
 
+    /**
+     * Renders the top 10 Firebase scores into the `#leaderboardContent` element
+     * as a two-column flex grid. The player's own score (matched by
+     * `nonx_submitted_score` in localStorage) is highlighted in cyan with a
+     * "← you" label. Shows a friendly message when the list is empty.
+     * @param {Array<{score:number, instagram:string}>} top10
+     */
     function renderLeaderboard(top10) {
       var content = document.getElementById('leaderboardContent');
       if (!content) return;
@@ -574,6 +588,12 @@
       content.innerHTML = html;
     }
 
+    /**
+     * Opens or closes the leaderboard dropdown panel with a CSS max-height
+     * transition. Fetches scores from Firebase on the first open (or on page
+     * load since the panel is open by default). Falls back gracefully if the
+     * Firebase module hasn't finished loading yet, with a 1.2 s retry.
+     */
     function toggleLeaderboard() {
       leaderboardOpen = !leaderboardOpen;
       var panel = document.getElementById('leaderboardPanel');
@@ -600,6 +620,12 @@
       }
     }
 
+    /**
+     * Updates the active platform selection, persists the preference to
+     * localStorage, and fires a 'platform_selected' analytics event when
+     * the value actually changes.
+     * @param {string} p - 'computer' | 'mobile'
+     */
     function selectPlatform(p) {
       var prev = selectedPlatform;
       selectedPlatform = p;

@@ -372,27 +372,12 @@ The codebase has grown rapidly and comments are inconsistent. A dedicated commen
 
 ---
 
-## Next Session: How-To-Play Screen Updates
+## ✅ DONE: How-To-Play Screen Updates
 
-The how-to-play screen needs updating to reflect the current UI. Add or update the following sections:
-
-### Leaderboard
-- Global Top 10 is visible on the main menu before you play — see how you stack up before starting
-- After submitting a score your entry is highlighted in cyan with a "← you" marker
-- Scores can be submitted from the game over screen if you beat your personal best
-- Only one submission per personal best (no score farming)
-- The leaderboard also appears on the game over screen so you can see your rank immediately
-
-### Settings (main menu toggles)
-- **Music** — toggles background music on/off; persists between sessions
-- **Full Movement** — ON (default) = full directional control (←→↑↓); OFF = horizontal only (←→), simpler one-thumb mobile play; persists between sessions
-- **Analytics** — opt-in anonymous data sharing to help improve the game; no personal info collected; persists between sessions
-- All settings are saved automatically — no need to re-set on each visit
-
-### Controls (update to reflect Full Movement toggle)
-- The controls that apply during gameplay match the Full Movement setting chosen on the main menu
-- Desktop: Arrow keys to move, spacebar to shoot (auto-fire available)
-- Mobile: Tap/swipe to move, auto-fire enabled
+Both `game.html` and `game_mobile.html` introCard updated with:
+- **Controls** — desktop: mouse/arrow keys + Full Movement toggle note; mobile: tap/drag + auto-fire + Full Movement toggle note
+- **Global Leaderboard** — top 10 on main menu, submit on game over, cyan highlight, one submission per personal best
+- **Settings** — Music, Full Movement (with on/off description), Analytics, all auto-save
 
 ---
 
