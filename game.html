@@ -889,6 +889,11 @@
       var igHandle = document.getElementById('igInput').value.trim();
       var sanitized = igHandle.replace(/[@<>'"]/g, '').substring(0, 30);
 
+      // Save Instagram handle for future autofill
+      if (sanitized) {
+        localStorage.setItem('nonx_ig_handle', sanitized);
+      }
+
       // Disable button to prevent double submit
       var submitBtn = document.querySelector('#leaderboardSubmit button');
       if (submitBtn) {
@@ -3879,6 +3884,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Check if top 10 score and save
+      var prevBest = highScores.length > 0 ? highScores[0] : null;
       var madeTopTen = isTopTenScore(score);
       var rank = getScoreRank(score);
       if (madeTopTen) {
@@ -3889,17 +3895,19 @@
       var victoryEl = document.getElementById("victory");
       var html = "<div style='font-size: 22px; margin-bottom: 15px;'>Thank you for playing NON-X!</div>";
       html += "<div style='font-size: 20px; margin-bottom: 25px;'>Your Score: <strong>" + score + "</strong>";
-      if (madeTopTen) {
-        html += " <span style='color: #FFD700;'>- TOP 10! Rank #" + rank + "</span>";
+      if (prevBest !== null && score < prevBest) {
+        html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
+        html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
       }
       html += "</div>";
 
       // Leaderboard submission — only if this beats player's previously submitted score
       var submittedScore = getEffectiveSubmittedScore();
       if (score >= submittedScore) {
+        var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
         html += "<div id='leaderboardSubmit' style='margin-bottom: 20px; text-align: center;'>";
         html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
-        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + savedHandle + "' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
         html += "</div>";
       } else {
@@ -4128,9 +4136,10 @@
       // otherwise highScores[0] already equals the current score.
       var html = "";
       if (score > submittedScore) {
+        var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
         html += "<div id='leaderboardSubmit' style='margin-top: 18px; margin-bottom: 18px; text-align: center;'>";
         html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 18px;'>Submit to Global Leaderboard:</div>";
-        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; display: block; margin-left: auto; margin-right: auto; margin-bottom: 18px;'>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + savedHandle + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none; display: block; margin-left: auto; margin-right: auto; margin-bottom: 18px;'>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 8px 18px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
         html += "</div>";
       } else {
@@ -4161,7 +4170,10 @@
         html += "<br><span style='color:#00FFFF;font-size:15px;'>🏆 New personal best!</span>";
       }
       html += "<br><span style='font-size: 22px;'>Your Score: " + score + "</span>";
-      if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+      if (prevBest !== null && score < prevBest) {
+        html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
+        html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
+      }
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture);
@@ -4561,8 +4573,9 @@
           html += "<br><span style='color: #00FFFF; font-size: 15px;'>🏆 New personal best!</span>";
         }
         html += "<br><span style='font-size: 22px;'>Your Score: " + score + "</span>";
-        if (madeTopTen) {
-          html += "<br><span style='color: #FFD700;'>TOP 10! Rank #" + rank + "</span>";
+        if (prevBest !== null && score < prevBest) {
+          html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
+          html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
         }
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
@@ -4818,12 +4831,16 @@
           deathPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
           var wasReplay = isReplaySession;
           var submittedScoreCapture = getEffectiveSubmittedScore();
+          var prevBest = highScores.length > 0 ? highScores[0] : null;
           var madeTopTen = isTopTenScore(score);
           var rank = getScoreRank(score);
           if (madeTopTen) addHighScore(score);
           var gameOverEl = document.getElementById('gameOver');
           var html = "Game Over!<br><br>Your Score: " + score;
-          if (madeTopTen) html += "<br><span style='color:#FFD700;'>TOP 10! Rank #" + rank + "</span>";
+          if (prevBest !== null && score < prevBest) {
+            html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
+            html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
+          }
           html += "<br><br>";
           html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
           if (!wasReplay) {
