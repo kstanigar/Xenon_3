@@ -422,23 +422,24 @@
 
     /**
      * Submits a score entry to the Firestore "leaderboard" collection.
-     * One entry per player: If player has existing entry, updates it only if new score is higher.
-     * Includes Instagram handle (or 'Anonymous'), platform, and movement group
-     * for analytics and display purposes. Server timestamp is added automatically.
+     * One entry per player: Query by unique player_id, update if new score is higher, create if none exists.
+     * This prevents name collisions (multiple players using "Anonymous" or same display name).
+     * Includes player name/handle, platform, and movement group for analytics and display purposes.
      *
      * @param {Object} scoreData - Score entry data
      * @param {number} scoreData.score - Final score achieved
-     * @param {string} scoreData.instagram - Instagram handle or 'Anonymous'
+     * @param {string} scoreData.instagram - Player name/handle or 'Anonymous'
      * @param {string} scoreData.platform - 'desktop' or 'mobile'
      * @param {string} scoreData.movement_group - 'A' (horizontal) or 'B' (full movement)
+     * @param {string} scoreData.player_id - Unique player ID (UUID)
      * @returns {Promise<{success:boolean, id?:string, updated?:boolean, error?:any}>} Result object
      */
     window.firebaseSubmitScore = async function (scoreData) {
       try {
-        // Query for existing entry with the same instagram handle
+        // Query for existing entry with the same player_id (unique per device/browser)
         const q = query(
           collection(db, "leaderboard"),
-          where("instagram", "==", scoreData.instagram)
+          where("player_id", "==", scoreData.player_id)
         );
         const snapshot = await getDocs(q);
 
@@ -451,6 +452,7 @@
           if (scoreData.score > existingData.score) {
             await updateDoc(doc(db, "leaderboard", existingDoc.id), {
               score: scoreData.score,
+              instagram: scoreData.instagram,  // Allow changing display name
               platform: scoreData.platform,
               movement_group: scoreData.movement_group,
               date: serverTimestamp() // Server-side timestamp for accurate sorting
@@ -467,6 +469,7 @@
             instagram: scoreData.instagram,
             platform: scoreData.platform,
             movement_group: scoreData.movement_group,
+            player_id: scoreData.player_id,  // Store unique player ID
             date: serverTimestamp() // Server-side timestamp for accurate sorting
           });
           return { success: true, id: docRef.id, updated: true };
@@ -647,6 +650,44 @@
       // Enemy types that sweep horizontally across the screen
       sideToSideEnemies: ['enemy2_red', 'enemy2_purple']
     };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PLAYER ID SYSTEM
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Generates a unique player ID to prevent name collision on leaderboard.
+    // Each player gets one persistent entry; display names can be duplicates.
+
+    /**
+     * Generates a simple UUID v4 for unique player identification.
+     * Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+     *
+     * @returns {string} UUID string
+     */
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0;
+        var v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    /**
+     * Gets or creates the unique player ID from localStorage.
+     * This ID persists across sessions and ensures one leaderboard entry per player.
+     *
+     * @returns {string} Unique player ID
+     */
+    function getPlayerId() {
+      var playerId = localStorage.getItem('nonx_player_id');
+      if (!playerId) {
+        playerId = generateUUID();
+        localStorage.setItem('nonx_player_id', playerId);
+      }
+      return playerId;
+    }
+
+    // Initialize player ID on game load
+    var PLAYER_ID = getPlayerId();
 
     // ═══════════════════════════════════════════════════════════════════════════
     // IMAGE ASSETS
@@ -1079,7 +1120,8 @@
         score: score,
         instagram: sanitized || 'Anonymous', // Empty input becomes Anonymous
         platform: 'desktop',
-        movement_group: movementABGroup      // A/B test group for analytics
+        movement_group: movementABGroup,     // A/B test group for analytics
+        player_id: PLAYER_ID                 // Unique ID to prevent name collision
       };
 
       // Track submission in GA4 (fires even if Firebase fails)

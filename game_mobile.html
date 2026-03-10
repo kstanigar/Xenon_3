@@ -417,13 +417,14 @@
     const db = getFirestore(app);
 
     // Expose to global scope so non-module game script can call them
-    // One entry per player: Query for existing entry, update if new score is higher, create if none exists
+    // One entry per player: Query by unique player_id, update if new score is higher, create if none exists
+    // This prevents name collisions (multiple players using "Anonymous" or same display name)
     window.firebaseSubmitScore = async function (scoreData) {
       try {
-        // Query for existing entry with the same instagram handle
+        // Query for existing entry with the same player_id (unique per device/browser)
         const q = query(
           collection(db, "leaderboard"),
-          where("instagram", "==", scoreData.instagram)
+          where("player_id", "==", scoreData.player_id)
         );
         const snapshot = await getDocs(q);
 
@@ -436,6 +437,7 @@
           if (scoreData.score > existingData.score) {
             await updateDoc(doc(db, "leaderboard", existingDoc.id), {
               score: scoreData.score,
+              instagram: scoreData.instagram,  // Allow changing display name
               platform: scoreData.platform,
               movement_group: scoreData.movement_group,
               date: serverTimestamp()
@@ -452,6 +454,7 @@
             instagram: scoreData.instagram,
             platform: scoreData.platform,
             movement_group: scoreData.movement_group,
+            player_id: scoreData.player_id,  // Store unique player ID
             date: serverTimestamp()
           });
           return { success: true, id: docRef.id, updated: true };
@@ -608,6 +611,44 @@
       // Enemies that move side to side (horizontal)
       sideToSideEnemies: ['enemy2_red', 'enemy2_purple']
     };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PLAYER ID SYSTEM
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Generates a unique player ID to prevent name collision on leaderboard.
+    // Each player gets one persistent entry; display names can be duplicates.
+
+    /**
+     * Generates a simple UUID v4 for unique player identification.
+     * Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+     *
+     * @returns {string} UUID string
+     */
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0;
+        var v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    /**
+     * Gets or creates the unique player ID from localStorage.
+     * This ID persists across sessions and ensures one leaderboard entry per player.
+     *
+     * @returns {string} Unique player ID
+     */
+    function getPlayerId() {
+      var playerId = localStorage.getItem('nonx_player_id');
+      if (!playerId) {
+        playerId = generateUUID();
+        localStorage.setItem('nonx_player_id', playerId);
+      }
+      return playerId;
+    }
+
+    // Initialize player ID on game load
+    var PLAYER_ID = getPlayerId();
 
     // ============================================
     // CANVAS AND IMAGE SETUP
@@ -1048,7 +1089,8 @@
         score: score,
         instagram: sanitized || 'Anonymous',
         platform: 'mobile',
-        movement_group: movementABGroup
+        movement_group: movementABGroup,
+        player_id: PLAYER_ID  // Unique ID to prevent name collision
       };
 
       // Track submission in GA4
