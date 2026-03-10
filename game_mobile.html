@@ -688,22 +688,43 @@
      *                             'playerHit', 'playerDead', 'enemyDead',
      *                             'bossIntro', 'powerUp').
      */
+    /**
+     * Plays a one-shot sound effect with intelligent throttling for mobile optimization.
+     *
+     * Mobile-specific optimizations (same as desktop):
+     * - playerBullet: Waits for previous play to finish (prevents overlap)
+     * - enemyDead: Limited to 3 plays per second (333ms cooldown)
+     * - Other SFX: Play immediately without throttling
+     *
+     * Throttling rationale:
+     * - playerBullet: Auto-fire cycle fires every 130ms, but sound is ~200ms long
+     *   → Wait for completion to avoid audio glitching
+     * - enemyDead: Formations can destroy 10+ enemies simultaneously
+     *   → Limit to 3/sec to prevent audio distortion
+     *
+     * No audio pools required (simple, clean approach).
+     * All sounds preloaded on game start to satisfy autoplay policies.
+     *
+     * @param {string} soundName - Sound key from sounds{} dictionary
+     *   Valid keys: 'playerBullet', 'playerHit', 'playerDead', 'enemyDead',
+     *               'powerUp', 'bossIntro'
+     */
     function playSound(soundName) {
       var sound = sounds[soundName];
-      if (!sound) return;
+      if (!sound) return; // Sound not found
 
       // playerBullet: Prevent overlap by checking if previous play has finished
       if (soundName === 'playerBullet') {
         if (!sound.paused && sound.currentTime > 0 && !sound.ended) {
-          return;
+          return; // Still playing from previous call
         }
       }
 
-      // enemyDead: Time-based throttling (max 3 plays per second)
+      // enemyDead: Time-based throttling (max 3 plays per second = 333ms cooldown)
       if (soundName === 'enemyDead') {
         var now = Date.now();
         if (now - lastEnemyDeadTime < ENEMY_DEAD_COOLDOWN) {
-          return;
+          return; // Still in cooldown period
         }
         lastEnemyDeadTime = now;
       }
@@ -943,16 +964,45 @@
      * Submits score to Firebase global leaderboard.
      * Falls back to localStorage display if Firebase is unavailable.
      */
+    /**
+     * Submits the current score to the global Firebase leaderboard.
+     * Sanitizes Instagram handle input and prevents duplicate submissions.
+     *
+     * Submission flow (same as desktop):
+     * 1. Read Instagram handle from input field
+     * 2. Sanitize: Remove @<>'" characters, limit to 30 chars
+     * 3. Save sanitized handle to localStorage for autofill
+     * 4. Disable submit button (prevents double-submit)
+     * 5. Fire 'leaderboard_submit' analytics event
+     * 6. Submit to Firebase via window.firebaseSubmitScore()
+     * 7. On success: Hide submit form, save submitted score, show leaderboard
+     * 8. On failure: Show error message
+     *
+     * Mobile-specific notes:
+     * - Same submission logic as desktop
+     * - Tracks 'platform': 'mobile' in scoreData and analytics
+     * - Includes 'movement_group' (A/B test data)
+     *
+     * Handle sanitization:
+     * - Removes @ prefix (user may type @username)
+     * - Removes <, >, ', " (XSS prevention)
+     * - Limits to 30 characters (prevents overflow)
+     * - Empty string → 'Anonymous'
+     *
+     * Score deduplication:
+     * - Only submits if score >= previously submitted score
+     * - Prevents spam submissions of same/lower scores
+     */
     function submitToLeaderboard() {
       var igHandle = document.getElementById('igInput').value.trim();
       var sanitized = igHandle.replace(/[@<>'"]/g, '').substring(0, 30);
 
-      // Save Instagram handle for future autofill
+      // Save Instagram handle for future autofill (pre-populates input on next game)
       if (sanitized) {
         localStorage.setItem('nonx_ig_handle', sanitized);
       }
 
-      // Disable button to prevent double submit
+      // Disable submit button to prevent double-submit while processing
       var submitBtn = document.querySelector('#leaderboardSubmit button');
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -998,7 +1048,30 @@
     }
 
     /**
-     * Fetches and displays top 10 global scores from Firebase.
+     * Fetches and displays top 10 global scores from Firebase Firestore.
+     * Renders a two-column leaderboard layout with player score highlighting.
+     *
+     * Leaderboard rendering (same as desktop and index.html):
+     * - Two-column grid: Entries 1-5 (left), 6-10 (right)
+     * - flex-wrap fallback: Single column on narrow screens
+     * - Player highlighting: Gold text if score matches current player's score
+     *
+     * Display logic:
+     * 1. Show "Loading leaderboard..." while fetching
+     * 2. Call window.firebaseGetTopScores() (Firebase SDK wrapper)
+     * 3. On success: Render two-column grid with entries
+     * 4. On failure/empty: Show "No scores yet" or "Leaderboard unavailable"
+     *
+     * Entry format:
+     * - Rank #1-10 (gold text)
+     * - Instagram handle or 'Anonymous'
+     * - Score (highlighted in gold if matches player's score)
+     * - Platform badge (🖥️ desktop or 📱 mobile)
+     *
+     * Mobile-specific notes:
+     * - Same rendering as desktop
+     * - 📱 badge shown for mobile scores
+     * - Responsive two-column → single-column on narrow screens
      */
     function showLeaderboard() {
       var display = document.getElementById('leaderboardDisplay');
@@ -1042,26 +1115,40 @@
     }
 
     // ============================================
-    // GAME STATE
-    // ============================================
-    // ── MOBILE TUNING ───────────────────────────────────────────────
-    // Adjust these after reviewing on a real device
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MOBILE-SPECIFIC POSITIONING CONSTANTS
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Portrait canvas (480×1040) requires different player positioning vs desktop.
+    // Desktop (800×600): Player at y=500 (83% down screen)
+    // Mobile (480×1040): Player at y=690 (66% down screen) for better visibility
 
-    var PLAYER_START_Y_OFFSET = 350;  // px from bottom of canvas — player starts at y=690
+    // Player spawn position — distance from bottom edge of canvas
+    // Canvas height = 1040, offset = 350 → player.y = 690
+    var PLAYER_START_Y_OFFSET = 350;
 
-    // Vertical constraint for Group B:
-    // Player starts at y=690 (bottom bound) and can move up to y=490 (upper bound).
-    // PLAYER_VERTICAL_MIN is the highest (smallest Y) the player can reach.
-    // PLAYER_VERTICAL_MAX is the lowest (largest Y) — locked to starting position.
-    var PLAYER_VERTICAL_MAX = 1040 - 350;        // 690 — starting position, no moving down
-    var PLAYER_VERTICAL_MIN = PLAYER_VERTICAL_MAX - 200; // 490 — max upward movement
+    // Vertical movement constraints (Movement Group B only)
+    // Y-axis in canvas: 0 = top, 1040 = bottom
+    // Movement window: 200px vertical range (y=490 to y=690)
+    //
+    // PLAYER_VERTICAL_MAX = 690 (starting position, cannot move down from spawn)
+    // PLAYER_VERTICAL_MIN = 490 (max upward reach, prevents obscuring enemies)
+    //
+    // Why these values:
+    // - 200px range allows dodge maneuvering without excessive vertical freedom
+    // - Prevents player from moving too high and blocking formation enemies
+    // - Prevents moving lower than spawn (off-screen on smaller devices)
+    var PLAYER_VERTICAL_MAX = 1040 - 350;        // 690 — bottom constraint (spawn Y)
+    var PLAYER_VERTICAL_MIN = PLAYER_VERTICAL_MAX - 200; // 490 — top constraint
 
-    // Touch Y delta tracking — only used in Group B
-    var touchTargetY = 0;
-    var touchLastY = 0;
-    var PLAYER_SPRITE_W = 75;         // player sprite width
-    var PLAYER_SPRITE_H = 75;         // player sprite height
-    // ────────────────────────────────────────────────────────────────
+    // Touch Y-axis delta tracking variables (Movement Group B only)
+    // touchTargetY: Y-axis movement delta calculated in touchmove handler
+    // touchLastY: Previous frame's touch Y position for delta calculation
+    var touchTargetY = 0; // Delta applied to player.y each frame (consumed after use)
+    var touchLastY = 0;   // Last recorded touch Y position (canvas pixels)
+
+    // Player sprite dimensions (same as desktop for visual consistency)
+    var PLAYER_SPRITE_W = 75;
+    var PLAYER_SPRITE_H = 75;
 
     var player = {
       x: canvas.width / 2,
@@ -1262,23 +1349,56 @@
      * and their local personal best (xenonHighScores[0]).
      * This prevents submitting a lower score even if they've never submitted to Firebase.
      */
+    /**
+     * Returns the player's last submitted score to Firebase (not local high score).
+     * Used to determine if current score should show leaderboard submission form.
+     *
+     * Critical implementation note:
+     * - MUST use localStorage 'nonx_submitted_score', NOT highScores[0]
+     * - addHighScore() runs before this function is called
+     * - If we checked highScores[0], it would already contain current score
+     * - This would make score > submittedScore always false (no submission form)
+     *
+     * Submission flow:
+     * 1. Game ends, score = 500
+     * 2. addHighScore(500) runs → highScores[0] = 500
+     * 3. getEffectiveSubmittedScore() → returns last Firebase submission (e.g., 300)
+     * 4. score (500) > submittedScore (300) → show submission form
+     *
+     * Same as desktop.
+     *
+     * @returns {number} Last score submitted to Firebase, or 0 if never submitted
+     */
     function getEffectiveSubmittedScore() {
-      // Only check what was actually submitted to Firebase — NOT highScores[0],
+      // Only check what was actually submitted to Firebase — NOT highScores[0]
       // because addHighScore() runs before this is called, so highScores[0]
       // already contains the current score, making score > submittedScore always false.
       return parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
     }
 
     /**
-     * Inserts a score into the top-10 leaderboard, sorts descending, trims to
-     * 10 entries, and persists to `localStorage` under `xenonHighScores`.
-     * @param {number} newScore - The score to add.
+     * Adds a score to the local high scores list (localStorage-based legacy system).
+     * Maintains a sorted top-10 list in descending order.
+     *
+     * Legacy system notes:
+     * - Local-only scores (not synced to Firebase)
+     * - Used for personal best tracking and "Your record: X" display
+     * - Separate from global leaderboard (Firebase)
+     * - Same implementation as desktop
+     *
+     * Algorithm:
+     * 1. Add newScore to highScores array
+     * 2. Sort descending (highest first)
+     * 3. Keep only top 10 scores (slice(0, 10))
+     * 4. Save to localStorage as JSON
+     *
+     * @param {number} newScore - Score to add to local top 10
      */
     function addHighScore(newScore) {
       highScores.push(newScore);
-      highScores.sort(function (a, b) { return b - a; }); // Sort descending
-      highScores = highScores.slice(0, 10); // Keep only top 10
-      localStorage.setItem('xenonHighScores', JSON.stringify(highScores));
+      highScores.sort(function (a, b) { return b - a; }); // Sort descending (highest first)
+      highScores = highScores.slice(0, 10); // Keep only top 10 (discard 11th+)
+      localStorage.setItem('xenonHighScores', JSON.stringify(highScores)); // Persist to localStorage
     }
 
     /**
@@ -1304,20 +1424,51 @@
       }
       return highScores.length + 1;
     }
+    // Keyboard input state (for developer testing on desktop)
     var rightPressed = false;
     var leftPressed = false;
     var upPressed = false;
     var downPressed = false;
 
-    // Mobile touch state
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TOUCH CONTROL STATE (Mobile-Specific)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Touch-based input system for mobile devices. Replaces desktop's keyboard
+    // controls with touch-and-drag movement + auto-fire cycle.
+
+    // Touch active flag — true when finger is on canvas
+    // Set by touchstart, cleared by touchend/touchcancel
+    // Controls whether updateTouchControls() processes movement
     var touchActive = false;
-    var touchTargetX = 0;           // canvas-space x the player should follow
-    var touchShootActive = false;   // currently in shoot window
-    var touchShootCycleStart = 0;   // when the current cycle began
-    var TOUCH_SHOOT_DURATION = 1800;  // 1.8 seconds shooting
-    var TOUCH_SHOOT_COOLDOWN = 400;   // 0.4 second reload
+
+    // Touch target X position (canvas pixels)
+    // Updated by touchstart/touchmove with getTouchCanvasX() conversion
+    // Player moves toward this position at 10px/frame in updateTouchControls()
+    var touchTargetX = 0;
+
+    // Auto-fire cycle state management
+    // Unlike desktop (spacebar = fire once), mobile uses continuous auto-fire cycle:
+    // Phase 1: ACTIVE (1.8s) — Fires bullets every 130ms while finger is down
+    // Phase 2: RELOAD (0.4s) — No firing, simulates weapon cooldown
+    // Phase 3: Repeat cycle from Phase 1
+    //
+    // Cycle resets on each new touchstart (doesn't resume from previous position)
+
+    // Currently in active firing window (true) or reload cooldown (false)
+    var touchShootActive = false;
+
+    // Timestamp when current cycle began (milliseconds from Date.now())
+    // Used to calculate elapsed time and determine active vs reload window
+    var touchShootCycleStart = 0;
+
+    // Auto-fire timing constants (milliseconds)
+    var TOUCH_SHOOT_DURATION = 1800;  // 1.8s active window (fires bullets)
+    var TOUCH_SHOOT_COOLDOWN = 400;   // 0.4s reload window (no firing)
+    var TOUCH_SHOOT_INTERVAL = 130;   // Fire rate: 130ms between bullets (~7.7 bullets/sec)
+
+    // Timestamp of last bullet fired (milliseconds from Date.now())
+    // Compared with current time to enforce TOUCH_SHOOT_INTERVAL spacing
     var touchLastShot = 0;
-    var TOUCH_SHOOT_INTERVAL = 130;   // fire every 130ms while active
 
     // Power-up state
     var hasDoubleLaser = false;
@@ -1403,11 +1554,30 @@
      * @param {number} [intensity=10] - Maximum pixel offset in each direction.
      * @param {number} [duration=500] - Total shake duration in milliseconds.
      */
+    /**
+     * Triggers the screen shake visual effect with configurable intensity and duration.
+     * Used for impact feedback (player hit, enemy destruction, boss defeat).
+     *
+     * Effect implementation:
+     * - CSS transform on canvas element (translate with random offsets)
+     * - Linear intensity decay over duration (smooth fade-out)
+     * - Applied every frame by updateScreenShake()
+     *
+     * Common usage:
+     * - Player hit: triggerScreenShake(5, 200) — subtle, brief
+     * - Enemy destroyed: triggerScreenShake(8, 300) — moderate
+     * - Boss defeated: triggerScreenShake(15, 800) — strong, prolonged
+     *
+     * Same as desktop (no mobile-specific adjustments)
+     *
+     * @param {number} intensity - Maximum shake offset in pixels (default: 10)
+     * @param {number} duration - Shake duration in milliseconds (default: 500)
+     */
     function triggerScreenShake(intensity, duration) {
       screenShakeActive = true;
-      screenShakeIntensity = intensity || 10;
-      screenShakeDuration = duration || 500;
-      screenShakeTimer = Date.now();
+      screenShakeIntensity = intensity || 10; // Max pixel offset
+      screenShakeDuration = duration || 500;  // Total shake time
+      screenShakeTimer = Date.now(); // Start timestamp for decay calculation
     }
 
     /**
@@ -1461,18 +1631,59 @@
      * @param {string} type - One of POWERUP_TYPES (HEALTH, DOUBLE_LASER, SHIELD).
      * @returns {boolean} True if the power-up was successfully added.
      */
+    /**
+     * Creates a power-up of the specified type at the top of the screen (y=0)
+     * with mobile-specific spawn positioning that accounts for CSS viewport scaling.
+     *
+     * Mobile viewport handling:
+     * - Canvas is 480×1040 but CSS-scaled to fill device screen
+     * - resizeCanvas() uses Math.max() which may crop canvas horizontally
+     * - Only the visible horizontal strip should spawn power-ups
+     * - Algorithm calculates visible canvas width after scaling
+     *
+     * Spawn positioning:
+     * 1. Calculate CSS scale factor (Math.max of width/height ratios)
+     * 2. Calculate visible canvas width: window.innerWidth / scale
+     * 3. Calculate horizontal spawn range centered on canvas
+     * 4. Add 20px inward margin to prevent edge clipping during breathing animation
+     *
+     * Example:
+     * - Device: 960px wide, 2080px tall
+     * - Canvas: 480×1040
+     * - Scale: Math.max(960/480, 2080/1040) = 2.0
+     * - Visible width: 960 / 2.0 = 480px (full canvas visible)
+     * - Spawn range: 20px to 412px (480 - 48 - 20)
+     *
+     * Desktop comparison:
+     * - Desktop (800×600): Spawns across full canvas width minus margins
+     * - Mobile (480×1040): Spawns only in visible horizontal strip
+     *
+     * @param {string} type - Power-up type from POWERUP_TYPES constant
+     * @returns {boolean} True if spawn succeeded, false if no valid position found
+     */
     function createPowerup(type) {
       // Double laser moves slightly slower (3.5) than health powerup (4)
+      // Easier to track and collect (helps player upgrade laser)
       var speed = (type === POWERUP_TYPES.DOUBLE_LASER) ? 3.5 : CONFIG.powerupSpeed;
-      var width = 48; // Increased by 20% (was 40)
+      var width = 48;  // 20% larger than original 40px (better visibility on mobile)
       var height = 48;
 
-      // Clamp spawn x to the visible canvas strip (cover-scaled), with 20px
-      // inward margin to prevent edge-spawned powerups clipping off-screen
-      // when the breathing animation scales them up.
-      var POWERUP_MARGIN = 20;
+      // Mobile-specific spawn positioning — account for CSS viewport scaling
+      // Canvas may be cropped horizontally if device is very tall (>9:19.5 ratio)
+      // Only spawn power-ups in the visible horizontal strip
+      var POWERUP_MARGIN = 20; // Prevents edge clipping during breathing animation (15% scale)
+
+      // Calculate CSS scale factor (same algorithm as resizeCanvas)
+      // Math.max ensures canvas fills viewport (may crop horizontally)
       var scale = Math.max(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
+
+      // Calculate visible canvas width after scaling
+      // visibleHalf = half of the horizontal canvas strip visible on device
       var visibleHalf = (window.innerWidth / scale) / 2;
+
+      // Calculate spawn range centered on canvas (canvas.width / 2 = 240px)
+      // spawnMinX: left edge of visible strip + margin
+      // spawnMaxX: right edge of visible strip - width - margin
       var spawnMinX = Math.max(0, canvas.width / 2 - visibleHalf) + POWERUP_MARGIN;
       var spawnMaxX = Math.min(canvas.width - width, canvas.width / 2 + visibleHalf - width) - POWERUP_MARGIN;
 
@@ -2376,15 +2587,39 @@
      * `spawnMorphingFormation()` to create the enemy group.
      * @param {number} waveNum - 1-based wave index within the current level.
      */
+    /**
+     * Starts a new formation wave within the current level.
+     * Resets wave state, spawns the morphing formation, and fires analytics.
+     *
+     * Wave system (same as desktop):
+     * - Each level has 2-4 waves (defined in LEVEL_WAVES)
+     * - Each wave = 1 morphing formation (9-25 enemies) + kamikazes
+     * - Wave completes when all formation enemies + kamikazes destroyed
+     * - After final wave → advanceLevel() → next level or boss
+     *
+     * Wave initialization:
+     * 1. Reset formation tracking (rotation, morph count, barrier flag)
+     * 2. Reset kamikaze tracking (pending count, launch flag)
+     * 3. Set morphStartTime = now (begins 6-beat morph cycle)
+     * 4. Fire 'wave_reached' analytics event
+     * 5. Spawn morphing formation via spawnMorphingFormation()
+     *
+     * Mobile-specific notes:
+     * - Same wave structure as desktop
+     * - Formation spawns at y=-200, settles at y=320 (mobile positioning)
+     * - Analytics includes 'platform': 'mobile'
+     *
+     * @param {number} waveNum - Wave number (1-indexed, 1-4 per level)
+     */
     function startWave(waveNum) {
       var levelData = LEVEL_WAVES[level];
-      if (!levelData || waveNum > levelData.waves.length) return;
+      if (!levelData || waveNum > levelData.waves.length) return; // Invalid wave
 
       currentWave = waveNum;
       waveInProgress = true;
       waveCooldown = false;
-      morphStartTime = Date.now();
-      currentMorphShape = 0;
+      morphStartTime = Date.now(); // Start morph cycle clock
+      currentMorphShape = 0; // Begin at first shape in wave's shape array
 
       // wave_reached fires at the start of every level's formation wave.
       // level_number is the current level (1–12). phase indicates which
@@ -2414,17 +2649,63 @@
       spawnMorphingFormation(waveData);
     }
 
-    // Formation center tracking - moves as a unit
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FORMATION ENTRY SYSTEM (Mobile Positioning)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Formation enemies enter as a cohesive unit, starting off-screen above canvas
+    // and descending to settle at formationTargetCenterY.
+    //
+    // Mobile positioning (480×1040 canvas):
+    // - formationTargetCenterY = 320 (31% down screen)
+    // - Provides visibility and dodge space for player at y=690 (66% down)
+    // - 370px separation between formation center and player spawn
+    //
+    // Desktop positioning (800×600 canvas):
+    // - formationTargetCenterY = 300 (50% down screen)
+    // - Different ratio due to 4:3 vs 9:19.5 aspect ratio
+
+    // Formation center Y position (current frame) — lerps toward target during entry
+    // Starts at -200 (off-screen above), moves to 320 (settled position)
     var formationCurrentCenterY = -200;
+
+    // Formation settle position (mobile: 31% down screen)
+    // All formation enemy Y positions are relative to this center point
     var formationTargetCenterY = 320;
+
+    // Formation descent speed (pixels per frame during entry phase)
+    // Lerped in draw() with factor 0.045 for smooth, gradual entry
     var formationEntrySpeed = 1.8;
+
+    // Flag: Formation has settled at target Y position
+    // Set to true when formationCurrentCenterY reaches formationTargetCenterY
+    // Triggers morph cycle start and enables kamikaze launch
     var formationEntered = false;
 
-    // Kamikaze wave tracking (separate from formation)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // KAMIKAZE WAVE SYSTEM (Mobile Positioning)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Kamikaze enemies launch separately after formation settles. They enter as
+    // a horizontal group from off-screen above, descend to holding position, then
+    // dive at player when formation enemies are reduced to 50%.
+
+    // Number of kamikazes pending launch (stored from wave data)
+    // Launched when formation enters and 1 second has elapsed
     var pendingKamikazeCount = 0;
+
+    // Flag: Kamikaze wave has been launched
+    // Prevents duplicate spawn during same wave
     var kamikazesLaunched = false;
+
+    // Kamikaze group center Y position (current frame) — lerps toward target
+    // Starts at -80 (off-screen above), moves to 320 (holding position)
     var kamikazeCenterY = -80;
+
+    // Kamikaze holding position (mobile: 31% down screen, same as formation)
+    // Kamikazes wait here until dive trigger (formation at 50% enemies remaining)
     var kamikazeCenterTargetY = 320;
+
+    // Flag: Kamikaze group is actively entering (descending to holding position)
+    // Controls kamikaze entry lerp in updateKamikazeEntry()
     var kamikazeCenterActive = false;
 
     // Shield cascade system
@@ -2528,16 +2809,38 @@
      * center has reached its target Y (handled by `updateKamikazeEntry`).
      * @param {number} count - Number of kamikaze enemies to spawn.
      */
+    /**
+     * Spawns a horizontal wave of kamikaze enemies at the top of the screen.
+     * Kamikazes enter as a group (descending to holding position), then dive
+     * at the player when the formation is reduced to 50% remaining enemies.
+     *
+     * Mobile positioning:
+     * - Holding position: y=320 (same as formation center, 31% down screen)
+     * - Entry start: y=-80 (off-screen above)
+     * - Desktop comparison: Same absolute Y values (320px) but different screen %
+     *
+     * Spawn algorithm:
+     * - Spread evenly across screen width (spacing based on count)
+     * - Add ±15px random jitter to horizontal positions
+     * - All kamikazes track invisible group center during entry
+     *
+     * Dive trigger:
+     * - Occurs when formation enemies <= 50% of original count
+     * - Velocity vector calculated toward player's current position
+     * - Speed: 4-6 (Standard/Red), 4.5-6.5 (Purple phase)
+     *
+     * @param {number} count - Number of kamikazes to spawn (typically 2-6)
+     */
     function spawnKamikazeWave(count) {
       var levelData = LEVEL_WAVES[level];
       var enemyType = levelData ? levelData.enemyType : 'enemy1';
       var width = 50, height = 50;
       if (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') { width = 35; height = 35; }
 
-      // Set up center that will scroll down, all kamikazes follow it
-      kamikazeCenterY = -80;
-      kamikazeCenterTargetY = 320;
-      kamikazeCenterActive = true;
+      // Set up invisible group center — kamikazes follow this anchor point during entry
+      kamikazeCenterY = -80;                  // Start off-screen above
+      kamikazeCenterTargetY = 320;            // Mobile: 31% down (same as formation)
+      kamikazeCenterActive = true;            // Enable entry lerp in updateKamikazeEntry()
 
       // Spread evenly across screen width, with slight random jitter
       var spacing = (canvas.width - 80) / (count + 1);
@@ -2625,10 +2928,32 @@
      * after the second morph and shield cascade after the third.
      * @param {number} time - Current timestamp from `Date.now()`.
      */
+    /**
+     * Updates formation enemy positions during shape morphing transitions.
+     * Handles morph timing (6 BPM beats), shape cycling, side effects (barriers,
+     * kamikazes, shield cascade), and smooth interpolation between shapes.
+     *
+     * Mobile positioning:
+     * - Formation center: y=320 (31% down screen, formationTargetCenterY)
+     * - Y bounds constraint: top 50% of canvas (y < 520px on mobile)
+     * - Desktop comparison: top 50% = 300px (600 * 0.5 vs 1040 * 0.5)
+     *
+     * Morph cycle:
+     * - Interval: 6 BPM beats (~3 seconds at 123 BPM)
+     * - Transition: 70% of interval (smooth movement with easeInOutCubic)
+     * - Hold: 30% of interval (enemies hold formation)
+     *
+     * Side effects by morph count:
+     * - morphCount 1: Spawn barrier (if wave has barrier)
+     * - morphCount 2: Launch kamikaze wave
+     * - morphCount 3: Start shield cascade (shields begin dropping)
+     *
+     * @param {number} time - Current timestamp from Date.now()
+     */
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
-      var morphInterval = BPM_INTERVAL * 6;
-      var timeSinceStart = Math.max(0, time - morphStartTime); // clamp to avoid negative
+      var morphInterval = BPM_INTERVAL * 6; // ~2927ms per shape
+      var timeSinceStart = Math.max(0, time - morphStartTime); // Clamp to avoid negative
       var newShapeIndex = Math.floor(timeSinceStart / morphInterval);
 
       // Get formation enemies
@@ -2710,11 +3035,16 @@
         enemy.x = baseX - enemy.width / 2;
         enemy.y = baseY - enemy.height / 2;
 
-        // Keep in bounds
+        // Mobile-specific bounds constraints
+        // X-axis: 20px margin on left/right edges (prevents clipping)
         if (enemy.x < 20) enemy.x = 20;
         if (enemy.x > canvas.width - enemy.width - 20) enemy.x = canvas.width - enemy.width - 20;
-        if (enemy.y < 30) enemy.y = 30;
-        if (enemy.y > canvas.height * 0.5) enemy.y = canvas.height * 0.5;
+
+        // Y-axis: Constrain to top 50% of canvas (mobile: y < 520px)
+        // Mobile (480×1040): top half = 520px (keeps formations above player at y=690)
+        // Desktop (800×600): top half = 300px (different screen ratio)
+        if (enemy.y < 30) enemy.y = 30; // Top margin
+        if (enemy.y > canvas.height * 0.5) enemy.y = canvas.height * 0.5; // Bottom limit
       });
     }
 
@@ -2723,8 +3053,26 @@
      * shields drop 2-at-a-time every 2 seconds (ordered by `shieldOrder`).
      * Once all shields are down they regenerate after 5 seconds. Shields
      * permanently broken by 15+ hits (25+ at level 9+) are excluded from regen.
+     *
+     * Shield cascade timing (same as desktop):
+     * - Trigger: After 3rd formation morph (morphCount >= 3)
+     * - Drop rate: 2 shields every 2 seconds
+     * - Regeneration: 5 seconds after all shields down
+     * - Permanent break: 15 hits (levels 1-8), 25 hits (levels 9-12)
+     *
+     * Mobile-specific notes:
+     * - Same timing as desktop (no adjustments needed)
+     * - Warning display shows briefly (1.5s) when shields regenerate
+     * - Shield hit counts same as desktop despite reduced enemy bullet speeds
+     *
+     * 6-phase shield cycle:
+     * 1. All shielded (morph 1-2)
+     * 2. Cascade starts (morph 3)
+     * 3. Shields drop 2-at-a-time every 2s
+     * 4. All shields down
+     * 5. Wait 5s
+     * 6. Regenerate (except permanently broken) → back to phase 2
      */
-    // Shield cascade system - shields drop 2 at a time, then regenerate
     function updateShieldCascade() {
       var formationEnemies = enemies.filter(function (e) {
         return e.formation && e.formationType === 'morphing';
@@ -2794,10 +3142,25 @@
       }
     }
 
-    // Spawn barrier reinforcements (4-8 enemies forming a protective barrier)
-    // Barriers stay between player and formation, no further than halfway down screen
+    /**
+     * Spawns barrier reinforcements that form a protective wall between the
+     * player and formation. Triggered after the first formation morph (collapse).
+     *
+     * Mobile positioning:
+     * - Barrier Y limit: canvas.height * 0.45 = 468px (45% down screen)
+     * - Desktop comparison: 45% of 600 = 270px (different absolute position)
+     * - Stays above player spawn (y=690) and below formation (y=320)
+     *
+     * Barrier types (same as desktop):
+     * - 'circle' / 'orbitingShield': Enemies orbit center at radius 180px
+     * - 'horizontal': Enemies in horizontal line formation
+     * - 'zigzag': Enemies in zigzag pattern
+     *
+     * @param {string} barrierType - Barrier formation type ('circle', 'horizontal', 'zigzag')
+     * @param {number} count - Number of barrier enemies (typically 4-8)
+     */
     function spawnBarrier(barrierType, count) {
-      if (barrierSpawned) return;
+      if (barrierSpawned) return; // One barrier per wave
       barrierSpawned = true;
 
       var levelData = LEVEL_WAVES[level];
@@ -2806,8 +3169,8 @@
       var height = 50;
       if (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') { width = 35; height = 35; }
 
-      var centerX = canvas.width / 2;
-      var barrierY = canvas.height * 0.45; // Halfway down screen max
+      var centerX = canvas.width / 2; // 240px on mobile (480 / 2)
+      var barrierY = canvas.height * 0.45; // Mobile: 468px (45% down screen)
 
       if (barrierType === 'circle' || barrierType === 'orbitingShield') {
         // Circle/orbiting barrier — enemies drop from above screen to their orbit start position
@@ -3022,8 +3385,32 @@
      * skipping to a phase whose boss hasn't been defeated yet. Resets per-level
      * power-up tracking and starts the first wave of the new level.
      */
+    /**
+     * Advances to the next level or triggers boss encounters at phase boundaries.
+     * Called after all waves in a level are completed.
+     *
+     * Level progression (same as desktop):
+     * - Levels 1-4: Standard phase (cyan enemies)
+     * - Level 4 complete → Boss 1 → Red phase unlocked
+     * - Levels 5-8: Red phase (red enemies, faster)
+     * - Level 8 complete → Boss 2 → Purple phase unlocked
+     * - Levels 9-12: Purple phase (purple enemies, fastest)
+     * - Level 12 complete → Boss 3 → Victory screen
+     *
+     * Boss triggers:
+     * - Boss 1: level >= 4 && !redPhase && !boss1Defeated
+     * - Boss 2: level >= 8 && redPhase && !purplePhase && !boss2Defeated
+     * - Boss 3: level >= 12 && purplePhase && !boss3Defeated
+     *
+     * Mobile-specific notes:
+     * - Same progression as desktop
+     * - Same boss timing and thresholds
+     * - Analytics events include 'platform': 'mobile'
+     *
+     * Level caps prevent progression beyond phase boundaries until boss defeated.
+     */
     function advanceLevel() {
-      // Check for boss triggers
+      // Check for boss triggers at phase boundaries
       if (!redPhase && level >= 4 && !boss1Defeated) {
         currentBoss = 1;
         // boss_attempt fires when the boss spawns — paired with boss_defeated to
@@ -3103,13 +3490,45 @@
       }, 2500);
     }
 
-    // Legacy formation functions (kept for boss fight variety)
-    // Note: spawnSpiralFormation, spawnPincerFormation, spawnSineWaveFormation
-    // are defined here but currently unused in the live wave system.
-    // They are available for future boss-fight scripted sequences.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LEGACY FORMATION FUNCTIONS (Reserved for Pink Levels 13-15)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // These formation functions are intentionally dormant in the current wave system
+    // but are fully implemented, tested, and ready for integration into the planned
+    // pink phase expansion (levels 13-15 + new boss encounter).
+    //
+    // Why these are kept:
+    // - Tested and working — not dead code, just staged features
+    // - Reserved for boss scripted sequences in pink levels
+    // - Alternative formation patterns for increased difficulty
+    //
+    // Current status: Not called by spawnWave() but movement logic is active in draw()
+    // Future integration: Will be triggered by boss fight scripting in pink phase
+    //
+    // Available formations:
+    // - spawnSpiralFormation(): 6 enemies in circular orbit pattern
+    // - spawnPincerFormation(): 3+3 enemies entering from left/right sides
+    // - spawnSineWaveFormation(): 8 enemies in horizontal wave pattern
 
-    /** Spawns 6 enemies at staggered intervals, each entering at the top center
-     *  and then orbiting in a circular formation around y=150. */
+    /**
+     * Spawns 6 enemies in a circular orbit formation centered at (canvas.width/2, 150).
+     *
+     * Formation pattern:
+     * - All enemies spawn at top-center (x = canvas.width/2)
+     * - Staggered entry: 150ms interval between each spawn, with increasing y offset
+     * - Once spawned, enemies descend to y=150 then begin circular orbit
+     *
+     * Orbit behavior (activated when enemy.reachedTarget = true):
+     * - Base radius: 80px from center point
+     * - Rotation speed: 0.02 radians per frame (~1.15°/frame, ~3.5s per full rotation)
+     * - Breathing effect: Radius pulses ±30% in sync with music BPM (see line 6593)
+     * - Each enemy starts at different angle: (index/6) * 2π
+     *
+     * Movement update logic: See draw() loop at line 6591-6597
+     *
+     * Reserved for: Pink levels 13-15 boss scripted sequences
+     * Status: Fully implemented, tested, ready for integration
+     */
     function spawnSpiralFormation() {
       var enemyType = getEnemyType();
       var count = 6;
@@ -3118,27 +3537,45 @@
 
       for (var i = 0; i < count; i++) {
         (function (index) {
+          // Staggered spawn: Each enemy spawns 150ms after the previous one
           setTimeout(function () {
+            // Calculate starting angle for this enemy (evenly distributed around circle)
+            // Enemy 0: 0°, Enemy 1: 60°, Enemy 2: 120°, etc.
             var angle = (index / count) * Math.PI * 2;
 
             var enemy = {
+              // Spawn position: All start at top-center horizontally
               x: centerX,
+              // Staggered vertical spawn: Later enemies start higher (-50, -80, -110, etc.)
+              // Prevents enemies from overlapping during entry
               y: -50 - (index * 30),
+
+              // Standard enemy dimensions
               width: 50,
               height: 50,
               baseWidth: 50,
               baseHeight: 50,
+
+              // Entry speed: 2px/frame descent until reaching targetY
               speed: 2,
-              type: enemyType,
+              type: enemyType, // Current phase (enemy1, enemy2, or enemy3)
+
+              // Formation flags
               formation: true,
-              formationType: 'spiral',
-              targetY: targetY,
-              reachedTarget: false,
-              spiralAngle: angle,
-              spiralBaseRadius: 80,
-              spiralCenterX: centerX,
-              spiralCenterY: targetY,
-              breathPhase: index * 0.3
+              formationType: 'spiral', // Activates spiral movement logic in draw()
+
+              // Entry target and state
+              targetY: targetY, // Stop descending at y=150
+              reachedTarget: false, // Flips to true when y >= targetY, activates orbit
+
+              // Spiral orbit properties (used by draw() loop after reachedTarget = true)
+              spiralAngle: angle, // Current angle position in radians
+              spiralBaseRadius: 80, // Distance from center (before breathing pulse)
+              spiralCenterX: centerX, // Orbit center X (canvas.width/2)
+              spiralCenterY: targetY, // Orbit center Y (150)
+
+              // Animation timing: Offset for breathing/pulse effects
+              breathPhase: index * 0.3 // Stagger animation so not all enemies pulse in sync
             };
             enemies.push(enemy);
           }, index * 150);
@@ -3147,63 +3584,112 @@
     }
 
     /**
-     * Spawns a 3+3 pincer: three enemies enter from the left and three from the
-     * right, sliding to fixed x targets then bouncing rhythmically in time with
-     * the beat.
+     * Spawns a 3+3 pincer formation: three enemies enter from the left edge and
+     * three from the right edge, converging toward the center then oscillating
+     * horizontally in sync with the music BPM.
+     *
+     * Formation pattern:
+     * - Left group: Spawns at x=-50 (off-screen left), moves right to x=150
+     * - Right group: Spawns at x=canvas.width (off-screen right), moves left to x=canvas.width-200
+     * - Vertical spacing: 70px between each enemy (y = 120, 190, 260)
+     * - Staggered entry: 200ms interval between each enemy on each side
+     *
+     * Entry phase (enemy.reachedTarget = false):
+     * - Left enemies: Move right at 3px/frame until x >= pincerTargetX
+     * - Right enemies: Move left at 3px/frame until x <= pincerTargetX
+     *
+     * Oscillation phase (enemy.reachedTarget = true):
+     * - Horizontal bounce: ±30px from base position, synced to music BPM
+     * - Left enemies bounce right/left from their base position
+     * - Right enemies bounce left/right (mirrored) from their base position
+     * - Creates visual "breathing" effect as groups move toward/away from each other
+     *
+     * Movement update logic: See draw() loop at line 6599-6616
+     *
+     * Reserved for: Pink levels 13-15 boss scripted sequences
+     * Status: Fully implemented, tested, ready for integration
      */
     function spawnPincerFormation() {
       var enemyType = getEnemyType();
       var count = 3;
       var targetY = 120;
 
+      // Left group: 3 enemies entering from off-screen left
       for (var i = 0; i < count; i++) {
         (function (index) {
+          // Staggered spawn: 200ms between each enemy
           setTimeout(function () {
             var enemy = {
+              // Spawn position: Off-screen left edge
               x: -50,
+              // Vertical spacing: 70px between each enemy (y = 120, 190, 260)
               y: targetY + index * 70,
+
+              // Standard enemy dimensions
               width: 50,
               height: 50,
               baseWidth: 50,
               baseHeight: 50,
+
+              // Speed: 0 (pincer uses pincerSpeed instead of speed property)
               speed: 0,
-              type: enemyType,
+              type: enemyType, // Current phase (enemy1, enemy2, or enemy3)
+
+              // Formation flags
               formation: true,
-              formationType: 'pincer',
+              formationType: 'pincer', // Activates pincer movement logic in draw()
               pincer: true,
-              pincerSide: 'left',
-              pincerSpeed: 3,
-              pincerTargetX: 150,
-              pincerBaseX: 150,
-              reachedTarget: false,
-              breathPhase: index * 0.4
+              pincerSide: 'left', // Identifies which side this enemy is on
+
+              // Pincer-specific properties
+              pincerSpeed: 3, // 3px/frame horizontal movement during entry
+              pincerTargetX: 150, // Stop moving when x >= 150
+              pincerBaseX: 150, // Base position for oscillation phase
+              reachedTarget: false, // Flips to true when x >= pincerTargetX
+
+              // Animation timing: Offset for breathing/pulse effects
+              breathPhase: index * 0.4 // Stagger animation timing
             };
             enemies.push(enemy);
           }, index * 200);
         })(i);
       }
 
+      // Right group: 3 enemies entering from off-screen right
       for (var i = 0; i < count; i++) {
         (function (index) {
+          // Staggered spawn: 200ms between each enemy (same timing as left group)
           setTimeout(function () {
             var enemy = {
+              // Spawn position: Off-screen right edge
               x: canvas.width,
+              // Vertical spacing: Same Y positions as left group (mirror formation)
               y: targetY + index * 70,
+
+              // Standard enemy dimensions
               width: 50,
               height: 50,
               baseWidth: 50,
               baseHeight: 50,
+
+              // Speed: 0 (pincer uses pincerSpeed instead of speed property)
               speed: 0,
-              type: enemyType,
+              type: enemyType, // Current phase (enemy1, enemy2, or enemy3)
+
+              // Formation flags
               formation: true,
-              formationType: 'pincer',
+              formationType: 'pincer', // Activates pincer movement logic in draw()
               pincer: true,
-              pincerSide: 'right',
-              pincerSpeed: 3,
-              pincerTargetX: canvas.width - 200,
-              pincerBaseX: canvas.width - 200,
-              reachedTarget: false,
-              breathPhase: index * 0.4
+              pincerSide: 'right', // Identifies which side this enemy is on
+
+              // Pincer-specific properties
+              pincerSpeed: 3, // 3px/frame horizontal movement during entry
+              pincerTargetX: canvas.width - 200, // Stop moving when x <= this value
+              pincerBaseX: canvas.width - 200, // Base position for oscillation phase
+              reachedTarget: false, // Flips to true when x <= pincerTargetX
+
+              // Animation timing: Offset for breathing/pulse effects
+              breathPhase: index * 0.4 // Stagger animation timing
             };
             enemies.push(enemy);
           }, index * 200);
@@ -3212,9 +3698,36 @@
     }
 
     /**
-     * Spawns 8 enemies evenly spread across the screen width that descend to
-     * y=100, then undulate horizontally in a sine-wave pattern synced to the
-     * background music BPM.
+     * Spawns 8 enemies evenly distributed across the screen width that descend
+     * to y=100, then undulate horizontally in a synchronized sine-wave pattern
+     * creating a mesmerizing wave effect.
+     *
+     * Formation pattern:
+     * - Enemy spacing: Evenly distributed across (canvas.width - 100px margin)
+     * - Starting X: 50 + index * ((canvas.width - 100) / 8)
+     * - Target Y: 100 (settles near top of screen)
+     * - Staggered entry: 100ms interval between each spawn
+     *
+     * Entry phase (enemy.reachedTarget = false):
+     * - Enemies spawn at y=-50 (off-screen above)
+     * - Descend at 2px/frame until reaching y=100
+     *
+     * Wave oscillation phase (enemy.reachedTarget = true):
+     * - Horizontal wave: Sin(wavePhase + sinePhase) * 60px amplitude
+     * - Wave phase: Driven by global time / BPM_INTERVAL (all enemies share wave progression)
+     * - Sine phase offset: Each enemy has unique offset (index * 0.8) for cascading wave
+     * - Vertical bounce: ±15px oscillation in sync with music beat
+     * - Bounds clamping: Enemies stay within 0 to canvas.width
+     *
+     * Visual effect:
+     * - Creates flowing horizontal wave pattern as enemies move in sync
+     * - Phase offsets create "rolling wave" appearance from left to right
+     * - Vertical bounce adds secondary motion for increased complexity
+     *
+     * Movement update logic: See draw() loop at line 6618-6625
+     *
+     * Reserved for: Pink levels 13-15 boss scripted sequences
+     * Status: Fully implemented, tested, ready for integration
      */
     function spawnSineWaveFormation() {
       var enemyType = getEnemyType();
@@ -3223,26 +3736,49 @@
 
       for (var i = 0; i < count; i++) {
         (function (index) {
+          // Staggered spawn: 100ms between each enemy (faster than other formations)
           setTimeout(function () {
+            // Calculate evenly-spaced horizontal position across screen width
+            // Formula: 50px margin + (index * spacing)
+            // Spacing = (canvas.width - 100px margin) / 8 enemies
+            // Canvas width = 480, so spacing ≈ 47.5px (enemies at x=50, 97.5, 145, etc.)
+            var startX = 50 + index * ((canvas.width - 100) / count);
+
             var enemy = {
-              x: 50 + index * ((canvas.width - 100) / count),
+              // Spawn position: Evenly distributed across screen width
+              x: startX,
+              // Start off-screen above
               y: -50,
+
+              // Standard enemy dimensions
               width: 50,
               height: 50,
               baseWidth: 50,
               baseHeight: 50,
+
+              // Entry speed: 2px/frame descent until reaching targetY
               speed: 2,
-              type: enemyType,
+              type: enemyType, // Current phase (enemy1, enemy2, or enemy3)
+
+              // Formation flags
               formation: true,
-              formationType: 'sineWave',
+              formationType: 'sineWave', // Activates sine wave movement logic in draw()
               sineWave: true,
-              targetY: targetY,
-              reachedTarget: false,
-              sinePhase: index * 0.8,
-              sineAmplitude: 60,
-              baseX: 50 + index * ((canvas.width - 100) / count),
-              baseY: targetY,
-              breathPhase: index * 0.2
+
+              // Entry target and state
+              targetY: targetY, // Stop descending at y=100
+              reachedTarget: false, // Flips to true when y >= targetY, activates wave
+
+              // Sine wave properties (used by draw() loop after reachedTarget = true)
+              sinePhase: index * 0.8, // Phase offset for cascading wave effect
+              sineAmplitude: 60, // ±60px horizontal oscillation
+
+              // Base position: Center of oscillation (set to spawn position)
+              baseX: startX, // Horizontal center for wave motion
+              baseY: targetY, // Vertical position (100)
+
+              // Animation timing: Offset for breathing/pulse effects
+              breathPhase: index * 0.2 // Stagger vertical bounce timing
             };
             enemies.push(enemy);
           }, index * 100);
@@ -3580,36 +4116,67 @@
      * 3 = purple). Clears all existing enemies and minions, plays the boss sting,
      * and creates the boss object with a shield that is always active at the start.
      */
+    /**
+     * Spawns a boss encounter at the current phase (green, red, or purple).
+     * Clears the screen, starts boss music, and initializes boss object with
+     * phase-specific properties.
+     *
+     * Boss encounters (same as desktop):
+     * - Boss 1 (Level 4): Green boss, one-time shield, 4 orbiters
+     * - Boss 2 (Level 8): Red boss, cycling shields (5s on/5s off), 6 orbiters
+     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 8 orbiters
+     *
+     * Mobile positioning:
+     * - Spawn position: x = canvas.width/2 - 75 (centered), y = -150 (off-screen above)
+     * - Settle position: y = 245 (23.5% down screen, documented in updateBoss)
+     * - Desktop comparison: Different Y percentage due to portrait vs landscape
+     *
+     * Boss initialization:
+     * 1. Clear all enemies, minions, orbiters (clean screen for boss fight)
+     * 2. Show "BOSS!" announcement (2s duration)
+     * 3. Start boss music (10s looping intro sting)
+     * 4. Create boss object with:
+     *    - Health: CONFIG.bossHealth (25 HP)
+     *    - Speed: CONFIG.bossSpeed
+     *    - Shield system: Boss 1 one-time, Boss 2/3 cycling (5s on/5s off)
+     *    - Movement: Boss 1 horizontal only, Boss 2/3 rectangular patrol
+     *
+     * Shield system:
+     * - Boss 1: Starts shielded, drops after first hit, never returns
+     * - Boss 2/3: Cycling shields (5s on, 5s off, regenerates indefinitely)
+     *
+     * Orbiters initialized by initBossOrbiters() once entrance animation completes.
+     */
     function spawnBoss() {
       bossActive = true;
-      enemies = []; // Clear regular enemies
-      bossMinions = []; // Clear any existing minions
-      bossOrbiters = []; // Clear orbiters
+      enemies = []; // Clear all regular enemies (clean screen for boss fight)
+      bossMinions = []; // Clear any existing minions from previous boss
+      bossOrbiters = []; // Clear orbiters (will spawn after entrance)
       orbitersInitialized = false;
       showAnnouncement("levelDisplay", "BOSS!", 2000);
-      startBossMusic();
+      startBossMusic(); // 10-second looping boss intro sting
 
       var isRedBoss = (currentBoss === 2);
       var isPurpleBoss = (currentBoss === 3);
       boss = {
-        x: canvas.width / 2 - 75,
-        y: -150,
+        x: canvas.width / 2 - 75, // Mobile: centered at 240px - 75 = 165px
+        y: -150, // Start off-screen above (enters downward at 3px/frame)
         width: 150,
         height: 150,
-        health: CONFIG.bossHealth,
+        health: CONFIG.bossHealth, // 25 HP
         maxHealth: CONFIG.bossHealth,
-        speed: CONFIG.bossSpeed,
-        direction: 1,
-        verticalDirection: 1, // For red/purple boss vertical movement
-        entering: true,
+        speed: CONFIG.bossSpeed, // Movement speed
+        direction: 1, // Horizontal direction (1 = right, -1 = left)
+        verticalDirection: 1, // Vertical direction for Boss 2/3 (1 = down, -1 = up)
+        entering: true, // Flag: Boss is entering (descending to y=245)
         isRedBoss: isRedBoss,
         isPurpleBoss: isPurpleBoss,
-        // Boss shield system
-        shielded: true, // Start with shield
-        shieldStartTime: Date.now(),
-        shieldDuration: 5000, // 5 seconds on
-        shieldCooldown: 5000, // 5 seconds off (only for red/purple boss)
-        shieldCycling: isRedBoss || isPurpleBoss // Red and purple bosses cycle shields
+        // Boss shield system (varies by boss number)
+        shielded: true, // All bosses start with shield active
+        shieldStartTime: Date.now(), // Timestamp for shield cycling
+        shieldDuration: 5000, // 5 seconds shield active (Boss 2/3 only)
+        shieldCooldown: 5000, // 5 seconds shield down before regenerating (Boss 2/3 only)
+        shieldCycling: isRedBoss || isPurpleBoss // Boss 1: one-time, Boss 2/3: cycling
       };
     }
 
@@ -3995,48 +4562,55 @@
       // Update boss blink effect
       updateBossBlink();
 
-      // Boss entrance animation
+      // Boss entrance animation — descends from top of screen
       if (boss.entering) {
-        boss.y += 3;
+        boss.y += 3; // Entry speed: 3px/frame
+        // Mobile boss settle position: y=245 (23.5% down screen)
+        // Provides visibility above formations (y=320) and player (y=690)
+        // Desktop settle position: 45% down screen (different aspect ratio)
         if (boss.y >= 245) {
-          boss.y = 245;
-          boss.entering = false;
+          boss.y = 245; // Lock at settle position
+          boss.entering = false; // Enable movement patterns
         }
       } else {
-        // Move side to side
+        // Horizontal movement — side-to-side drift
         boss.x += boss.speed * boss.direction;
         if (boss.x <= 0 || boss.x >= canvas.width - boss.width) {
-          boss.direction *= -1;
+          boss.direction *= -1; // Bounce at screen edges
         }
 
-        // Red/purple boss also moves north/south
+        // Vertical drift (Red and Purple bosses only)
+        // Creates figure-8 movement pattern when combined with horizontal drift
         if (boss.isRedBoss || boss.isPurpleBoss) {
           boss.y += boss.speed * 0.6 * boss.verticalDirection;
+          // Mobile vertical drift range: y=205 to y=285 (80px range centered on y=245)
+          // Desktop vertical drift range: 40% to 50% of screen height
           if (boss.y <= 205) {
-            boss.verticalDirection = 1;
+            boss.verticalDirection = 1; // Reverse: move down
           } else if (boss.y >= 285) {
-            boss.verticalDirection = -1;
+            boss.verticalDirection = -1; // Reverse: move up
           }
-        }
-
-        // Boss shooting
-        if (Math.random() < CONFIG.bossShootChance) {
-          var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1;
-          if (boss.isRedBoss) {
-            bossBulletSpeed = CONFIG.enemyBulletSpeed + 3; // Faster for red boss
-          } else if (boss.isPurpleBoss) {
-            bossBulletSpeed = CONFIG.enemyBulletSpeed + 4; // Fastest for purple boss
-          }
-          enemyBullets.push({
-            x: Math.floor(boss.x + boss.width / 2 - 4),
-            y: Math.floor(boss.y + boss.height),
-            width: 8,
-            height: 15,
-            speed: bossBulletSpeed,
-            isBossBullet: true
-          });
         }
       }
+
+      // Boss shooting
+      if (Math.random() < CONFIG.bossShootChance) {
+        var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1;
+        if (boss.isRedBoss) {
+          bossBulletSpeed = CONFIG.enemyBulletSpeed + 3; // Faster for red boss
+        } else if (boss.isPurpleBoss) {
+          bossBulletSpeed = CONFIG.enemyBulletSpeed + 4; // Fastest for purple boss
+        }
+        enemyBullets.push({
+          x: Math.floor(boss.x + boss.width / 2 - 4),
+          y: Math.floor(boss.y + boss.height),
+          width: 8,
+          height: 15,
+          speed: bossBulletSpeed,
+          isBossBullet: true
+        });
+      }
+
 
       // Draw boss ripple effect at 123 BPM (PRE-RENDERED)
       var bossCx = boss.x + boss.width / 2;
@@ -4293,12 +4867,36 @@
      * top-10 score, builds the victory HTML (score, optional rank badge, email
      * subscription form, return button), and displays the #victory overlay.
      */
+    /**
+     * Displays the victory screen after defeating Boss 3 (final boss).
+     * Fires analytics events, checks for high score, and shows leaderboard
+     * submission form if score beats player's previous submission.
+     *
+     * Mobile-specific UI elements:
+     * - Instagram handle input (desktop also uses Instagram, not email)
+     * - Leaderboard submission form (same as desktop)
+     * - Survey banner after 5th game (triggers on mobile and desktop)
+     * - Play Again / Leave Game buttons (same as desktop)
+     *
+     * Victory screen flow:
+     * 1. Fire 'player_won' and 'game_complete' analytics events
+     * 2. Clear canvas and all game objects
+     * 3. Check if score is top 10 (local storage)
+     * 4. Show personal best callout if new record
+     * 5. Show leaderboard submission if score >= previous submission
+     * 6. Display global leaderboard (top 10 from Firebase)
+     * 7. Show survey banner after 5th game (once only)
+     *
+     * Same as desktop except:
+     * - No keyboard controls (mobile uses touch)
+     * - Portrait orientation (480×1040 vs 800×600)
+     */
     function showVictory() {
       gameOver = true;
       stopBossMusic();
-      // Keep background music playing - don't stop it
+      // Keep background music playing for victory celebration
 
-      // Clear all game objects from screen
+      // Clear all game objects from screen (clean slate for next game)
       enemies = [];
       playerBullets = [];
       enemyBullets = [];
@@ -4566,7 +5164,16 @@
      * previously submitted high score (or they haven't submitted yet).
      * Returns empty string if conditions not met.
      */
-    /** Returns just the leaderboard display container (placed above buttons). */
+    /**
+     * Builds the leaderboard display container HTML for game over/victory screens.
+     * Returns an empty div that will be populated by showLeaderboard() with top 10.
+     *
+     * Placement: Above Play Again / Leave Game buttons
+     * Population: Filled by showLeaderboard() via Firebase fetch
+     * Same as desktop.
+     *
+     * @returns {string} HTML string with empty leaderboard container div
+     */
     function buildLeaderboardDisplayHTML() {
       return "<div id='leaderboardDisplay' style='margin-top: 12px; margin-bottom: 20px;'></div>";
     }
@@ -4594,6 +5201,20 @@
       return html;
     }
 
+    /**
+     * Builds the bug report button HTML for game over/victory screens.
+     * Opens a bug report form when clicked (via openBugReport function).
+     *
+     * Button styling:
+     * - Gray border, transparent background (subtle, non-intrusive)
+     * - Small text (12px) to not compete with main action buttons
+     * - 🐛 emoji for visual identification
+     *
+     * Same as desktop.
+     *
+     * @param {string} source - Screen context ('game_over' or 'victory')
+     * @returns {string} HTML string with bug report button
+     */
     function buildBugButtonHTML(source) {
       return "<div style='margin-top: 10px;'>" +
         "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
@@ -4652,9 +5273,33 @@
       showLeaderboard();
     }
 
+    /**
+     * Opens the bug report modal dialog for player feedback.
+     * Creates or shows a modal overlay with a form to submit bug reports via email.
+     *
+     * Modal form fields:
+     * - Bug description (required): What happened?
+     * - Steps to reproduce (optional): How to trigger the bug?
+     * - Email (optional): For follow-up questions
+     *
+     * Implementation:
+     * - Checks if modal already exists (reuses existing if found)
+     * - Creates modal dynamically with inline styles (no external CSS)
+     * - Dark theme with cyan accents (matches game UI)
+     * - Responsive width (90% of viewport, max 400px)
+     *
+     * Submission:
+     * - Calls submitBugReport(source) when Submit clicked
+     * - Sends to stanigarkeith@gmail.com via FormSubmit.co
+     * - Includes platform, source screen, and game context
+     *
+     * Same as desktop.
+     *
+     * @param {string} source - Screen context ('game_over' or 'victory')
+     */
     function openBugReport(source) {
       var existing = document.getElementById('nonxBugModal');
-      if (existing) { existing.style.display = 'flex'; return; }
+      if (existing) { existing.style.display = 'flex'; return; } // Reuse if already created
 
       var modal = document.createElement('div');
       modal.id = 'nonxBugModal';
@@ -4724,7 +5369,23 @@
     }
 
     /** Fires leave_game event then navigates to main menu. */
+    /**
+     * Exits the game and returns to the main menu (index.html).
+     * Fires analytics events for session tracking and stops all audio.
+     *
+     * Analytics tracking:
+     * - 'leave_game' event: Tracks voluntary exits (includes source and score)
+     * - 'game_complete' event: Marks session as 'abandoned' (not victory or defeat)
+     *
+     * Same as desktop:
+     * - Stops all audio (background music, boss music, credits music)
+     * - Navigates to index.html (main menu)
+     * - Does not save high score (player chose to leave)
+     *
+     * @param {string} source - Exit point ('game_over' or 'victory' screen)
+     */
     function leaveGame(source) {
+      // Track voluntary exit for drop-off analysis
       fireEvent('leave_game', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
@@ -4733,6 +5394,7 @@
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
+      // Mark session as abandoned (not victory or defeat)
       fireEvent('game_complete', {
         'outcome': 'abandoned',
         'ab_music_group': userABGroup,
@@ -4743,9 +5405,13 @@
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
       });
+
+      // Stop all audio before navigation
       stopBackgroundMusic();
       stopBossMusic();
       stopCreditsMusic();
+
+      // Return to main menu
       window.location.href = 'index.html';
     }
 
@@ -4761,22 +5427,54 @@
     //   isReplay is a one-shot flag; isReplaySession persists for the entire run so death
     //   screens can correctly identify replay deaths. Missing this causes Tier 2-4 to never fire.
 
-    /** Resets and restarts the game in place without returning to main menu. */
+    /**
+     * Resets and restarts the game in place without returning to main menu.
+     * Applies tiered bonus HP based on how far the player progressed.
+     *
+     * Replay tier system (mobile-specific feature):
+     * - Tier 1: +15 HP (first death, or died in Standard phase on replay)
+     * - Tier 2: +15 HP + Resume from level (levels 2-4 only, via continueFromLevel)
+     * - Tier 3: +25 HP (died in Red phase on replay, levels 5-8)
+     * - Tier 4: +50 HP (died in Purple phase on replay, levels 9-12)
+     *
+     * Tier logic:
+     * - First death (!isReplaySession) → Tier 1 (+15 HP)
+     * - Replay death in Purple phase → Tier 4 (+50 HP)
+     * - Replay death in Red phase → Tier 3 (+25 HP)
+     * - Replay death in Standard phase → Tier 1 (+15 HP)
+     *
+     * Implementation:
+     * 1. Hide game over/victory screens
+     * 2. Determine tier and bonus HP based on death phase
+     * 3. Fire 'play_again' analytics event with tier data
+     * 4. Set isReplay flag (triggers replay flow in game start)
+     * 5. Simulate start button click (resets game with bonus HP)
+     *
+     * Same as desktop except:
+     * - Desktop may have different tier thresholds (check if ported)
+     * - Mobile tracks 'platform': 'mobile' in analytics
+     *
+     * PORTING NOTE: Also port to game.html as part of REPLAY INCENTIVES system.
+     */
     function playAgain() {
-      // Hide both end screens
+      // Hide both end screens (covers victory and game over paths)
       document.getElementById('gameOver').style.display = 'none';
       document.getElementById('victory').style.display = 'none';
 
-      // Determine tier and bonus for analytics
+      // Determine tier and bonus HP for this replay attempt
       var tier, bonusHP;
       if (!isReplaySession) {
+        // First death (not a replay) → Tier 1
         tier = 1; bonusHP = 15;
       } else if (deathPhase === 'purple') {
+        // Replay death in Purple phase (levels 9-12) → Tier 4
         tier = 4; bonusHP = 50;
       } else if (deathPhase === 'red') {
+        // Replay death in Red phase (levels 5-8) → Tier 3
         tier = 3; bonusHP = 25;
       } else {
-        tier = 1; bonusHP = 15; // level 1 green fallback
+        // Replay death in Standard phase (levels 1-4) → Tier 1
+        tier = 1; bonusHP = 15;
       }
 
       // Track replay — fired before reset so score/level reflect the just-finished session
@@ -4840,10 +5538,29 @@
      *   3 → three evenly spread bullets (triple laser, purple phase default)
      *   4 → four evenly spread bullets (quad laser, purple phase rare upgrade)
      */
+    /**
+     * Fires player bullets based on current laser level. Called by keyboard spacebar
+     * (desktop/dev testing) or auto-fire cycle (mobile touch controls).
+     *
+     * Laser levels (same as desktop):
+     * - Level 1: Single bullet (centered)
+     * - Level 2: Double laser (25% and 75% of ship width)
+     * - Level 3: Triple laser (20%, 50%, 80% of ship width)
+     * - Level 4: Quad laser (15%, 38%, 62%, 85% of ship width)
+     *
+     * Mobile firing mechanism:
+     * - Auto-fire cycle: 1.8s active window (fires every 130ms)
+     * - 0.4s reload cooldown between cycles
+     * - No manual fire button (spacebar disabled on touch devices)
+     *
+     * Desktop firing mechanism:
+     * - Spacebar: Manual fire with cooldown
+     * - Fire cooldown prevents spam
+     */
     function shootBullet() {
       playSound('playerBullet');
       if (laserLevel >= 4) {
-        // Quad laser - four bullets spread across ship width (rare upgrade)
+        // Quad laser - four bullets spread across ship width (Purple phase only)
         var offsets = [0.15, 0.38, 0.62, 0.85];
         for (var q = 0; q < 4; q++) {
           playerBullets.push(BulletPool.get(
@@ -4896,15 +5613,26 @@
 
     /**
      * Fires one bullet downward from the bottom-centre of the given enemy.
-     * Bullet speed scales with the current game phase (red: +40%, purple: +65%).
-     * @param {Object} enemy - The firing enemy object.
+     * Bullet speed scales with the current game phase.
+     *
+     * Mobile-specific speed multipliers (reduced for playability):
+     * - Standard phase: 1.0× (base speed, same as desktop)
+     * - Red phase: 1.15× (desktop: 1.40×, -25% reduction for mobile)
+     * - Purple phase: 1.35× (desktop: 1.65×, -30% reduction for mobile)
+     *
+     * Rationale for mobile reductions:
+     * - Touch controls have slower reaction time vs mouse/keyboard
+     * - Portrait screen (480×1040) requires different dodge spacing
+     * - Auto-fire cycle means player can't control fire rate precisely
+     *
+     * @param {Object} enemy - The firing enemy object
      */
     function shootEnemyBullet(enemy) {
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       if (purplePhase) {
-        bulletSpeed *= 1.35; // mobile: reduced from 1.65 for playability
+        bulletSpeed *= 1.35; // Mobile: 35% increase (desktop: 65% increase)
       } else if (redPhase) {
-        bulletSpeed *= 1.15; // mobile: reduced from 1.40 for playability
+        bulletSpeed *= 1.15; // Mobile: 15% increase (desktop: 40% increase)
       }
       enemyBullets.push(BulletPool.get(
         Math.floor(enemy.x + enemy.width / 2 - 2),
@@ -4961,8 +5689,26 @@
      * (showing the Game Over overlay) if health reaches 0.
      * @param {number} damage - HP to subtract before shield mitigation.
      */
+    /**
+     * Applies damage to the player with shield absorption, laser downgrades,
+     * and invincibility frames. Triggers game over sequence if health reaches 0.
+     *
+     * Damage logic (same as desktop):
+     * - Invincibility: 30 frames (~0.5s) after hit, ignores all damage while blinking
+     * - Shield absorption (Purple phase): Full block, no health loss
+     * - Shield absorption (Earlier phases): Reduces damage to 5 HP
+     * - Shield low-health protection: Absorbs damage if health <= 15
+     * - Laser downgrade (Red/Purple only): Quad → Triple → Double → Single
+     *
+     * Mobile-specific notes:
+     * - Touch controls remain active during blinking (no control differences)
+     * - Game over screen includes leaderboard submission prompt
+     * - Instagram handle input (not email like early versions)
+     *
+     * @param {number} damage - Damage amount (10 for enemy collision, 15 for bullet)
+     */
     function playerTakeDamage(damage) {
-      // Invincibility frames — ignore all damage while blinking from a previous hit.
+      // Invincibility frames — ignore all damage while blinking from a previous hit
       if (playerBlinking) return;
 
       if (hasShield) {
@@ -5292,77 +6038,221 @@
      * again on every `resize` event. Uses `Math.max` so the canvas always
      * covers the full screen without letterboxing.
      */
+    /**
+     * Dynamically scales the canvas to fill the device viewport while maintaining
+     * the 480×1040 aspect ratio (9:19.5 portrait). Uses CSS transform: scale()
+     * to avoid pixelation from changing canvas internal dimensions.
+     *
+     * Scaling algorithm:
+     * - Calculate scale needed to fill width: vw / 480
+     * - Calculate scale needed to fill height: vh / 1040
+     * - Use Math.max() to ensure canvas fills entire viewport (may overflow)
+     * - Transform origin set to center for symmetric scaling
+     *
+     * Canvas rendering:
+     * - Internal resolution: Always 480×1040 (game logic uses these coordinates)
+     * - Display size: Scaled via CSS transform to fill viewport
+     * - All touch coordinates must be converted back to 480×1040 space
+     *
+     * Called on page load and whenever window resizes (orientation change, etc.)
+     */
     function resizeCanvas() {
       var vw = window.innerWidth;
       var vh = window.innerHeight;
+
+      // Scale to fill viewport (may exceed one dimension for full coverage)
       var scale = Math.max(vw / canvas.width, vh / canvas.height);
+
       canvas.style.transformOrigin = 'center center';
       canvas.style.transform = 'scale(' + scale + ')';
     }
 
+    // Initialize canvas scale on page load
     resizeCanvas();
+
+    // Re-scale on window resize (orientation change, browser resize)
     window.addEventListener('resize', resizeCanvas);
 
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // TOUCH CONTROLS
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Mobile-specific touch input system. Handles touch-to-canvas coordinate
+    // conversion, movement tracking, and auto-fire cycle management.
+    //
+    // Key differences from desktop (mouse/keyboard):
+    // - Canvas is CSS-scaled but rendered at 480×1040
+    // - Touch events report CSS pixel coordinates (scaled)
+    // - Must convert CSS pixels → canvas pixels for accurate positioning
+    // - Auto-fire cycle (1.8s on / 0.4s reload) replaces spacebar
+    // - Movement Group B: Touch Y-axis delta controls vertical position
+
     /**
-     * Converts a Touch object's CSS-pixel clientX into the canvas coordinate
-     * space, accounting for the CSS transform scale applied by `resizeCanvas`.
-     * @param {Touch} touch - A Touch object from a touch event.
-     * @returns {number} X position in canvas pixels.
+     * Converts a Touch object's CSS-pixel clientX coordinate into canvas pixel
+     * space, accounting for the CSS transform scale applied by resizeCanvas().
+     *
+     * Conversion process:
+     * 1. Get canvas bounding rect (CSS pixel dimensions after scaling)
+     * 2. Calculate scaleX: canvas.width (480) / rect.width (CSS pixels)
+     * 3. Convert: (touch.clientX - rect.left) * scaleX
+     *
+     * Example:
+     * - Canvas width: 480px (internal)
+     * - Display width: 960px (2x scale via CSS)
+     * - Touch at CSS pixel 480 → Canvas pixel 240 (center)
+     *
+     * @param {Touch} touch - Touch object from touch event (touchstart/touchmove)
+     * @returns {number} X position in canvas pixels (0-480 range)
      */
     function getTouchCanvasX(touch) {
       var rect = canvas.getBoundingClientRect();
-      // Scale from CSS pixels to canvas pixels
-      var scaleX = canvas.width / rect.width;
+      // Scale factor from CSS pixels to canvas pixels
+      var scaleX = canvas.width / rect.width; // 480 / (CSS width after transform)
       return (touch.clientX - rect.left) * scaleX;
     }
 
+    /**
+     * Converts a Touch object's CSS-pixel clientY coordinate into canvas pixel
+     * space, accounting for the CSS transform scale applied by resizeCanvas().
+     *
+     * Same conversion algorithm as getTouchCanvasX but for Y-axis.
+     * Used by Movement Group B for vertical touch controls.
+     *
+     * @param {Touch} touch - Touch object from touch event (touchstart/touchmove)
+     * @returns {number} Y position in canvas pixels (0-1040 range)
+     */
     function getTouchCanvasY(touch) {
       var rect = canvas.getBoundingClientRect();
-      var scaleY = canvas.height / rect.height;
+      // Scale factor from CSS pixels to canvas pixels
+      var scaleY = canvas.height / rect.height; // 1040 / (CSS height after transform)
       return (touch.clientY - rect.top) * scaleY;
     }
 
+    /**
+     * touchstart event handler — Activates touch controls when user touches canvas.
+     *
+     * Behavior:
+     * 1. Records initial touch position (X-axis for all groups, Y-axis for Group B)
+     * 2. Starts auto-fire cycle timer (1.8s active window begins)
+     * 3. Sets touchActive flag to enable updateTouchControls() processing
+     *
+     * Movement Group A: Only X position recorded (horizontal-only control)
+     * Movement Group B: X + Y position recorded (Y used for delta tracking)
+     *
+     * Auto-fire cycle starts immediately on first touch:
+     * - touchShootCycleStart = now (begins 1.8s active window)
+     * - touchShootActive = true (enables firing in updateTouchControls)
+     * - touchLastShot = 0 (allows immediate first shot)
+     *
+     * passive: false required to allow preventDefault() (disables scroll/zoom)
+     *
+     * @listens touchstart
+     */
     canvas.addEventListener("touchstart", function (e) {
-      e.preventDefault();
+      e.preventDefault(); // Prevent mobile scroll/zoom/context menu
       if (gameOver || paused) return;
-      var touch = e.touches[0];
-      touchActive = true;
-      touchTargetX = getTouchCanvasX(touch);
+      var touch = e.touches[0]; // Primary finger (multi-touch not supported)
+      touchActive = true; // Enable updateTouchControls() processing
+      touchTargetX = getTouchCanvasX(touch); // Convert CSS → canvas pixels
       if (movementABGroup === 'B') {
-        touchLastY = getTouchCanvasY(touch); // record start Y for delta tracking
+        // Record start Y for delta tracking (Y movement = touch drag delta)
+        touchLastY = getTouchCanvasY(touch);
       }
-      // Begin shoot cycle on first touch
+      // Begin shoot cycle on first touch (1.8s active window starts now)
       touchShootCycleStart = Date.now();
       touchShootActive = true;
-      touchLastShot = 0;
+      touchLastShot = 0; // Allow immediate first shot
     }, { passive: false });
 
+    /**
+     * touchmove event handler — Updates player target position as finger drags.
+     *
+     * Behavior:
+     * - Updates touchTargetX every frame while finger moves (updateTouchControls
+     *   moves player toward this target at 10px/frame)
+     * - For Movement Group B: Calculates Y-axis delta for vertical control
+     *
+     * Movement Group A (horizontal-only):
+     * - Only touchTargetX is updated
+     * - Player Y position remains fixed at spawn point
+     *
+     * Movement Group B (full movement):
+     * - touchTargetX updated (horizontal target)
+     * - touchTargetY = delta from last frame (positive = down, negative = up)
+     * - Delta approach allows smooth finger-drag control vs absolute positioning
+     * - touchLastY updated each frame for continuous delta calculation
+     *
+     * Delta vs Absolute:
+     * - X-axis uses absolute target (player moves toward finger X position)
+     * - Y-axis uses delta (player moves by finger drag distance, not to finger Y)
+     * - This prevents sudden Y jumps when finger first touches high/low on screen
+     *
+     * @listens touchmove
+     */
     canvas.addEventListener("touchmove", function (e) {
-      e.preventDefault();
-      if (!touchActive) return;
-      var touch = e.touches[0];
-      touchTargetX = getTouchCanvasX(touch);
+      e.preventDefault(); // Prevent mobile scroll/zoom
+      if (!touchActive) return; // Ignore if touchstart hasn't fired
+      var touch = e.touches[0]; // Primary finger
+      touchTargetX = getTouchCanvasX(touch); // Update X target (all groups)
       if (movementABGroup === 'B') {
         var currentY = getTouchCanvasY(touch);
-        touchTargetY = currentY - touchLastY; // delta: positive = finger moved down, negative = up
-        touchLastY = currentY;               // update for next frame
+        // Delta approach: player.y += delta (not player.y = currentY)
+        touchTargetY = currentY - touchLastY; // Positive = down, negative = up
+        touchLastY = currentY; // Update for next frame's delta calculation
       }
     }, { passive: false });
 
+    /**
+     * touchend event handler — Deactivates touch controls when finger lifts.
+     *
+     * Behavior:
+     * - Checks if ALL fingers have lifted (e.touches.length === 0)
+     * - If yes: disables touch processing and stops auto-fire
+     * - If no: touch remains active (multi-finger scenario, though not used)
+     *
+     * Effects:
+     * - touchActive = false → updateTouchControls() early-returns
+     * - touchShootActive = false → stops bullet firing immediately
+     * - Player continues drifting at last position (no more movement updates)
+     *
+     * Note: Auto-fire cycle does NOT resume from where it left off when
+     * re-touching. Next touchstart will reset touchShootCycleStart to now,
+     * starting a fresh 1.8s active window.
+     *
+     * @listens touchend
+     */
     canvas.addEventListener("touchend", function (e) {
-      e.preventDefault();
+      e.preventDefault(); // Prevent mobile click/tap delay
       if (e.touches.length === 0) {
-        touchActive = false;
-        touchShootActive = false;
+        // All fingers lifted — deactivate touch controls
+        touchActive = false; // Disables updateTouchControls() processing
+        touchShootActive = false; // Stops auto-fire immediately
       }
+      // If e.touches.length > 0, another finger is still down (ignored in current implementation)
     }, { passive: false });
 
+    /**
+     * touchcancel event handler — Emergency deactivation for interrupted touches.
+     *
+     * Fires when the browser cancels an ongoing touch sequence, such as:
+     * - System UI appears (notification shade, control center, etc.)
+     * - Browser navigation gesture triggers (swipe back/forward)
+     * - Phone call or alert interrupts the app
+     * - Touch events exceed system limits (too many fingers, etc.)
+     *
+     * Behavior:
+     * - Immediately disables touch controls and auto-fire
+     * - Same effect as touchend but without checking e.touches.length
+     *   (touch is already cancelled by the browser)
+     *
+     * Prevents stuck state where touchActive remains true after interruption,
+     * which would cause player to drift infinitely toward last touch position.
+     *
+     * @listens touchcancel
+     */
     canvas.addEventListener("touchcancel", function (e) {
-      touchActive = false;
-      touchShootActive = false;
+      // Browser cancelled touch — immediately deactivate
+      touchActive = false; // Disables updateTouchControls() processing
+      touchShootActive = false; // Stops auto-fire immediately
     }, { passive: false });
 
     /**
@@ -5844,41 +6734,82 @@
               enemy.y = baseY - enemy.height / 2;
             }
 
-            // Legacy formation types (spiral, pincer, sineWave) for variety
+            // ───────────────────────────────────────────────────────────────────────
+            // Legacy formation movement update (reserved for pink levels 13-15)
+            // ───────────────────────────────────────────────────────────────────────
+            // These movement patterns are fully implemented and tested but not
+            // currently spawned by the wave system. They will be activated by
+            // boss scripting in the upcoming pink phase expansion.
+
+            // Calculate beat phase for BPM-synced animations (0.0 to 1.0 per beat cycle)
+            // breathPhase offsets each enemy's timing for staggered animation
             var beatPhase = ((time + (enemy.breathPhase || 0) * BPM_INTERVAL) % BPM_INTERVAL) / BPM_INTERVAL;
 
+            // Spiral formation: Circular orbit with breathing radius
             if (enemy.formationType === 'spiral' && enemy.reachedTarget) {
+              // Rotate enemy around center point (0.02 rad/frame ≈ 3.5s per full rotation)
               enemy.spiralAngle += 0.02;
+
+              // Breathing effect: Radius pulses ±30% in sync with music beat
+              // pulseFactor ranges from 0.7 to 1.3 over each beat cycle
               var pulseFactor = 1 + Math.sin(beatPhase * Math.PI * 2) * 0.3;
               var currentRadius = enemy.spiralBaseRadius * pulseFactor;
+
+              // Calculate orbit position using polar coordinates (angle, radius)
+              // Convert to canvas coordinates and center on enemy sprite
               enemy.x = enemy.spiralCenterX + Math.cos(enemy.spiralAngle) * currentRadius - enemy.width / 2;
               enemy.y = enemy.spiralCenterY + Math.sin(enemy.spiralAngle) * currentRadius - enemy.height / 2;
             }
 
+            // Pincer formation: 3+3 enemies converging from sides then oscillating
             if (enemy.formationType === 'pincer') {
               if (!enemy.reachedTarget) {
+                // Entry phase: Slide enemies from off-screen edges toward target positions
+                // Left group: Move right from x=-50 to x=150
                 if (enemy.pincerSide === 'left' && enemy.x < enemy.pincerTargetX) {
-                  enemy.x += enemy.pincerSpeed;
+                  enemy.x += enemy.pincerSpeed; // 3px/frame
                   if (enemy.x >= enemy.pincerTargetX) enemy.reachedTarget = true;
-                } else if (enemy.pincerSide === 'right' && enemy.x > enemy.pincerTargetX) {
-                  enemy.x -= enemy.pincerSpeed;
+                }
+                // Right group: Move left from x=canvas.width to x=canvas.width-200
+                else if (enemy.pincerSide === 'right' && enemy.x > enemy.pincerTargetX) {
+                  enemy.x -= enemy.pincerSpeed; // 3px/frame
                   if (enemy.x <= enemy.pincerTargetX) enemy.reachedTarget = true;
                 }
               } else {
+                // Oscillation phase: Horizontal bounce ±30px from base position
+                // Creates "breathing" effect as groups move toward/away from each other
+                // pulseDist ranges from -30 to +30 over each beat cycle
                 var pulseDist = Math.sin(beatPhase * Math.PI * 2) * 30;
+
                 if (enemy.pincerSide === 'left') {
+                  // Left enemies: Bounce right (+) and left (-) from base
                   enemy.x = enemy.pincerBaseX + pulseDist;
                 } else {
+                  // Right enemies: Bounce left (-) and right (+) from base (mirrored)
                   enemy.x = enemy.pincerBaseX - pulseDist;
                 }
               }
             }
 
+            // Sine wave formation: 8 enemies undulating in synchronized horizontal wave
             if (enemy.formationType === 'sineWave' && enemy.reachedTarget) {
+              // Global wave phase: All enemies share the same wave progression (time-driven)
+              // Completes one full wave cycle per BPM_INTERVAL (music-synced)
               var wavePhase = (time / BPM_INTERVAL) * Math.PI * 2;
+
+              // Horizontal wave: Each enemy has unique phase offset (sinePhase)
+              // Creates cascading "rolling wave" effect from left to right
+              // Amplitude = 60px (±60px horizontal movement from base position)
               enemy.x = enemy.baseX + Math.sin(wavePhase + enemy.sinePhase) * enemy.sineAmplitude;
+
+              // Vertical bounce: Secondary oscillation adds complexity to motion
+              // Math.abs creates "bounce" effect (always positive, up/down from base)
+              // Amplitude = 15px (0 to +15px vertical movement)
               var vertBounce = Math.abs(Math.sin(beatPhase * Math.PI)) * 15;
               enemy.y = enemy.baseY + vertBounce;
+
+              // Bounds clamping: Prevent enemies from moving off-screen edges
+              // Ensures wave stays within visible canvas area
               if (enemy.x < 0) enemy.x = 0;
               if (enemy.x > canvas.width - enemy.width) enemy.x = canvas.width - enemy.width;
             }

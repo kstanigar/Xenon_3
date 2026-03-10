@@ -391,12 +391,22 @@
       padding: 20px;
     }
   </style>
-  <!-- Firebase SDK -->
+  <!-- ═════════════════════════════════════════════════════════════════════════
+       Firebase SDK Integration — Leaderboard Read/Write
+       ═══════════════════════════════════════════════════════════════════════════
+       Loaded as an ES6 module to import Firebase Firestore functions.
+       Exposes two global functions for leaderboard interaction:
+       - firebaseSubmitScore() — Writes new score entries to Firestore
+       - firebaseGetTopScores() — Reads top 10 scores for display
+
+       Note: This is an async module, so these functions may not be available
+       immediately on page load. Callers should check for existence before use. -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+    // Firebase project configuration (read-write API key, safe for client-side use)
     const firebaseConfig = {
       apiKey: "AIzaSyDumeBRk__-lcKFJA2WLD7Wi-0y6OuFZlo",
       authDomain: "nonx---game.firebaseapp.com",
@@ -410,6 +420,18 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    /**
+     * Submits a score entry to the Firestore "leaderboard" collection.
+     * Includes Instagram handle (or 'Anonymous'), platform, and movement group
+     * for analytics and display purposes. Server timestamp is added automatically.
+     *
+     * @param {Object} scoreData - Score entry data
+     * @param {number} scoreData.score - Final score achieved
+     * @param {string} scoreData.instagram - Instagram handle or 'Anonymous'
+     * @param {string} scoreData.platform - 'desktop' or 'mobile'
+     * @param {string} scoreData.movement_group - 'A' (horizontal) or 'B' (full movement)
+     * @returns {Promise<{success:boolean, id?:string, error?:any}>} Result object
+     */
     window.firebaseSubmitScore = async function (scoreData) {
       try {
         const docRef = await addDoc(collection(db, "leaderboard"), {
@@ -417,7 +439,7 @@
           instagram: scoreData.instagram,
           platform: scoreData.platform,
           movement_group: scoreData.movement_group,
-          date: serverTimestamp()
+          date: serverTimestamp() // Server-side timestamp for accurate sorting
         });
         return { success: true, id: docRef.id };
       } catch (e) {
@@ -426,6 +448,14 @@
       }
     };
 
+    /**
+     * Queries the Firestore "leaderboard" collection for the top 10 scores,
+     * ordered by score descending. Returns an empty array on error.
+     *
+     * Used by both game-over and victory screens to display global leaderboard.
+     *
+     * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>} Top 10 leaderboard entries
+     */
     window.firebaseGetTopScores = async function () {
       try {
         const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
@@ -494,17 +524,26 @@
   </div>
 
   <script>
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // CANVAS SETUP
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Fixed 4:3 canvas (800×600) scaled via CSS to fill viewport while
+    // maintaining aspect ratio. All game logic uses canvas coordinates.
     var canvas = document.getElementById("gameCanvas");
     var ctx = canvas.getContext("2d");
 
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // GAME CONFIGURATION
-    // ============================================
-    // Central tuning object. All gameplay-affecting numbers live here
-    // so difficulty, feel, and balance can be adjusted in one place.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Central tuning object. All gameplay-affecting numbers live here so
+    // difficulty, feel, and balance can be adjusted in one place without
+    // hunting through the codebase.
+    //
+    // Key design decisions:
+    // - Player speed (5px/frame) balanced for precise dodging without feeling sluggish
+    // - Enemy speed scales per level to increase challenge gradually
+    // - Boss encounters triggered by score thresholds (400, 1200, 2000)
+    // - Three phases: Original (1-4), Red (5-8), Purple (9-12)
     var CONFIG = {
       // ── Player ──────────────────────────────────────────────────
       playerSpeed: 5,           // Movement speed in px/frame
@@ -579,9 +618,19 @@
       sideToSideEnemies: ['enemy2_red', 'enemy2_purple']
     };
 
-    // ============================================
-    // IMAGE SETUP
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // IMAGE ASSETS
+    // ═══════════════════════════════════════════════════════════════════════════
+    // All sprites loaded from /Xenon_3/ prefix (GitHub Pages deployment path).
+    // Images are drawn using ctx.drawImage() with no filtering for pixel-perfect
+    // rendering (see CSS: image-rendering: pixelated).
+    //
+    // Asset organization:
+    // - Standard enemies: enemy.png, enemy2-4.png (levels 1-4)
+    // - Red phase: enemy1-4_Red.png, boss_Red.png (levels 5-8)
+    // - Purple phase: enemy1-4_purple.png, boss_purple.png (levels 9-12)
+
+    // Player ship sprite (75×75px)
     var playerImg = new Image();
     playerImg.src = "/Xenon_3/player.png";
 
@@ -632,9 +681,11 @@
     var bossImgPurple = new Image();
     bossImgPurple.src = "/Xenon_3/boss_purple.png";
 
-    // ============================================
-    // SOUND SETUP
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AUDIO ASSETS
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Sound effects dictionary for one-shot gameplay audio events.
+    // Each sound is a separate Audio element to allow overlapping playback.
     var sounds = {
       playerBullet: new Audio("/Xenon_3/sfx/playerBullet.mp3"),
       playerHit: new Audio("/Xenon_3/sfx/playerHit.mp3"),
@@ -644,16 +695,17 @@
       powerUp: new Audio("/Xenon_3/sfx/powerUp.mp3")
     };
 
-    // Background music (full song, looped)
+    // Background music track (looped continuously during gameplay).
+    // Volume set to 0.79 for balanced mix with sound effects.
     var bgMusic = new Audio("/Xenon_3/sfx/NonexFullSong.mp3");
     bgMusic.loop = true;
     bgMusic.volume = 0.79;
 
-    // Credits music
+    // Credits music track (plays on victory screen, same track as background).
     var creditsMusic = new Audio("/Xenon_3/sfx/NonexFullSong.mp3");
     creditsMusic.volume = 0.79;
 
-    // Set sound effect volumes (all at 0.4)
+    // Set sound effect volumes to 0.4 for clear audio without overpowering music.
     sounds.playerBullet.volume = 0.4;
     sounds.playerHit.volume = 0.4;
     sounds.playerDead.volume = 0.4;
@@ -661,30 +713,36 @@
     sounds.bossIntro.volume = 0.4;
     sounds.powerUp.volume = 0.4;
 
+    // Interval handle for repeating boss intro sting every 10 seconds during boss fights.
     var bossIntroInterval = null;
 
     /**
      * Plays a one-shot sound effect by resetting its playback position and
-     * calling play(). Autoplay errors are silently ignored (browser policy).
-     * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead').
+     * calling play(). Allows overlapping sound effects since each call starts
+     * from the beginning. Autoplay errors are silently ignored (browser policy).
+     *
+     * @param {string} soundName - Key in the `sounds` object (e.g. 'enemyDead', 'playerBullet').
      */
     function playSound(soundName) {
       var sound = sounds[soundName];
       if (sound) {
-        sound.currentTime = 0;
+        sound.currentTime = 0; // Reset to start for immediate replay
         sound.play().catch(function (e) {
-          // Ignore autoplay errors
+          // Silently ignore autoplay policy errors
         });
       }
     }
 
     /**
      * Starts the boss intro sting and sets a repeating interval so it plays
-     * every 10 seconds for as long as a boss fight is active.
+     * every 10 seconds for as long as a boss fight is active. Creates dramatic
+     * tension during boss encounters.
+     *
+     * Interval auto-stops when boss is defeated or player dies (gameOver = true).
      */
     function startBossMusic() {
-      playSound('bossIntro');
-      // Repeat every 10 seconds
+      playSound('bossIntro'); // Play immediately on boss spawn
+      // Repeat every 10 seconds while boss is active
       bossIntroInterval = setInterval(function () {
         if (bossActive && !gameOver) {
           playSound('bossIntro');
@@ -692,7 +750,10 @@
       }, 10000);
     }
 
-    /** Clears the boss music interval and resets the audio element to the start. */
+    /**
+     * Clears the boss music interval and resets the audio element to the start.
+     * Called when boss is defeated or player dies.
+     */
     function stopBossMusic() {
       if (bossIntroInterval) {
         clearInterval(bossIntroInterval);
@@ -702,31 +763,44 @@
       sounds.bossIntro.currentTime = 0;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // A/B TESTING SYSTEM
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Two active A/B tests:
+    // 1. Music Default (Group A = ON, Group B = OFF) — assigned randomly on first visit
+    // 2. Movement Controls (Group A = horizontal only, Group B = full movement) — user-selectable on main menu
+    //
+    // All assignments persist in localStorage for consistent experience across sessions.
+    // Analytics events include group designations for cohort analysis.
+
     /**
-     * Starts looping background music from the beginning, unless the player
-     * has disabled music (localStorage key `nonex_music` === 'off').
-     */
-    // ============================================
-    // A/B TESTING - MUSIC DEFAULT
-    // ============================================
-    /**
-     * Assigns user to A/B test group for music default setting.
-     * Group A: Music ON by default
-     * Group B: Music OFF by default
-     * Assignment is random and persists in localStorage.
+     * Assigns user to A/B test group for music default setting on first visit.
+     *
+     * Groups:
+     * - Group A: Music ON by default (50% of users)
+     * - Group B: Music OFF by default (50% of users)
+     *
+     * Assignment:
+     * - Random 50/50 split on first visit
+     * - Persists in localStorage (nonx_ab_music_group)
+     * - Only sets music preference if user hasn't manually changed it
+     *
+     * @returns {string} 'A' or 'B' — the user's assigned music group
      */
     function initMusicABTest() {
       var abGroup = localStorage.getItem('nonx_ab_music_group');
 
       if (!abGroup) {
+        // First visit — assign randomly
         abGroup = Math.random() < 0.5 ? 'A' : 'B';
         localStorage.setItem('nonx_ab_music_group', abGroup);
 
+        // Only set default music preference if user hasn't changed it manually
         if (!localStorage.getItem('nonex_music')) {
           if (abGroup === 'A') {
-            localStorage.setItem('nonex_music', 'on');
+            localStorage.setItem('nonex_music', 'on');  // Group A: Music ON
           } else {
-            localStorage.setItem('nonex_music', 'off');
+            localStorage.setItem('nonex_music', 'off'); // Group B: Music OFF
           }
         }
       }
@@ -734,41 +808,59 @@
       return abGroup;
     }
 
+    // User's assigned music A/B group (persists across sessions)
     var userABGroup = initMusicABTest();
 
-    // ============================================
-    // MOVEMENT A/B TEST
-    // ============================================
-    // Group A: horizontal movement only (default)
-    // Group B: horizontal + vertical movement (bottom 30% of canvas)
-    // Player chooses their style on the game over / victory screen.
-    // Choice persists in localStorage.
     /**
      * Reads the player's Full Movement preference set on the main menu.
-     * 'B' = full movement (horizontal + vertical), 'A' = horizontal only.
-     * Defaults to 'B' (full movement on) if no preference saved yet.
+     *
+     * Movement groups:
+     * - Group A: Horizontal movement only (left/right arrow keys, mouse X-axis)
+     * - Group B: Full movement (all arrow keys, mouse X+Y within bottom 30% of canvas)
+     *
+     * Mapping:
+     * - nonex_movement === 'off' → Group A (horizontal only)
+     * - nonex_movement === 'on' or null → Group B (full movement, default)
+     *
+     * @returns {string} 'A' or 'B' — the user's movement control group
      */
     function initMovementABTest() {
       var pref = localStorage.getItem('nonex_movement');
-      // nonex_movement 'on' / null  → group B (full movement)
-      // nonex_movement 'off'        → group A (horizontal only)
+      // Default to 'B' (full movement) if no preference set yet
       return (pref === 'off') ? 'A' : 'B';
     }
+
+    // User's movement control group (set on main menu, persists across sessions)
     var movementABGroup = initMovementABTest();
 
-    // ── Developer Mode ────────────────────────────────────────────────────────
-    // Toggle with Shift+D. Never persists — resets on every page load.
-    // Hotkeys active only while devMode is ON:
-    //   Shift+V  → skip to victory screen
-    //   Shift+G  → skip to game over screen
-    // All analytics are suppressed and logged to console instead.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEVELOPER MODE
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Toggle with Shift+D. Enables debug shortcuts and suppresses analytics.
+    // Never persists — resets to false on every page load.
+    //
+    // Dev shortcuts (active only while devMode is ON):
+    //   Shift+V → Skip to victory screen
+    //   Shift+G → Skip to game over screen
+    //   Shift+I → Toggle god mode (invincibility)
+    //   Shift+1-9 → Jump to level 1-9
+    //   Shift+0 → Jump to level 12
+    //
+    // All analytics events are suppressed and logged to console with cyan badge.
     var devMode = false;
 
     /**
-     * Wrapper for all GA4 event calls. In devMode, logs to console instead of
-     * sending to GA4 so analytics are never skewed during development/testing.
-     * @param {string} eventName - GA4 event name
-     * @param {Object} params    - Event parameters
+     * Wrapper for all Google Analytics (GA4) event calls. Routes events through
+     * gtag.js in production, but suppresses and logs to console in developer mode
+     * to prevent analytics pollution during testing.
+     *
+     * Dev mode behavior:
+     * - Events are NOT sent to GA4
+     * - Logged to console with cyan styling for easy identification
+     * - Parameters are included in console output for debugging
+     *
+     * @param {string} eventName - GA4 event name (e.g. 'level_complete', 'player_death')
+     * @param {Object} params - Event parameters (e.g. {score: 500, level: 3})
      */
     function fireEvent(eventName, params) {
       if (devMode) {
@@ -782,7 +874,18 @@
       gtag('event', eventName, params);
     }
 
-    // ── Session & User Identity Events ───────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SESSION & USER IDENTITY ANALYTICS
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Fires on every page load to track sessions and distinguish first-time vs.
+    // returning players. Visit count increments each time the game is loaded.
+    //
+    // Events fired:
+    // - session_start (always) — tracks every game session
+    // - first_visit (once ever) — tracks new user acquisition
+    // - returning_user (subsequent visits) — tracks retention with visit count
+    //
+    // IIFE executes immediately on page load before game starts.
     (function fireSessionEvents() {
       var isFirstVisit = !localStorage.getItem('nonx_has_visited');
       var musicVariant = localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off';
@@ -796,7 +899,7 @@
       });
 
       if (isFirstVisit) {
-        // First time ever visiting
+        // First time ever visiting — track new user acquisition
         fireEvent('first_visit', {
           'ab_music_group': userABGroup,
           'platform': 'desktop',
@@ -805,7 +908,7 @@
         localStorage.setItem('nonx_has_visited', 'true');
         localStorage.setItem('nonx_visit_count', '1');
       } else {
-        // Returning player
+        // Returning player — increment visit count and track retention
         var visitCount = parseInt(localStorage.getItem('nonx_visit_count') || '1', 10) + 1;
         localStorage.setItem('nonx_visit_count', String(visitCount));
         fireEvent('returning_user', {
@@ -817,13 +920,25 @@
       }
     })();
 
+    /**
+     * Starts looping background music from the beginning, unless the player
+     * has disabled music (localStorage key nonex_music === 'off').
+     *
+     * Called when the game starts or resumes from pause. Music loops continuously
+     * until manually stopped or muted.
+     */
     function startBackgroundMusic() {
-      if (localStorage.getItem('nonex_music') === 'off') return;
+      if (localStorage.getItem('nonex_music') === 'off') return; // Respect user preference
       bgMusic.currentTime = 0;
-      bgMusic.play().catch(function (e) { });
+      bgMusic.play().catch(function (e) {
+        // Silently handle autoplay policy errors
+      });
     }
 
-    /** Pauses and resets the background music track. */
+    /**
+     * Pauses and resets the background music track to the beginning.
+     * Called when the game ends or is paused.
+     */
     function stopBackgroundMusic() {
       bgMusic.pause();
       bgMusic.currentTime = 0;
@@ -832,17 +947,25 @@
     /**
      * Toggles the background music on/off and updates the mute button icon.
      * Saves the preference to localStorage for persistence across sessions.
+     *
+     * Button states:
+     * - 🔊 = Music playing
+     * - 🔇 = Music muted
+     *
+     * Fires 'music_toggled' analytics event with current score and level context.
      */
     function toggleMusic() {
       var muteBtn = document.getElementById('muteButton');
 
       if (bgMusic.paused) {
+        // Currently muted — turn music ON
         bgMusic.play().catch(function (e) {
           // Silently handle autoplay restrictions
         });
         localStorage.setItem('nonex_music', 'on');
         if (muteBtn) muteBtn.textContent = '🔊';
       } else {
+        // Currently playing — turn music OFF
         bgMusic.pause();
         localStorage.setItem('nonex_music', 'off');
         if (muteBtn) muteBtn.textContent = '🔇';
@@ -858,57 +981,73 @@
       });
     }
 
-    /** Plays the credits music track from the beginning (used on victory screen). */
+    /**
+     * Plays the credits music track from the beginning (used on victory screen).
+     * Same track as background music but plays once (not looped).
+     */
     function startCreditsMusic() {
       creditsMusic.currentTime = 0;
       creditsMusic.play().catch(function (e) {
-        // Ignore autoplay errors
+        // Silently ignore autoplay errors
       });
     }
 
-    /** Pauses and resets the credits music track. */
+    /**
+     * Pauses and resets the credits music track.
+     * Called when player exits victory screen.
+     */
     function stopCreditsMusic() {
       creditsMusic.pause();
       creditsMusic.currentTime = 0;
     }
 
     /**
-     * Validates and saves the email address entered in the victory screen input.
-     * Emails are stored in `localStorage` under the key `xenonEmails` (JSON array).
-     * A basic '@' check is the only validation applied.
-     */
-    /**
-     * Submits score to the global leaderboard with optional Instagram handle.
-     * Leaderboard is stored in localStorage and can sync to backend.
-     */
-    /**
-     * Submits score to Firebase global leaderboard.
-     * Falls back gracefully if Firebase is unavailable.
+     * Submits the player's final score to the Firebase global leaderboard with
+     * optional Instagram handle. Sanitizes input, saves handle for future autofill,
+     * and displays submission status.
+     *
+     * Flow:
+     * 1. Read Instagram handle from input field
+     * 2. Sanitize input (remove special chars, 30 char limit)
+     * 3. Save handle to localStorage for future autofill
+     * 4. Disable submit button to prevent double submission
+     * 5. Send to Firebase with score, platform, movement group
+     * 6. On success: save submitted score, show leaderboard
+     * 7. On failure: show error message
+     *
+     * Sanitization:
+     * - Removes: @, <, >, ', "
+     * - Max length: 30 characters
+     * - Empty input becomes 'Anonymous'
+     *
+     * Analytics event 'leaderboard_submit' fired regardless of Firebase result.
      */
     function submitToLeaderboard() {
+      // Read and sanitize Instagram handle from input field
       var igHandle = document.getElementById('igInput').value.trim();
       var sanitized = igHandle.replace(/[@<>'"]/g, '').substring(0, 30);
 
-      // Save Instagram handle for future autofill
+      // Save sanitized handle for future autofill (remembered across sessions)
       if (sanitized) {
         localStorage.setItem('nonx_ig_handle', sanitized);
       }
 
-      // Disable button to prevent double submit
+      // Disable submit button to prevent double submission
       var submitBtn = document.querySelector('#leaderboardSubmit button');
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Submitting...';
       }
 
+      // Build score entry data for Firebase
       var scoreData = {
         score: score,
-        instagram: sanitized || 'Anonymous',
+        instagram: sanitized || 'Anonymous', // Empty input becomes Anonymous
         platform: 'desktop',
-        movement_group: movementABGroup
+        movement_group: movementABGroup      // A/B test group for analytics
       };
 
-      // Track submission in GA4
+      // Track submission in GA4 (fires even if Firebase fails)
       fireEvent('leaderboard_submit', {
         'ab_music_group': userABGroup,
         'movement_group': movementABGroup,
@@ -918,19 +1057,24 @@
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
       });
 
+      // Submit to Firebase if available (async module may still be loading)
       if (typeof window.firebaseSubmitScore === 'function') {
         window.firebaseSubmitScore(scoreData).then(function (result) {
+          // Hide submit form regardless of result
           document.getElementById('leaderboardSubmit').style.display = 'none';
+
           if (result.success) {
-            // Save this score as the player's submitted high score
+            // Save this score as the player's submitted high score for highlighting
             localStorage.setItem('nonx_submitted_score', String(score));
-            showLeaderboard();
+            showLeaderboard(); // Fetch and display top 10
           } else {
+            // Firebase error (network, permissions, etc.)
             document.getElementById('leaderboardDisplay').innerHTML =
               "<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Could not reach leaderboard. Check your connection.</div>";
           }
         });
       } else {
+        // Firebase SDK not loaded yet (should be rare, but handle gracefully)
         document.getElementById('leaderboardSubmit').style.display = 'none';
         document.getElementById('leaderboardDisplay').innerHTML =
           "<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Leaderboard unavailable. Try again later.</div>";
@@ -938,39 +1082,66 @@
     }
 
     /**
-     * Fetches and displays top 10 global scores from Firebase.
+     * Fetches and displays the top 10 global scores from Firebase in a
+     * two-column layout. Highlights the player's current score if it appears
+     * in the top 10.
+     *
+     * Layout algorithm:
+     * - Split into two columns: left (1-5), right (6-10)
+     * - Math.ceil handles odd counts (e.g., 9 entries → 5 left, 4 right)
+     * - flex-wrap allows single-column fallback on narrow screens
+     *
+     * Score highlighting:
+     * - Compares each entry.score to the current game's final score
+     * - Exact match gets cyan color (#00FFFF) and bold weight
+     *
+     * Called after successful leaderboard submission to show results.
      */
     function showLeaderboard() {
       var display = document.getElementById('leaderboardDisplay');
       if (!display) return;
+
+      // Show loading state
       display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Loading leaderboard...</div>";
 
+      // Check if Firebase SDK is available
       if (typeof window.firebaseGetTopScores !== 'function') {
         display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Leaderboard unavailable.</div>";
         return;
       }
 
+      // Fetch top 10 scores from Firebase
       window.firebaseGetTopScores().then(function (top10) {
         if (!top10 || top10.length === 0) {
           display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>No scores yet — be the first!</div>";
           return;
         }
+
         // Two-column grid: entries laid out left column (1-5) then right column (6-10).
-        // flex-wrap means narrow screens fall back to a single column automatically.
-        var half = Math.ceil(top10.length / 2);
-        var cols = ['', ''];
+        // Math.ceil ensures odd counts distribute correctly (e.g., 9 → 5 left, 4 right).
+        var half = Math.ceil(top10.length / 2); // Split point for two-column layout
+        var cols = ['', '']; // HTML strings for left and right columns
+
         for (var i = 0; i < top10.length; i++) {
           var entry = top10[i];
           var igText = entry.instagram && entry.instagram !== 'Anonymous'
             ? '@' + entry.instagram : 'Anonymous';
+
+          // Highlight player's current score with cyan color
           var isCurrentScore = entry.score === score;
           var rowStyle = isCurrentScore ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
+
+          // Determine which column (0 = left, 1 = right)
           var col = i < half ? 0 : 1;
+
+          // Build row HTML: rank, score, Instagram handle
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
           cols[col] += "<span style='color:#aaa;font-size:11px;'>" + igText + "</span>";
           cols[col] += "</div>";
         }
+
+        // Assemble final two-column layout with trophy header
         var html = "<div style='margin-top:12px;text-align:center;'>";
         html += "<div style='color:#FFD700;font-weight:bold;margin-bottom:8px;font-size:14px;'>🏆 Global Top 10</div>";
         html += "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;'>";
@@ -981,35 +1152,48 @@
       });
     }
 
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // GAME STATE
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Core game state variables. Reset on each new game via resetGame().
+
+    // Player ship position and dimensions (75×75px sprite).
+    // Starts centered horizontally, 100px from bottom edge.
     var player = {
-      x: canvas.width / 2,
-      y: canvas.height - 100,
-      width: 75,
-      height: 75
+      x: canvas.width / 2,      // Horizontal center (400px on 800px canvas)
+      y: canvas.height - 100,   // 100px from bottom (500px on 600px canvas)
+      width: 75,                // Sprite width
+      height: 75                // Sprite height
     };
 
-    var playerBullets = [];
-    var enemyBullets = [];
-    var enemies = [];
-    var powerups = [];
-    var score = 0;
-    var level = 1;
-    var health = 50;
-    var gameOver = true;
-    var paused = false;
-    // Load top 10 high scores from localStorage
+    // Entity arrays — all cleared on game reset.
+    var playerBullets = [];     // Player's active bullets (move upward)
+    var enemyBullets = [];      // Enemy bullets (move downward)
+    var enemies = [];           // All active enemies (formations, kamikazes, boss)
+    var powerups = [];          // Falling power-ups (health, laser, shield, quad)
+
+    // Core game metrics
+    var score = 0;              // Player's current score (incremented by enemy kills, power-up pickups)
+    var level = 1;              // Current level (1-12, split across 3 phases)
+    var health = 50;            // Player's current HP (starts at 50, max 250)
+    var gameOver = true;        // True when player is dead or hasn't started yet
+    var paused = false;         // True when game is paused (P key or Pause button)
+
+    // High scores array (top 10) loaded from localStorage.
+    // Legacy local storage — now superseded by Firebase global leaderboard.
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
 
-    // ── Analytics tracking variables ─────────────────────────────────────────
-    // gameSessionStart: timestamp (ms) when the current game session began.
-    //   Used to calculate session duration sent with player_death and player_won.
-    //   Reset each time the player presses Start / Play Again.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ANALYTICS TRACKING VARIABLES
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Session tracking for calculating play time and replay behavior.
+
+    // Timestamp (ms) when the current game session began.
+    // Used to calculate session duration sent with player_death and player_won events.
+    // Reset each time the player presses Start / Play Again.
     var gameSessionStart = null;
 
-    // isReplay: true if the current game was started via the Play Again button
+    // True if the current game was started via the Play Again button (replay).
     //   rather than a fresh page load. Sent with game_start so replays can be
     //   distinguished from first-time starts in GA4 reports.
     var isReplay = false;
@@ -1460,44 +1644,80 @@
     }
 
     /**
-     * Attempts to spawn a power-up based on random chance, respecting a 5-second
-     * minimum cooldown between drops and a per-level one-of-each limit.
-     * Priority: health (40%) → double laser (70%) → shield (level 3+) → health fallback.
+     * Attempts to spawn a power-up based on random chance, respecting cooldown
+     * and per-level limits. Creates strategic scarcity by limiting each power-up
+     * type to one spawn per level.
+     *
+     * Spawn system:
+     * - Base chance: 0.3% per frame (CONFIG.powerupSpawnChance = 0.003)
+     * - Cooldown: 5 seconds minimum between drops (powerupSpawnCooldown = 5000ms)
+     * - Limit: Maximum 1 of each power-up type per level
+     * - Reset: powerupsSpawnedThisLevel cleared on level progression
+     *
+     * Priority ladder (checked in order):
+     * 1. Health (40% chance) — if not spawned this level and rand < 0.4
+     * 2. Double Laser (70% chance) — if not spawned this level and rand < 0.7
+     * 3. Shield (100% chance) — if not spawned this level, level >= 3, and rand >= 0.7
+     * 4. Health (fallback) — if shield/laser already spawned but health not
+     *
+     * Level requirements:
+     * - Health: Available all levels
+     * - Double Laser: Available all levels
+     * - Shield: Only available level 3+ (mid-game onward)
+     *
+     * Power-up effects:
+     * - Health: +10 HP (up to maxHealth = 250)
+     * - Double Laser: Enables dual-shot (laserLevel = 2)
+     * - Shield: 5-hit absorption, reduces damage to 5 HP
+     *
+     * Called every frame from draw() during normal gameplay (not boss fights).
      */
     function trySpawnPowerup() {
-      // Stagger power-ups - minimum 5 seconds between spawns
+      // ── Cooldown Check ─────────────────────────────────────────────────────────
+      // Enforce minimum 5-second gap between power-up spawns to prevent spam
       var now = Date.now();
       if (now - lastPowerupSpawnTime < powerupSpawnCooldown) return;
+
+      // ── Base Spawn Chance ──────────────────────────────────────────────────────
+      // 0.3% per frame (~18% per second at 60 FPS)
       if (Math.random() > CONFIG.powerupSpawnChance) return;
 
-      // Randomly choose which power-up to try spawning
-      // Only mark as spawned if createPowerup succeeds
+      // ── Power-Up Selection (Priority Ladder) ──────────────────────────────────
+      // Randomly choose which power-up to try spawning.
+      // Only mark as spawned if createPowerup succeeds (x-bounds check).
       var rand = Math.random();
       var spawned = false;
 
+      // Priority 1: Health (40% chance, most common)
       if (!powerupsSpawnedThisLevel.health && rand < 0.4) {
         if (createPowerup(POWERUP_TYPES.HEALTH)) {
           powerupsSpawnedThisLevel.health = true;
           spawned = true;
         }
-      } else if (!powerupsSpawnedThisLevel.doubleLaser && rand < 0.7) {
+      }
+      // Priority 2: Double Laser (70% chance, medium rarity)
+      else if (!powerupsSpawnedThisLevel.doubleLaser && rand < 0.7) {
         if (createPowerup(POWERUP_TYPES.DOUBLE_LASER)) {
           powerupsSpawnedThisLevel.doubleLaser = true;
           spawned = true;
         }
-      } else if (!powerupsSpawnedThisLevel.shield && level >= 3) {
-        // Shield only spawns level 3+
+      }
+      // Priority 3: Shield (100% chance, rare, level 3+)
+      else if (!powerupsSpawnedThisLevel.shield && level >= 3) {
         if (createPowerup(POWERUP_TYPES.SHIELD)) {
           powerupsSpawnedThisLevel.shield = true;
           spawned = true;
         }
-      } else if (!powerupsSpawnedThisLevel.health) {
+      }
+      // Priority 4: Health (fallback if other types already spawned)
+      else if (!powerupsSpawnedThisLevel.health) {
         if (createPowerup(POWERUP_TYPES.HEALTH)) {
           powerupsSpawnedThisLevel.health = true;
           spawned = true;
         }
       }
 
+      // Update cooldown timer if a power-up was successfully spawned
       if (spawned) {
         lastPowerupSpawnTime = now;
       }
@@ -2172,54 +2392,103 @@
     var shieldRegenTime = 0;
 
     /**
-     * Instantiates all formation enemies for the current wave. Enemies enter
-     * from above the canvas in the first (exploded) shape and are marked
-     * `formation: true`. Each enemy carries its `waveShapes` list so
-     * `updateMorphingFormation()` knows what to cycle through. All formation
-     * enemies start shielded.
-     * @param {Object} waveData - Wave descriptor from `LEVEL_WAVES[level].waves`.
+     * Creates a morphing formation of enemies that enter from above in an exploded
+     * spread formation, then continuously cycle through multiple shapes via
+     * updateMorphingFormation(). This is the primary enemy pattern for all levels.
+     *
+     * Formation initialization:
+     * - Count: 9-25 enemies depending on level (increases as game progresses)
+     * - Entry shape: First shape in waveData.shapes array (typically "exploded" variant)
+     * - All enemies start at y=-200 (well above screen)
+     * - Enemies descend together to targetY=160 (upper third of screen)
+     * - All start shielded (shielded = true)
+     *
+     * Spread radius (horizontal spread distance):
+     * - Standard/Red phases: 140px
+     * - Purple phase: 175px (wider spread for increased difficulty)
+     *
+     * Position calculation:
+     * - Shape functions return normalized coordinates (-1 to 1 range)
+     * - X position: centerX + (normalized X * spreadRadius)
+     * - Y position: centerY + (normalized Y * spreadRadius * 0.8)
+     * - Y multiplier 0.8 compresses vertical spread to 80% of horizontal
+     *
+     * Enemy properties (critical for formation behavior):
+     * - formation: true (marks as formation enemy)
+     * - formationType: 'morphing' (distinguishes from barrier enemies)
+     * - waveShapes: Array of shape names to cycle through
+     * - spreadRadius: Stored per-enemy for position calculations
+     * - shielded: true (all start with shields)
+     * - shieldOrder: i (determines cascade order, 0 = drops first)
+     * - breathPhase: i * 0.12 (staggers breathing animation)
+     * - reachedTarget: false (set to true when entry animation completes)
+     *
+     * Side systems triggered:
+     * - Kamikaze count stored in pendingKamikazeCount (launched after 2nd morph)
+     * - Shield cascade tracking reset (manages rolling shield drops)
+     * - Formation center reset (invisible anchor point for morphing)
+     *
+     * Called by startWave() when beginning a new level wave.
+     *
+     * @param {Object} waveData - Wave descriptor from LEVEL_WAVES[level].waves
+     * @param {number} waveData.count - Number of enemies in formation (9-25)
+     * @param {number} waveData.kamikazes - Number of kamikazes to spawn later (2-6)
+     * @param {Array<string>} waveData.shapes - Array of shape names to cycle through
+     * @param {string} [waveData.barrier] - Barrier pattern name (optional)
+     * @param {number} [waveData.barrierCount] - Barrier enemy count (optional)
      */
     function spawnMorphingFormation(waveData) {
-      var count = waveData.count;
-      var centerX = canvas.width / 2;
-      var targetY = 160;
+      var count = waveData.count; // 9-25 enemies depending on level
+      var centerX = canvas.width / 2; // Formation center X (400px on 800px canvas)
+      var targetY = 160; // Final Y position (upper third of screen)
+
+      // Spread radius: Purple phase uses wider spread for increased challenge
       var spreadRadius = purplePhase ? 175 : 140;
 
-      // Store kamikaze count to be launched separately after formation settles
+      // Store kamikaze count to be launched separately after formation settles (2nd morph)
       pendingKamikazeCount = waveData.kamikazes || 2;
-      kamikazesLaunched = false;
+      kamikazesLaunched = false; // Prevents duplicate spawn
 
-      // Reset formation center - starts well above screen so all enemies enter from top
+      // ── Formation Center Initialization ────────────────────────────────────────
+      // Invisible anchor point that all formation enemies move relative to.
+      // Starts well above screen (-200) so enemies enter from top.
       formationCurrentCenterY = -200;
       formationTargetCenterY = targetY;
-      formationEntered = false;
+      formationEntered = false; // Set to true when center reaches targetY
 
       var levelData = LEVEL_WAVES[level];
-      var enemyType = levelData.enemyType;
+      var enemyType = levelData.enemyType; // e.g. 'enemy1', 'enemy3_red', 'enemy4_purple'
 
-      // Get initial shape positions (exploded - enters spread out)
+      // ── Initial Shape Calculation ──────────────────────────────────────────────
+      // Get positions from first shape in array (typically "exploded" variant).
+      // Shape functions return array of {x, y} objects with normalized coords (-1 to 1).
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
       if (typeof shapeFunc !== 'function') {
         console.error('Formation shape not found:', waveData.shapes[0]);
-        shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
+        shapeFunc = FORMATION_SHAPES['grid3x3']; // Safe fallback to prevent crash
       }
       var positions = shapeFunc(count);
 
+      // ── Enemy Creation Loop ────────────────────────────────────────────────────
       for (var i = 0; i < count; i++) {
         var pos = positions[i];
         if (!pos) {
+          // Safety check: shape function returned fewer positions than expected
           console.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
-          break; // stop spawning rather than crash
+          break; // Stop spawning rather than crash
         }
+
+        // Size depends on enemy type (enemy2 variants are smaller: 35×35)
         var width = 50;
         var height = 50;
-
         if (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') {
           width = 35;
           height = 35;
         }
 
-        // Position relative to formation center (which will move)
+        // ── Position Calculation ───────────────────────────────────────────────
+        // Convert normalized position (-1 to 1) to canvas coordinates.
+        // Y spread compressed to 80% of horizontal spread.
         var enemy = {
           x: centerX + pos.x * spreadRadius - width / 2,
           y: formationCurrentCenterY + pos.y * spreadRadius * 0.8 - height / 2,
@@ -2227,60 +2496,89 @@
           height: height,
           baseWidth: width,
           baseHeight: height,
-          speed: formationEntrySpeed,
+          speed: formationEntrySpeed, // Entry descent speed (1.8 px/frame)
           type: enemyType,
-          formation: true,
-          formationType: 'morphing',
-          targetY: targetY,
-          reachedTarget: false,
-          formationIndex: i,
-          formationCount: count,
-          waveShapes: waveData.shapes,
-          spreadRadius: spreadRadius,
-          centerX: centerX,
-          centerY: targetY,
-          breathPhase: i * 0.12,
-          startPos: { x: pos.x, y: pos.y },
-          currentPos: { x: pos.x, y: pos.y },
-          targetPos: { x: pos.x, y: pos.y },
-          shielded: true,  // Start with shield
-          shieldOrder: i,  // Order for cascade (lower = drops first)
-          nextShootTime: Date.now() + 2000 + Math.random() * 4000  // Staggered random shoot times
+          formation: true,           // Marks as formation enemy
+          formationType: 'morphing',  // Distinguishes from barrier enemies
+          targetY: targetY,           // Target Y for entry animation
+          reachedTarget: false,       // Set to true when entry completes
+          formationIndex: i,          // Index in formation (0 to count-1)
+          formationCount: count,      // Total formation size
+          waveShapes: waveData.shapes, // Shape cycle array
+          spreadRadius: spreadRadius, // Stored for morph position calculations
+          centerX: centerX,           // Formation center X
+          centerY: targetY,           // Formation center Y
+          breathPhase: i * 0.12,      // Staggers breathing animation (0 to count*0.12)
+          startPos: { x: pos.x, y: pos.y },    // Morph start position
+          currentPos: { x: pos.x, y: pos.y },  // Current morph position
+          targetPos: { x: pos.x, y: pos.y },   // Target morph position
+          shielded: true,            // All start shielded
+          shieldOrder: i,            // Cascade order (0 drops first, then 1, 2, ...)
+          nextShootTime: Date.now() + 2000 + Math.random() * 4000 // Random shoot delay 2-6s
         };
 
         enemies.push(enemy);
       }
 
-      // Reset shield cascade tracking
-      shieldCascadeStarted = false;
-      shieldCascadeTime = 0;
-      shieldsDropped = 0;
-      allShieldsDown = false;
-      shieldRegenTime = 0;
+      // ── Shield Cascade Reset ───────────────────────────────────────────────────
+      // Reset all shield cascade tracking for new formation
+      shieldCascadeStarted = false; // Triggers after 3rd morph
+      shieldCascadeTime = 0;         // Timestamp when cascade started
+      shieldsDropped = 0;            // Count of shields dropped so far
+      allShieldsDown = false;        // All shields dropped flag
+      shieldRegenTime = 0;           // Timestamp when regen started
     }
 
     /**
-     * Spawns a group of kamikaze enemies that first enter from the top in a
-     * horizontal spread, then dive toward the player's position once the group
-     * center has reached its target Y (handled by `updateKamikazeEntry`).
-     * @param {number} count - Number of kamikaze enemies to spawn.
+     * Spawns a group of kamikaze enemies that enter from the top in a horizontal
+     * spread formation, then dive toward the player once the group settles.
+     *
+     * Entry animation:
+     * - All kamikazes start at y=-80 (above screen), spread horizontally
+     * - Group descends together to y=120 (handled by updateKamikazeEntry)
+     * - Once settled, all kamikazes dive toward player's current position
+     *
+     * Horizontal spread algorithm:
+     * - Spacing: (canvas.width - 80) / (count + 1) evenly distributes enemies
+     * - Random jitter: ±15px per enemy prevents perfect spacing
+     * - Each enemy stores kamikazeCenterOffsetX for formation tracking
+     *
+     * Kamikaze properties:
+     * - kamikaze: true (marks as kamikaze type)
+     * - kamikazeEntering: true (entry phase flag)
+     * - shielded: false (never shielded)
+     * - formation: false (not part of morphing formation)
+     *
+     * Spawned by:
+     * - updateMorphingFormation() after 2nd morph (morphCount === 2)
+     * - Count determined by wave data (typically 2-6 kamikazes)
+     *
+     * @param {number} count - Number of kamikaze enemies to spawn (typically 2-6)
      */
     function spawnKamikazeWave(count) {
       var levelData = LEVEL_WAVES[level];
       var enemyType = levelData ? levelData.enemyType : 'enemy1';
+
+      // Size depends on enemy type (enemy2 variants are smaller)
       var width = 50, height = 50;
-      if (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') { width = 35; height = 35; }
+      if (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') {
+        width = 35;
+        height = 35;
+      }
 
-      // Set up center that will scroll down, all kamikazes follow it
-      kamikazeCenterY = -80;
-      kamikazeCenterTargetY = 120;
-      kamikazeCenterActive = true;
+      // Initialize kamikaze group center (invisible anchor point for entry animation)
+      kamikazeCenterY = -80;           // Start above screen
+      kamikazeCenterTargetY = 120;     // Settle point (upper third of screen)
+      kamikazeCenterActive = true;      // Enables updateKamikazeEntry() to move center
 
-      // Spread evenly across screen width, with slight random jitter
-      var spacing = (canvas.width - 80) / (count + 1);
+      // Spread kamikazes evenly across screen width with random jitter
+      var spacing = (canvas.width - 80) / (count + 1); // 40px margins on each side
+
       for (var k = 0; k < count; k++) {
+        // Calculate offset from center (canvas.width / 2)
         var centerOffsetX = (spacing * (k + 1) + 40) - canvas.width / 2;
-        centerOffsetX += (Math.random() - 0.5) * 30;
+        centerOffsetX += (Math.random() - 0.5) * 30; // Random jitter: ±15px
+
         enemies.push({
           x: canvas.width / 2 + centerOffsetX - width / 2,
           y: kamikazeCenterY - height / 2,
@@ -2289,49 +2587,85 @@
           baseWidth: width,
           baseHeight: height,
           type: enemyType,
-          formation: false,
-          kamikaze: true,
-          kamikazeEntering: true,
-          kamikazeCenterOffsetX: centerOffsetX,
-          shielded: false,
-          breathPhase: Math.random()
+          formation: false,          // Not part of morphing formation
+          kamikaze: true,            // Kamikaze type flag
+          kamikazeEntering: true,    // Entry phase (descending with group)
+          kamikazeCenterOffsetX: centerOffsetX, // Offset from group center
+          shielded: false,           // Never shielded
+          breathPhase: Math.random() // Random breathing animation offset
         });
       }
     }
 
     /**
-     * Moves the invisible kamikaze group center downward each frame. Once it
-     * reaches its target Y, all kamikazes are given a velocity vector aimed at
-     * the player's current position and begin their dive.
+     * Handles kamikaze group entry animation and triggers the dive phase.
+     * Moves an invisible group center downward until it reaches the target Y,
+     * then calculates velocity vectors for all kamikazes to dive at the player.
+     *
+     * Two-phase system:
+     * 1. Entry phase (kamikazeEntering = true):
+     *    - Group center descends at formationEntrySpeed (1.8 px/frame)
+     *    - All kamikazes maintain horizontal spread relative to center
+     *    - Kamikazes update position each frame to follow descending center
+     *
+     * 2. Dive phase (kamikazeEntering = false):
+     *    - Triggered when center reaches kamikazeCenterTargetY (120px)
+     *    - Calculate velocity vector from each kamikaze to player center
+     *    - Normalize vector and multiply by speed (4-6 px/frame)
+     *    - Purple phase: 4.5-6.5 speed (faster)
+     *    - Earlier phases: 4-6 speed
+     *
+     * Velocity calculation:
+     * - dx = player center X - kamikaze center X
+     * - dy = player center Y - kamikaze center Y
+     * - dist = sqrt(dx² + dy²) (Pythagorean distance)
+     * - normalized velocity: (dx/dist, dy/dist)
+     * - final velocity: normalized * speed
+     *
+     * Once dive begins, kamikazes move independently via their velocity vectors
+     * (updated in draw() main loop, not by this function).
+     *
+     * Called every frame from draw() when kamikazeCenterActive = true.
      */
     function updateKamikazeEntry() {
-      if (!kamikazeCenterActive) return;
+      if (!kamikazeCenterActive) return; // No active kamikaze group
 
-      kamikazeCenterY += formationEntrySpeed;
+      // Move group center downward
+      kamikazeCenterY += formationEntrySpeed; // 1.8 px/frame
 
+      // ── Dive Trigger ───────────────────────────────────────────────────────────
+      // When center reaches target Y, transition from entry to dive phase
       if (kamikazeCenterY >= kamikazeCenterTargetY) {
-        kamikazeCenterY = kamikazeCenterTargetY;
-        kamikazeCenterActive = false;
+        kamikazeCenterY = kamikazeCenterTargetY; // Clamp to target
+        kamikazeCenterActive = false; // Stop center movement
 
-        // Center has landed — trigger all kamikazes to dive
+        // Calculate dive velocity for all kamikazes
         for (var i = 0; i < enemies.length; i++) {
           var e = enemies[i];
           if (e.kamikaze && e.kamikazeEntering) {
-            e.kamikazeEntering = false;
-            var speed = (purplePhase ? 4.5 : 4) + Math.random() * 2;
+            e.kamikazeEntering = false; // Exit entry phase
+
+            // Speed scales with phase (Purple faster than Standard/Red)
+            var speed = (purplePhase ? 4.5 : 4) + Math.random() * 2; // 4-6 or 4.5-6.5
+
+            // Calculate vector from kamikaze to player center
             var dx = player.x + player.width / 2 - (e.x + e.width / 2);
             var dy = player.y + player.height / 2 - (e.y + e.height / 2);
-            var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            var dist = Math.sqrt(dx * dx + dy * dy) || 1; // Avoid divide by zero
+
+            // Normalize and scale by speed
             e.kamikazeVelX = (dx / dist) * speed;
             e.kamikazeVelY = (dy / dist) * speed;
-            e.kamikazeSpeed = speed;
+            e.kamikazeSpeed = speed; // Store for reference
           }
         }
       } else {
-        // Update all entering kamikaze positions relative to descending center
+        // ── Entry Phase Update ─────────────────────────────────────────────────
+        // Update all kamikaze positions to follow descending center
         for (var i = 0; i < enemies.length; i++) {
           var e = enemies[i];
           if (e.kamikaze && e.kamikazeEntering) {
+            // Maintain horizontal offset from group center
             e.x = canvas.width / 2 + e.kamikazeCenterOffsetX - e.width / 2;
             e.y = kamikazeCenterY - e.height / 2;
           }
@@ -2346,6 +2680,9 @@
 
     /**
      * Cubic ease-in-out interpolation for smooth, natural formation movement.
+     * Starts slow, accelerates in the middle, slows at the end.
+     * Standard easing function for organic animation feel.
+     *
      * @param {number} t - Progress from 0.0 (start) to 1.0 (end).
      * @returns {number} Eased value in the same 0–1 range.
      */
@@ -2354,36 +2691,53 @@
     }
 
     /**
-     * Drives the formation dance cycle. Every 6 BPM beats (~3 s) the formation
-     * switches to the next shape in `waveShapes`, updating each enemy's
-     * `targetPos`. Enemy positions are smoothly lerped using `easeInOutCubic`
-     * over 70% of the morph interval, then held. Also triggers kamikaze launch
-     * after the second morph and shield cascade after the third.
-     * @param {number} time - Current timestamp from `Date.now()`.
+     * Drives the formation morphing animation cycle. Formations continuously cycle
+     * through multiple shapes, creating a dynamic "dance" effect synced to music BPM.
+     *
+     * Timing system:
+     * - Morph interval: 6 BPM beats (~3 seconds at 123 BPM)
+     * - Transition: 70% of interval (smooth easeInOutCubic interpolation)
+     * - Hold: 30% of interval (static shape before next morph)
+     *
+     * Morphing sequence:
+     * 1. Formation enters (exploded spread)
+     * 2. Morph 0 → 1: Collapse to tight formation, spawn barrier
+     * 3. Morph 1 → 2: Expand again, launch kamikazes
+     * 4. Morph 2 → 3: Shield cascade begins (shields start dropping)
+     * 5. Continue cycling through waveShapes array indefinitely
+     *
+     * Side effects:
+     * - Triggers kamikaze wave after 2nd morph (morphCount === 2)
+     * - Triggers shield cascade after 3rd morph (morphCount === 3)
+     * - Spawns barrier after 1st morph (morphCount === 1)
+     * - Hides shield warning after 3rd morph
+     *
+     * @param {number} time - Current timestamp from Date.now()
      */
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
-      var morphInterval = BPM_INTERVAL * 6;
-      var timeSinceStart = Math.max(0, time - morphStartTime); // clamp to avoid negative
-      var newShapeIndex = Math.floor(timeSinceStart / morphInterval);
+      var morphInterval = BPM_INTERVAL * 6; // ~3000ms at 123 BPM
+      var timeSinceStart = Math.max(0, time - morphStartTime); // Clamp to avoid negative
+      var newShapeIndex = Math.floor(timeSinceStart / morphInterval); // Which shape we should be on
 
-      // Get formation enemies
+      // Get all formation enemies (filter out kamikazes, boss, etc.)
       var formationEnemies = enemies.filter(function (e) { return e.formation && e.formationType === 'morphing'; });
-      if (formationEnemies.length === 0) return;
+      if (formationEnemies.length === 0) return; // Formation destroyed
 
-      var waveShapes = formationEnemies[0].waveShapes;
+      var waveShapes = formationEnemies[0].waveShapes; // Array of shape names to cycle through
       if (!waveShapes || waveShapes.length === 0) return;
 
       // Cycle through shapes — use ((n % len) + len) % len to guarantee positive index in JS
       newShapeIndex = ((newShapeIndex % waveShapes.length) + waveShapes.length) % waveShapes.length;
 
-      // If shape changed, update target positions
+      // ── Shape Change Detection ────────────────────────────────────────────────
+      // If shape changed, update target positions and trigger side effects
       if (newShapeIndex !== currentMorphShape) {
         currentMorphShape = newShapeIndex;
-        morphCount++;
+        morphCount++; // Total number of morphs since formation spawned
         lastMorphTime = time;
 
-        // Hide shield warning after 3 morphs (enemies now vulnerable)
+        // Hide shield warning after 3 morphs (enemies now vulnerable via cascade)
         if (morphCount === 3) {
           document.getElementById("warningDisplay").style.display = "none";
         }
@@ -2397,20 +2751,21 @@
           }
         }
 
+        // Get new shape function and calculate positions
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
         if (typeof shapeFunc !== 'function') {
           console.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
-          shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
+          shapeFunc = FORMATION_SHAPES['grid3x3']; // Safe fallback to prevent crash
         }
         var count = formationEnemies[0].formationCount;
-        var newPositions = shapeFunc(count);
+        var newPositions = shapeFunc(count); // Get normalized positions for this shape
 
-        // Store starting positions and update targets
+        // Store starting positions and update targets for smooth interpolation
         formationEnemies.forEach(function (enemy, idx) {
           if (newPositions[idx]) {
-            enemy.startPos = { x: enemy.currentPos.x, y: enemy.currentPos.y };
-            enemy.targetPos = { x: newPositions[idx].x, y: newPositions[idx].y };
+            enemy.startPos = { x: enemy.currentPos.x, y: enemy.currentPos.y }; // Where we are now
+            enemy.targetPos = { x: newPositions[idx].x, y: newPositions[idx].y }; // Where we're going
           }
         });
 
@@ -2421,44 +2776,66 @@
         }
       }
 
+      // ── Position Interpolation ────────────────────────────────────────────────
       // Calculate eased progress (use 70% of interval for transition, hold for rest)
-      var morphDuration = morphInterval * 0.7;
+      var morphDuration = morphInterval * 0.7; // 2.1s of 3s interval for smooth movement
       var timeSinceMorph = time - lastMorphTime;
-      var morphProgress = Math.min(timeSinceMorph / morphDuration, 1);
-      var easedProgress = easeInOutCubic(morphProgress);
+      var morphProgress = Math.min(timeSinceMorph / morphDuration, 1); // Clamp to 1.0
+      var easedProgress = easeInOutCubic(morphProgress); // Apply easing curve
 
       formationEnemies.forEach(function (enemy) {
-        if (!enemy.reachedTarget) return;
+        if (!enemy.reachedTarget) return; // Skip enemies still entering from top
 
-        // Smooth interpolation between positions
+        // Smooth interpolation between current and target positions
         if (enemy.startPos) {
           enemy.currentPos.x = enemy.startPos.x + (enemy.targetPos.x - enemy.startPos.x) * easedProgress;
           enemy.currentPos.y = enemy.startPos.y + (enemy.targetPos.y - enemy.startPos.y) * easedProgress;
         } else {
+          // First frame or missing data — snap to target
           enemy.currentPos.x = enemy.targetPos.x;
           enemy.currentPos.y = enemy.targetPos.y;
         }
 
-        // Calculate actual position (no rotation - clean dance)
+        // Convert normalized position (-1 to 1) to canvas coordinates
         var baseX = enemy.centerX + enemy.currentPos.x * enemy.spreadRadius;
-        var baseY = enemy.centerY + enemy.currentPos.y * enemy.spreadRadius * 0.8;
+        var baseY = enemy.centerY + enemy.currentPos.y * enemy.spreadRadius * 0.8; // Y spread compressed to 80%
 
+        // Center sprite on calculated position
         enemy.x = baseX - enemy.width / 2;
         enemy.y = baseY - enemy.height / 2;
 
-        // Keep in bounds
+        // Keep enemies within bounds (20px margins)
         if (enemy.x < 20) enemy.x = 20;
         if (enemy.x > canvas.width - enemy.width - 20) enemy.x = canvas.width - enemy.width - 20;
         if (enemy.y < 30) enemy.y = 30;
-        if (enemy.y > canvas.height * 0.5) enemy.y = canvas.height * 0.5;
+        if (enemy.y > canvas.height * 0.5) enemy.y = canvas.height * 0.5; // Keep in top half
       });
     }
 
     /**
-     * Manages the rolling shield cascade for formation enemies. After 3 morphs,
-     * shields drop 2-at-a-time every 2 seconds (ordered by `shieldOrder`).
-     * Once all shields are down they regenerate after 5 seconds. Shields
-     * permanently broken by 15+ hits (25+ at level 9+) are excluded from regen.
+     * Manages the rolling shield cascade system for formation enemies. Creates
+     * windows of vulnerability by dropping shields in waves rather than all at once.
+     *
+     * Shield cascade phases:
+     * 1. Initial state: All formation enemies spawn with shields (shielded = true)
+     * 2. Trigger: After 3 morphs, cascade begins automatically
+     * 3. Drop phase: Shields drop 2-at-a-time every 2 seconds (by shieldOrder)
+     * 4. Vulnerable phase: All shields down, enemies fully exposed
+     * 5. Regeneration: After 5 seconds, shields regenerate (except permanently broken)
+     * 6. Cycle repeats: Cascade starts over
+     *
+     * Shield breaking system:
+     * - Shields absorb bullets without destroying the enemy
+     * - Each hit increments enemy.shieldHits counter
+     * - After 15 hits (levels 1-8) or 25 hits (levels 9-12), shield breaks permanently
+     * - Permanently broken shields marked with enemy.shieldBroken = true
+     * - Broken shields never regenerate (excluded from cascade)
+     *
+     * Timing constants:
+     * - 2000ms between each 2-shield drop
+     * - 5000ms regeneration delay after all shields down
+     *
+     * Called every frame from draw() when formation is active.
      */
     function updateShieldCascade() {
       var formationEnemies = enemies.filter(function (e) {
@@ -3493,37 +3870,61 @@
     }
 
     /**
-     * Main boss update called every frame. Manages the shield cycle (on/off
-     * timer; green boss never regains it), entrance animation, horizontal and
-     * optional vertical drift, bullet firing, BPM-synced ripple rendering,
-     * golden shield ripple overlay, and the health bar HUD element.
+     * Main boss update loop called every frame during boss encounters. Manages
+     * all boss behavior including shield cycling, movement patterns, shooting,
+     * visual effects, and HUD rendering.
+     *
+     * Boss shield system:
+     * - Boss 1 (Green): Shield drops once, never regenerates (shieldCycling = false)
+     * - Boss 2 (Red): Shield cycles 5s ON, 5s OFF continuously (shieldCycling = true)
+     * - Boss 3 (Purple): Shield cycles 5s ON, 5s OFF continuously (shieldCycling = true)
+     *
+     * Movement patterns:
+     * - Boss 1: Horizontal drift only (left-right)
+     * - Boss 2: Horizontal + vertical drift (rectangular patrol)
+     * - Boss 3: Horizontal + vertical drift (rectangular patrol)
+     *
+     * Bullet speed scaling:
+     * - Boss 1: Base speed + 1
+     * - Boss 2: Base speed + 3 (Red phase faster)
+     * - Boss 3: Base speed + 4 (Purple phase fastest)
+     *
+     * Visual effects:
+     * - Dual BPM-synced ripples (color matches boss phase)
+     * - Golden shield ripple overlay when shielded (larger, thicker)
+     * - Blink effect when taking damage
+     * - Health bar HUD (fixed at top center)
+     *
+     * Called every frame from draw() when bossActive = true.
      */
     function updateBoss() {
       if (!boss) return;
 
-      // Update boss shield
+      // ── Shield Cycle Management ───────────────────────────────────────────────
+      // Different shield behavior per boss tier.
       var now = Date.now();
       var timeSinceShieldStart = now - boss.shieldStartTime;
 
       if (boss.shielded) {
-        // Check if shield duration expired
+        // Shield is currently UP — check if duration expired
         if (timeSinceShieldStart >= boss.shieldDuration) {
           boss.shielded = false;
-          boss.shieldStartTime = now; // Reset timer for cooldown
+          boss.shieldStartTime = now; // Start cooldown timer
         }
       } else if (boss.shieldCycling) {
-        // Red boss: check if cooldown expired to regenerate shield
+        // Shield is DOWN — check if cooldown expired (Red/Purple bosses only)
         if (timeSinceShieldStart >= boss.shieldCooldown) {
           boss.shielded = true;
-          boss.shieldStartTime = now;
+          boss.shieldStartTime = now; // Start shield duration timer
         }
       }
-      // Green boss: once shield is down, it stays down (shieldCycling = false)
+      // Boss 1 (Green): shieldCycling = false, so shield never regenerates
 
-      // Update boss blink effect
+      // Update boss blink effect (toggles bossVisible flag)
       updateBossBlink();
 
-      // Boss entrance animation
+      // ── Entrance Animation ─────────────────────────────────────────────────────
+      // Boss slides down from y=-200 to y=30 at 1px/frame
       if (boss.entering) {
         boss.y += 1;
         if (boss.y >= 30) {
@@ -3533,97 +3934,114 @@
           boss.shieldStartTime = Date.now();
         }
       } else {
-        // Move side to side
+        // ── Movement: Horizontal Drift ─────────────────────────────────────────
+        // All bosses drift horizontally at boss.speed (1px/frame)
         boss.x += boss.speed * boss.direction;
+
+        // Reverse direction at canvas edges
         if (boss.x <= 0 || boss.x >= canvas.width - boss.width) {
           boss.direction *= -1;
         }
 
-        // Red/purple boss also moves north/south
+        // ── Movement: Vertical Drift (Red/Purple Only) ────────────────────────
+        // Red and Purple bosses patrol up/down in a rectangular pattern
         if (boss.isRedBoss || boss.isPurpleBoss) {
-          boss.y += boss.speed * 0.6 * boss.verticalDirection;
+          boss.y += boss.speed * 0.6 * boss.verticalDirection; // Slower vertical speed
+
+          // Reverse at vertical bounds (y=20 to y=100)
           if (boss.y <= 20) {
-            boss.verticalDirection = 1;
+            boss.verticalDirection = 1; // Move down
           } else if (boss.y >= 100) {
-            boss.verticalDirection = -1;
+            boss.verticalDirection = -1; // Move up
           }
         }
 
-        // Boss shooting
+        // ── Boss Shooting ──────────────────────────────────────────────────────
+        // Random per-frame chance to fire a bullet (CONFIG.bossShootChance = 0.02)
         if (Math.random() < CONFIG.bossShootChance) {
-          var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1;
+          // Bullet speed scales with boss tier
+          var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1; // Boss 1: base + 1
           if (boss.isRedBoss) {
-            bossBulletSpeed = CONFIG.enemyBulletSpeed + 3; // Faster for red boss
+            bossBulletSpeed = CONFIG.enemyBulletSpeed + 3; // Boss 2: base + 3 (faster)
           } else if (boss.isPurpleBoss) {
-            bossBulletSpeed = CONFIG.enemyBulletSpeed + 4; // Fastest for purple boss
+            bossBulletSpeed = CONFIG.enemyBulletSpeed + 4; // Boss 3: base + 4 (fastest)
           }
+
+          // Spawn bullet from boss center-bottom
           enemyBullets.push({
-            x: Math.floor(boss.x + boss.width / 2 - 4),
-            y: Math.floor(boss.y + boss.height),
+            x: Math.floor(boss.x + boss.width / 2 - 4), // Center on boss
+            y: Math.floor(boss.y + boss.height),         // Bottom edge
             width: 8,
             height: 15,
             speed: bossBulletSpeed,
-            isBossBullet: true
+            isBossBullet: true // Flag for damage/collision handling
           });
         }
       }
 
-      // Draw boss ripple effect at 123 BPM
+      // ── Visual Effects: BPM-Synced Ripples ─────────────────────────────────────
+      // Dual expanding ripples synced to music beat (123 BPM).
+      // Color matches boss phase (green/red/purple).
       var bossCx = boss.x + boss.width / 2;
       var bossCy = boss.y + boss.height / 2;
       var time = Date.now();
-      var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
-      var maxBossRipple = boss.width * 0.8;
+      var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL; // 0.0 → 1.0 per beat
+      var maxBossRipple = boss.width * 0.8; // Max radius: 80% of boss width
       var bossRippleRadius = beatPhase * maxBossRipple;
-      var bossRippleAlpha = 1 - beatPhase;
+      var bossRippleAlpha = 1 - beatPhase; // Fade out as ripple expands
 
       ctx.save();
+
+      // First ripple (main)
       ctx.beginPath();
       ctx.arc(bossCx, bossCy, bossRippleRadius, 0, Math.PI * 2);
       var bossRippleColor = boss.isPurpleBoss ?
-        'rgba(160, 50, 255, ' + (bossRippleAlpha * 0.5) + ')' :
+        'rgba(160, 50, 255, ' + (bossRippleAlpha * 0.5) + ')' : // Purple
         (boss.isRedBoss ?
-          'rgba(255, 50, 50, ' + (bossRippleAlpha * 0.5) + ')' :
-          'rgba(50, 255, 50, ' + (bossRippleAlpha * 0.5) + ')');
+          'rgba(255, 50, 50, ' + (bossRippleAlpha * 0.5) + ')' : // Red
+          'rgba(50, 255, 50, ' + (bossRippleAlpha * 0.5) + ')'); // Green
       ctx.strokeStyle = bossRippleColor;
       ctx.lineWidth = 3;
       ctx.stroke();
 
-      // Second boss ripple
+      // Second ripple (offset by half a beat for continuous pulsing)
       var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
       var bossRippleRadius2 = beatPhase2 * maxBossRipple;
       var bossRippleAlpha2 = 1 - beatPhase2;
       ctx.beginPath();
       ctx.arc(bossCx, bossCy, bossRippleRadius2, 0, Math.PI * 2);
       var bossRippleColor2 = boss.isPurpleBoss ?
-        'rgba(160, 50, 255, ' + (bossRippleAlpha2 * 0.3) + ')' :
+        'rgba(160, 50, 255, ' + (bossRippleAlpha2 * 0.3) + ')' : // Purple (dimmer)
         (boss.isRedBoss ?
-          'rgba(255, 50, 50, ' + (bossRippleAlpha2 * 0.3) + ')' :
-          'rgba(50, 255, 50, ' + (bossRippleAlpha2 * 0.3) + ')');
+          'rgba(255, 50, 50, ' + (bossRippleAlpha2 * 0.3) + ')' : // Red (dimmer)
+          'rgba(50, 255, 50, ' + (bossRippleAlpha2 * 0.3) + ')'); // Green (dimmer)
       ctx.strokeStyle = bossRippleColor2;
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Draw golden shield ripple when boss is shielded
+      // ── Visual Effects: Golden Shield Ripple ───────────────────────────────────
+      // When boss is shielded, draw larger golden ripple overlay
       if (boss.shielded) {
+        // Outer shield ripple (130% of boss width, thicker line)
         var shieldRippleRadius = beatPhase * maxBossRipple * 1.3;
         ctx.beginPath();
         ctx.arc(bossCx, bossCy, shieldRippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 215, 0, ' + (bossRippleAlpha * 0.7) + ')';
+        ctx.strokeStyle = 'rgba(255, 215, 0, ' + (bossRippleAlpha * 0.7) + ')'; // Gold
         ctx.lineWidth = 5;
         ctx.stroke();
 
-        // Inner shield ripple
+        // Inner shield ripple (60% of outer, thinner line)
         var innerShieldRadius = shieldRippleRadius * 0.6;
         ctx.beginPath();
         ctx.arc(bossCx, bossCy, innerShieldRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (bossRippleAlpha * 0.5) + ')';
+        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (bossRippleAlpha * 0.5) + ')'; // Bright yellow
         ctx.lineWidth = 3;
         ctx.stroke();
       }
       ctx.restore();
 
-      // Draw boss (only if visible during blink)
+      // ── Boss Sprite Rendering ──────────────────────────────────────────────────
+      // Draw boss sprite (only if visible — blink effect toggles this)
       if (bossVisible) {
         var bossImage = boss.isPurpleBoss ? bossImgPurple : (boss.isRedBoss ? bossImgRed : bossImg);
         ctx.drawImage(bossImage, boss.x, boss.y, boss.width, boss.height);
@@ -3670,30 +4088,55 @@
     }
 
     /**
-     * Registers one player-bullet hit on the boss. Shielded hits deal 0.5 chip
-     * damage; unshielded hits deal 1 HP. At 0 HP, triggers screen shake, clears
-     * all boss entities, awards a score bonus, and advances the game phase:
-     *   Boss 1 → red phase (level 5, score set to 800)
-     *   Boss 2 → purple phase (level 9, score set to 2000)
-     *   Boss 3 → victory screen
+     * Registers one player-bullet hit on the boss. Handles damage calculation
+     * with shield states, boss defeat logic, phase transitions, and victory conditions.
+     *
+     * Damage system:
+     * - Shielded: 0.5 HP per hit (chip damage, 6-frame blink)
+     * - Unshielded: 1.0 HP per hit (10-frame blink)
+     * - Boss starts with 50 HP (CONFIG.bossHealth)
+     *
+     * Boss defeat sequence:
+     * 1. Trigger strong screen shake (15 intensity, 800ms duration)
+     * 2. Spawn explosion and 24 particle effects
+     * 3. Clear boss, orbiters, minions, and all enemies
+     * 4. Stop boss music
+     * 5. Award score bonus (if below threshold)
+     * 6. Fire boss_defeated analytics event
+     * 7. Advance to next phase or show victory
+     *
+     * Phase progression:
+     * - Boss 1 defeated → Red phase (level 5, score = 800 minimum)
+     * - Boss 2 defeated → Purple phase (level 9, score = 2000 minimum)
+     * - Boss 3 defeated → Victory screen (game complete)
+     *
+     * Score bonus system:
+     * - Bonus = (threshold - current_score)
+     * - Only awarded if player is below threshold
+     * - Threshold: Boss 1 = 800, Boss 2 = 2000, Boss 3 = N/A
+     *
+     * Called from draw() when player bullet collides with boss.
      */
     function damageBoss() {
       if (!boss) return;
 
-      // Check if boss is shielded — chip damage still gets through
+      // ── Shielded Hit (Chip Damage) ─────────────────────────────────────────────
+      // Boss shield reduces damage to 0.5 HP per hit
       if (boss.shielded) {
-        boss.health -= 0.5;
+        boss.health -= 0.5; // Half damage through shield
         bossBlinking = true;
-        bossBlinkTimer = 6;
-        return;
+        bossBlinkTimer = 6; // Short blink for chip damage
+        return; // Exit early, no defeat check
       }
 
-      boss.health--;
+      // ── Unshielded Hit (Full Damage) ───────────────────────────────────────────
+      boss.health -= 1.0; // Full damage when shield is down
 
       // Start boss blinking effect
       bossBlinking = true;
-      bossBlinkTimer = 10; // Short blink (10 frames)
+      bossBlinkTimer = 10; // Longer blink for full damage
 
+      // ── Boss Defeat ────────────────────────────────────────────────────────────
       if (boss.health <= 0) {
         // Boss defeated - trigger screen shake and explosion!
         triggerScreenShake(15, 800); // Strong shake for boss death
@@ -4377,14 +4820,43 @@
      *   3 → three evenly spread bullets (triple laser, purple phase)
      *   4 → four evenly spread bullets (quad laser, purple phase rare upgrade)
      */
+    /**
+     * Spawns player bullet(s) based on current laser level. Bullet pattern and
+     * count scale with power-ups collected during gameplay.
+     *
+     * Laser levels (progressive upgrades):
+     * 1. Single laser (default) — One bullet from ship center
+     * 2. Double laser — Two bullets from 1/4 and 3/4 ship width (side-by-side)
+     * 3. Triple laser — Three bullets at 20%, 50%, 80% ship width (Purple phase)
+     * 4. Quad laser — Four bullets at 15%, 38%, 62%, 85% ship width (rare upgrade)
+     *
+     * Bullet properties:
+     * - Width: 5px, Height: 10px
+     * - Speed: CONFIG.bulletSpeed (12 px/frame, upward)
+     * - All bullets spawn from player.y (top edge of ship)
+     *
+     * Upgrade progression:
+     * - Single → Double: Collect Double Laser power-up (hasDoubleLaser = true, laserLevel = 2)
+     * - Double → Triple: Purple phase only (laserLevel = 3)
+     * - Triple → Quad: Collect Quad Laser power-up (laserLevel = 4)
+     *
+     * Downgrade on hit (Red/Purple phases only):
+     * - Quad → Triple → Double → Single
+     * - Triggered by playerTakeDamage() when hit without shield
+     *
+     * Called from draw() when spacebar/mouse is held (respects fire cooldown).
+     */
     function shootBullet() {
-      playSound('playerBullet');
+      playSound('playerBullet'); // Play shoot sound for all laser levels
+
       if (laserLevel >= 4) {
-        // Quad laser - four bullets spread across ship width (rare upgrade)
+        // ── Quad Laser (Level 4) ───────────────────────────────────────────────
+        // Four bullets spread evenly across ship width.
+        // Offsets: 15%, 38%, 62%, 85% (avoids edges, creates nice spread)
         var offsets = [0.15, 0.38, 0.62, 0.85];
         for (var q = 0; q < 4; q++) {
           playerBullets.push({
-            x: Math.floor(player.x + player.width * offsets[q] - 2),
+            x: Math.floor(player.x + player.width * offsets[q] - 2), // Center bullet (width 5)
             y: Math.floor(player.y),
             width: 5,
             height: 10,
@@ -4392,7 +4864,9 @@
           });
         }
       } else if (laserLevel === 3) {
-        // Triple laser - three bullets spread across ship width (purple phase)
+        // ── Triple Laser (Level 3) ─────────────────────────────────────────────
+        // Three bullets: left, center, right.
+        // Offsets: 20%, 50%, 80% (classic tri-shot pattern)
         var offsets = [0.2, 0.5, 0.8];
         for (var t = 0; t < 3; t++) {
           playerBullets.push({
@@ -4404,25 +4878,28 @@
           });
         }
       } else if (hasDoubleLaser) {
-        // Double laser - two side-by-side bullets
+        // ── Double Laser (Level 2) ─────────────────────────────────────────────
+        // Two bullets side-by-side from ship wings.
+        // Left bullet at 1/4, right bullet at 3/4 ship width
         playerBullets.push({
-          x: Math.floor(player.x + player.width / 4 - 2),
+          x: Math.floor(player.x + player.width / 4 - 2), // Left wing
           y: Math.floor(player.y),
           width: 5,
           height: 10,
           speed: CONFIG.bulletSpeed
         });
         playerBullets.push({
-          x: Math.floor(player.x + (player.width * 3 / 4) - 2),
+          x: Math.floor(player.x + (player.width * 3 / 4) - 2), // Right wing
           y: Math.floor(player.y),
           width: 5,
           height: 10,
           speed: CONFIG.bulletSpeed
         });
       } else {
-        // Single bullet
+        // ── Single Laser (Level 1, Default) ───────────────────────────────────
+        // One bullet from ship center
         playerBullets.push({
-          x: Math.floor(player.x + player.width / 2 - 2),
+          x: Math.floor(player.x + player.width / 2 - 2), // Center (bullet width 5, so -2 centers it)
           y: Math.floor(player.y),
           width: 5,
           height: 10,
@@ -4452,14 +4929,17 @@
       });
     }
 
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // COLLISION DETECTION
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+
     /**
-     * Axis-Aligned Bounding Box (AABB) collision test between two rect objects.
-     * @param {{x:number, y:number, width:number, height:number}} a
-     * @param {{x:number, y:number, width:number, height:number}} b
-     * @returns {boolean} True when the two rects overlap.
+     * Axis-Aligned Bounding Box (AABB) collision test between two rectangular objects.
+     * Standard collision detection for bullets, enemies, power-ups, and boss.
+     *
+     * @param {{x:number, y:number, width:number, height:number}} a - First rectangle
+     * @param {{x:number, y:number, width:number, height:number}} b - Second rectangle
+     * @returns {boolean} True when the two rectangles overlap
      */
     function isColliding(a, b) {
       return a.x < b.x + b.width &&
@@ -4469,12 +4949,24 @@
     }
 
     /**
-     * Collision check against the player using a 10px inset hitbox on each side.
-     * The player sprite is 75x75 but the visual ship hull is narrower — this
-     * makes hits feel fair without making the player unkillable.
+     * Collision check against the player using a 10px inset hitbox on all sides.
+     * Provides more forgiving collision detection than raw sprite bounds.
+     *
+     * Rationale:
+     * - Player sprite is 75×75px but the visual ship hull is narrower
+     * - 10px inset reduces effective hitbox to 55×55px (73% of sprite size)
+     * - Makes hits feel fair — near-misses don't kill the player
+     * - Balances difficulty without making player unkillable
+     *
+     * Effective hitbox:
+     * - Sprite: (player.x, player.y, 75, 75)
+     * - Hitbox: (player.x + 10, player.y + 10, 55, 55)
+     *
+     * @param {{x:number, y:number, width:number, height:number}} other - Entity to check collision with
+     * @returns {boolean} True when other collides with player's inset hitbox
      */
     function isCollidingPlayer(other) {
-      var inset = 10;
+      var inset = 10; // 10px inset on all sides
       var px = player.x + inset;
       var py = player.y + inset;
       var pw = player.width - inset * 2;
@@ -4498,52 +4990,101 @@
      * (showing the Game Over overlay) if health reaches 0.
      * @param {number} damage - HP to subtract before shield mitigation.
      */
+    /**
+     * Handles player damage from enemy collisions, bullets, and boss attacks.
+     * Manages shield absorption, power-up downgrades, invincibility frames,
+     * and game-over sequence.
+     *
+     * Damage system:
+     * - Enemy bullet: 10 HP (CONFIG.enemyBulletDamage)
+     * - Enemy collision: 20 HP (CONFIG.enemyCollisionDamage)
+     * - Boss bullet/collision: 25 HP (CONFIG.bossDamage)
+     *
+     * Invincibility frames:
+     * - 30 frames (~0.5s) after taking damage (playerBlinking = true)
+     * - Prevents death spirals and feels fair to player
+     * - All damage ignored during blink period
+     *
+     * Shield behavior (phase-dependent):
+     * - Purple phase: Shield fully blocks all damage (no HP loss)
+     * - Earlier phases: Shield reduces damage to 5 HP, protects when health <= 15
+     * - Shield breaks after 3 hits (shieldHitsRemaining decrements)
+     *
+     * Power-up downgrade system (Red/Purple phases only):
+     * - Hit WITHOUT shield downgrades laser level:
+     *   - Quad (4) → Triple (3)
+     *   - Triple (3) → Double (2)
+     *   - Double (2) → Single (1)
+     * - Adds strategic risk/reward to power-up management
+     *
+     * Game-over sequence:
+     * 1. Play death sound, stop boss music
+     * 2. Check for personal best / top 10 score
+     * 3. Build game-over UI with replay options
+     * 4. Show leaderboard submission form
+     * 5. Fire player_death analytics event
+     *
+     * @param {number} damage - HP to subtract (before shield reduction)
+     */
     function playerTakeDamage(damage) {
-      // Invincibility frames — ignore all damage while blinking from a previous hit.
-      // Prevents death spirals and feels fair to the player.
+      // ── Invincibility Frames ───────────────────────────────────────────────────
+      // Ignore all damage while blinking from a previous hit.
+      // Prevents unfair death spirals and gives player time to react.
       if (playerBlinking) return;
 
+      // ── Shield Absorption ──────────────────────────────────────────────────────
       if (hasShield) {
-        shieldHitsRemaining--;
+        shieldHitsRemaining--; // Decrement shield durability
+
+        // Shield broken after 3 hits
         if (shieldHitsRemaining <= 0) {
           hasShield = false;
           showAnnouncement("powerupDisplay", "Shield Broken!", 1500);
         } else {
+          // Shield still active — show remaining hits
           showAnnouncement("powerupDisplay", "Shield: " + shieldHitsRemaining + " hits left", 800);
         }
+
+        // Purple phase: shield fully blocks all damage (no HP loss)
         if (purplePhase) {
-          // Purple phase: shield fully blocks all damage, no health loss
-          return;
+          return; // Exit early — no health loss, no blink
         }
-        // Earlier phases: shield reduces damage to 5, protects health at low HP
+
+        // Earlier phases (Standard/Red): shield reduces damage to 5 HP
         damage = 5;
+
+        // Low health protection — shield fully absorbs damage when health <= 15
         if (health <= 15) {
           showAnnouncement("powerupDisplay", "Shield absorbed damage!", 800);
-          return;
+          return; // Exit early — no health loss, no blink
         }
       } else {
-        // Lose laser power when hit without shield (red and purple phases)
+        // ── Power-Up Downgrade (No Shield) ────────────────────────────────────────
+        // Red and Purple phases: lose laser power when hit without shield
         if ((redPhase || purplePhase) && hasDoubleLaser) {
           if (laserLevel >= 4) {
-            laserLevel = 3; // Quad -> triple
+            laserLevel = 3; // Quad → Triple
             showAnnouncement("powerupDisplay", "Lost Quad Laser!", 1500);
           } else if (laserLevel === 3) {
-            laserLevel = 2; // Triple -> double
+            laserLevel = 2; // Triple → Double
             showAnnouncement("powerupDisplay", "Lost Triple Laser!", 1500);
           } else {
+            // Double → Single
             hasDoubleLaser = false;
             laserLevel = 1;
           }
         }
       }
 
+      // ── Apply Damage ───────────────────────────────────────────────────────────
       health -= damage;
       updateUI();
 
-      // Start blinking effect
+      // Start blinking effect (invincibility frames)
       playerBlinking = true;
-      playerBlinkTimer = 30; // Blink for 30 frames (~0.5 seconds)
+      playerBlinkTimer = 30; // Blink for 30 frames (~0.5 seconds at 60 FPS)
 
+      // ── Game Over ──────────────────────────────────────────────────────────────
       if (health <= 0) {
         health = 0;
         updateUI();
@@ -4982,36 +5523,66 @@
      *   7. Delegates to the boss subsystem or the wave-formation subsystem.
      *   8. Schedules the next frame with requestAnimationFrame.
      */
+    /**
+     * Main game loop. Runs continuously via requestAnimationFrame (~60 FPS).
+     * Handles all game logic, rendering, collision detection, and entity updates.
+     *
+     * Execution order (critical for correct behavior):
+     * 1. Early exit checks (gameOver, paused)
+     * 2. Update effects (screen shake, player blink)
+     * 3. Clear canvas and update visual effects (explosions, particles)
+     * 4. Draw player and handle movement (mouse priority over keyboard)
+     * 5. Update and draw bullets (player and enemy)
+     * 6. Handle bullet-enemy collisions with shield logic
+     * 7. Update and draw enemies (formations, kamikazes, boss)
+     * 8. Update formations (morphing shapes, shield cascades, entry animations)
+     * 9. Update boss (movement, shooting, orbiter spawning)
+     * 10. Update power-ups (falling, collection, spawning)
+     * 11. Handle entity cleanup (off-screen bullets, dead enemies)
+     * 12. Check level progression and boss spawn thresholds
+     * 13. Queue next frame
+     *
+     * Performance notes:
+     * - All loops iterate backwards (i--) to safely remove items during iteration
+     * - Shield logic requires 15-25 hits before breaking (level-dependent)
+     * - Boss only takes damage when fully visible (not during entry animation)
+     */
     function draw() {
+      // Early exit if game has ended
       if (gameOver) return;
 
-      // If paused, just keep the animation frame going but don't update
+      // If paused, keep animation loop running but skip all updates
       if (paused) {
         requestAnimationFrame(draw);
         return;
       }
 
-      // Update screen shake effect
+      // Update screen shake effect (applied via CSS transform on canvas wrapper)
       updateScreenShake();
 
+      // Clear entire canvas for fresh frame
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Update player blink effect
+      // Update player blink effect (toggles playerVisible flag)
       updatePlayerBlink();
 
-      // Update explosions and particles
-      updateExplosions();
-      updateParticles();
+      // Update and draw visual effects
+      updateExplosions();  // Expanding circles on enemy death
+      updateParticles();   // Debris particles from explosions
 
-      // Draw shield ripple effect if active
+      // ── Shield Ripple Effect ──────────────────────────────────────────────────
+      // Animated expanding cyan ripples synced to music BPM when player has shield.
+      // Two ripples offset by half a beat create continuous pulsing effect.
       if (hasShield) {
         var playerCx = player.x + player.width / 2;
         var playerCy = player.y + player.height / 2;
         var time = Date.now();
+
+        // First ripple: full beat cycle (0.0 → 1.0)
         var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
-        var maxShieldRipple = player.width * 0.9;
-        var shieldRippleRadius = beatPhase * maxShieldRipple;
-        var shieldRippleAlpha = 1 - beatPhase;
+        var maxShieldRipple = player.width * 0.9; // Max radius: 90% of player width
+        var shieldRippleRadius = beatPhase * maxShieldRipple; // Expand from 0 to max
+        var shieldRippleAlpha = 1 - beatPhase; // Fade out as it expands
 
         ctx.save();
         ctx.beginPath();
@@ -5020,7 +5591,7 @@
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Second ripple
+        // Second ripple: offset by half a beat for continuous pulsing
         var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
         var shieldRippleRadius2 = beatPhase2 * maxShieldRipple;
         var shieldRippleAlpha2 = 1 - beatPhase2;
@@ -5032,36 +5603,45 @@
         ctx.restore();
       }
 
-      // Draw quad laser glow when player has quad lasers
+      // ── Quad Laser Glow Effect ────────────────────────────────────────────────
+      // Radial gradient glow around player when they have max laser level (quad shot).
+      // Visual feedback for power-up state.
       if (!gameOver && !paused && laserLevel >= 4) {
         var playerCenterX = player.x + player.width / 2;
         var playerCenterY = player.y + player.height / 2;
+
+        // Create radial gradient from player center
         var gradient = ctx.createRadialGradient(playerCenterX, playerCenterY, 0, playerCenterX, playerCenterY, player.width);
-        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.4)');
-        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.2)');
-        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        gradient.addColorStop(0, 'rgba(0, 255, 255, 0.4)'); // Bright center
+        gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.2)'); // Mid fade
+        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)'); // Transparent edge
+
         ctx.fillStyle = gradient;
         ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width * 2, player.height * 2);
       }
 
-      // Draw and move player (only if visible during blink)
+      // ── Player Rendering ───────────────────────────────────────────────────────
+      // Only draw player sprite if visible (blink effect toggles this flag).
       if (playerVisible) {
         ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
       }
-      // Mouse movement (prioritize over keyboard)
-      if (mouseActive && !gameOver && !paused) {
-        var targetX = mouseX - player.width / 2;
-        targetX = Math.max(0, Math.min(targetX, canvas.width - player.width));
-        player.x += (targetX - player.x) * 0.3; // Smooth follow
 
-        // Group B: vertical mouse movement constrained to bottom 30%
+      // ── Player Movement: Mouse (Priority) ──────────────────────────────────────
+      // Mouse movement takes priority over keyboard. Smooth lerp follow (0.3 factor).
+      if (mouseActive && !gameOver && !paused) {
+        // Horizontal movement (always enabled)
+        var targetX = mouseX - player.width / 2; // Center player on cursor
+        targetX = Math.max(0, Math.min(targetX, canvas.width - player.width)); // Clamp to canvas
+        player.x += (targetX - player.x) * 0.3; // Smooth lerp (30% per frame)
+
+        // Vertical movement (Group B only, bottom 30% of canvas)
         if (movementABGroup === 'B') {
           var targetY = mouseY - player.height / 2;
           targetY = Math.max(PLAYER_VERTICAL_MIN, Math.min(targetY, canvas.height - player.height));
           player.y += (targetY - player.y) * 0.3;
         }
 
-        // Mouse shooting with cooldown
+        // Mouse shooting (hold left button)
         if (mouseDown) {
           var now = Date.now();
           if (now - lastShotTime >= FIRE_COOLDOWN) {
@@ -5070,14 +5650,15 @@
           }
         }
       }
-      // Keyboard movement (fallback)
+      // ── Player Movement: Keyboard (Fallback) ───────────────────────────────────
+      // Keyboard movement only active when mouse is not being used.
       else if (rightPressed && player.x < canvas.width - player.width) {
         player.x += CONFIG.playerSpeed;
       } else if (leftPressed && player.x > 0) {
         player.x -= CONFIG.playerSpeed;
       }
 
-      // Group B: vertical keyboard movement constrained to bottom 30%
+      // Vertical keyboard movement (Group B only, bottom 30% of canvas)
       if (movementABGroup === 'B') {
         if (upPressed && player.y > PLAYER_VERTICAL_MIN) {
           player.y -= CONFIG.playerSpeed;
