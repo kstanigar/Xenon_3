@@ -1100,22 +1100,26 @@
         var cols = ['', ''];
         for (var i = 0; i < top10.length; i++) {
           var entry = top10[i];
-          var igText = entry.instagram && entry.instagram !== 'Anonymous'
-            ? '@' + entry.instagram : 'Anonymous';
+          // Display player name/handle exactly as entered (no @ prefix)
+          // Accepts any identifier: gamer tags, social handles, real names, etc.
+          var playerName = entry.instagram && entry.instagram !== 'Anonymous'
+            ? entry.instagram : 'Anonymous';
           var isCurrentScore = entry.score === score;
 
           // Highlight player's score with cyan color + bold (no text label)
           // Visual identification via color only maintains clean 2-column alignment
           // Avoids variable-width text (like "← you") that would break column layout
           var rowStyle = isCurrentScore ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
+          // Username color: cyan for player's score, gray for others
+          var nameColor = isCurrentScore ? "#00FFFF" : "#aaa";
           var col = i < half ? 0 : 1;
 
           // Build row HTML: rank, score, player name/handle
-          // Player's score: cyan + bold for clear identification
-          // Other scores: white, normal weight
+          // Player's entry: cyan + bold (score AND username highlighted)
+          // Other entries: white score, gray username
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:#aaa;font-size:11px;'>" + igText + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
           cols[col] += "</div>";
         }
         var html = "<div style='margin-top:12px;text-align:center;'>";
