@@ -1103,8 +1103,16 @@
           var igText = entry.instagram && entry.instagram !== 'Anonymous'
             ? '@' + entry.instagram : 'Anonymous';
           var isCurrentScore = entry.score === score;
+
+          // Highlight player's score with cyan color + bold (no text label)
+          // Visual identification via color only maintains clean 2-column alignment
+          // Avoids variable-width text (like "← you") that would break column layout
           var rowStyle = isCurrentScore ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
           var col = i < half ? 0 : 1;
+
+          // Build row HTML: rank, score, player name/handle
+          // Player's score: cyan + bold for clear identification
+          // Other scores: white, normal weight
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
           cols[col] += "<span style='color:#aaa;font-size:11px;'>" + igText + "</span>";
