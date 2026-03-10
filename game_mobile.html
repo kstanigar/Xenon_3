@@ -400,7 +400,7 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp }
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp, where, doc, setDoc, updateDoc }
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -417,16 +417,45 @@
     const db = getFirestore(app);
 
     // Expose to global scope so non-module game script can call them
+    // One entry per player: Query for existing entry, update if new score is higher, create if none exists
     window.firebaseSubmitScore = async function (scoreData) {
       try {
-        const docRef = await addDoc(collection(db, "leaderboard"), {
-          score: scoreData.score,
-          instagram: scoreData.instagram,
-          platform: scoreData.platform,
-          movement_group: scoreData.movement_group,
-          date: serverTimestamp()
-        });
-        return { success: true, id: docRef.id };
+        // Query for existing entry with the same instagram handle
+        const q = query(
+          collection(db, "leaderboard"),
+          where("instagram", "==", scoreData.instagram)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          // Player has an existing entry
+          const existingDoc = snapshot.docs[0];
+          const existingData = existingDoc.data();
+
+          // Only update if new score is higher
+          if (scoreData.score > existingData.score) {
+            await updateDoc(doc(db, "leaderboard", existingDoc.id), {
+              score: scoreData.score,
+              platform: scoreData.platform,
+              movement_group: scoreData.movement_group,
+              date: serverTimestamp()
+            });
+            return { success: true, id: existingDoc.id, updated: true };
+          } else {
+            // New score is not better, don't update
+            return { success: true, id: existingDoc.id, updated: false };
+          }
+        } else {
+          // No existing entry, create new one
+          const docRef = await addDoc(collection(db, "leaderboard"), {
+            score: scoreData.score,
+            instagram: scoreData.instagram,
+            platform: scoreData.platform,
+            movement_group: scoreData.movement_group,
+            date: serverTimestamp()
+          });
+          return { success: true, id: docRef.id, updated: true };
+        }
       } catch (e) {
         console.error("Firebase submit error:", e);
         return { success: false, error: e };
@@ -5209,26 +5238,29 @@
      * - Matches player expectations (must beat personal record)
      *
      * @param {number} submittedScore - Last score submitted to Firebase (from getEffectiveSubmittedScore)
+     * @param {number} previousLocalBest - Local high score BEFORE current game was added
      * @returns {string} HTML for submission form or hidden placeholder
      */
-    function buildLeaderboardSubmitHTML(submittedScore) {
+    function buildLeaderboardSubmitHTML(submittedScore, previousLocalBest) {
       // Show form only if current score beats BOTH local personal best AND last Firebase submission.
       // This prevents submitting lower scores and matches player expectations.
       //
+      // CRITICAL: previousLocalBest must be captured BEFORE addHighScore() runs
+      // Otherwise highScores[0] already contains the current score, making the check always false
+      //
       // Logic:
-      // - localBest: Highest score in local top-10 list (personal record)
+      // - previousLocalBest: Highest score in local top-10 BEFORE current game (passed as param)
       // - firebaseBest: Last score successfully submitted to Firebase (submittedScore param)
       // - threshold: Higher of the two (must beat whichever is greater)
       //
       // Edge cases handled:
-      // - Never submitted: threshold = localBest (must beat personal best)
+      // - Never submitted: threshold = previousLocalBest (must beat personal best)
       // - Cleared localStorage: threshold = firebaseBest (can't submit worse than Firebase)
       // - Normal: threshold = max(both) (must beat highest of either)
 
       var html = "";
-      var localBest = highScores[0] || 0; // Highest local score, or 0 if none
       var firebaseBest = submittedScore; // Last Firebase submission (passed as param)
-      var threshold = Math.max(localBest, firebaseBest); // Must beat whichever is higher
+      var threshold = Math.max(previousLocalBest, firebaseBest); // Must beat whichever is higher
 
       if (score > threshold) {
         var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
@@ -5280,8 +5312,13 @@
      * Mirrors the main death screen build logic so the toggle label refreshes.
      */
     function rebuildGameOverScreen() {
+      // NOTE: This is a REBUILD function called after score already added to highScores
+      // prevBest here is NOT the previous best, but current best (includes current score)
+      // For submission form, we need to check if current score beat the SECOND highest
       var prevBest = highScores.length > 0 ? highScores[0] : null;
       var submittedScoreCapture = getEffectiveSubmittedScore();
+      // Get second highest score (the previous best before current game)
+      var previousLocalBest = highScores.length > 1 ? highScores[1] : 0;
       var madeTopTen = isTopTenScore(score);
       var rank = getScoreRank(score);
       var wasReplay = isReplaySession;
@@ -5297,7 +5334,7 @@
       }
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
-      html += buildLeaderboardSubmitHTML(submittedScoreCapture);
+      html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
       html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
       if (!wasReplay) {
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
@@ -5806,12 +5843,13 @@
         // Keep background music playing - don't stop it
 
         // Check if top 10 score and save
+        // CRITICAL: Capture prevBest BEFORE calling addHighScore()
         var prevBest = highScores.length > 0 ? highScores[0] : null;
         var submittedScoreCapture = getEffectiveSubmittedScore();
         var madeTopTen = isTopTenScore(score);
         var rank = getScoreRank(score);
         if (madeTopTen) {
-          addHighScore(score);
+          addHighScore(score);  // Now highScores[0] contains current score
         }
 
         // Capture phase at death for tier logic
@@ -5832,7 +5870,7 @@
         }
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
-        html += buildLeaderboardSubmitHTML(submittedScoreCapture);
+        html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
         html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
 
         // REPLAY INCENTIVES — PORTING NOTE: port this tier block to game.html game over screen
@@ -5954,11 +5992,12 @@
           updateUI();
           gameOver = true;
           stopBossMusic();
+          // CRITICAL: Capture prevBest BEFORE calling addHighScore()
           var prevBest = highScores.length > 0 ? highScores[0] : null;
           var submittedScoreCapture = getEffectiveSubmittedScore();
           var madeTopTen = isTopTenScore(score);
           var rank = getScoreRank(score);
-          if (madeTopTen) addHighScore(score);
+          if (madeTopTen) addHighScore(score);  // Now highScores[0] contains current score
 
           // Capture phase at death for tier logic
           deathPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
@@ -5994,7 +6033,7 @@
 
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
-          html += buildLeaderboardSubmitHTML(submittedScoreCapture);
+          html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
           html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
