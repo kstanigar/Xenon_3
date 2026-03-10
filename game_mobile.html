@@ -3901,8 +3901,8 @@
         { key: 'blue', color: '#64C8FF' },
         { key: 'orange', color: '#FFC864' },
         { key: 'purple', color: '#C864FF' },
-        { key: 'shield_outer', color: '#FFD700' }, // Standard shield
-        { key: 'shield_inner', color: '#FFFF64' }  // Inner shield
+        { key: 'shield_outer', color: '#FFD700' }, // Yellow shield (will tint red when damaged)
+        { key: 'shield_inner', color: '#FFFF64' }  // Bright yellow inner shield
       ];
 
       // Configuration for different ripple sizes/styles
@@ -4072,13 +4072,49 @@
       var drawX = cx - drawWidth / 2;
       var drawY = cy - drawHeight / 2;
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // SHIELD VISUAL FEEDBACK SYSTEM (Mobile)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Provides visual indicators when shielded enemies are hit:
+      // 1. Flash Effect - Shield brightens briefly when hit (3 frames, +0.4 alpha boost)
+      // 2. Wobble Effect - Shield pulses in size when hit (oscillates, exponential decay)
+      // 3. Faster Pulse Rate - Shield ripple animates faster as damage increases (1.0x → 1.5x)
+      // 4. Opacity Degradation - Shield fades as damage increases (1.0 → 0.5 alpha)
+      //
+      // Implementation differences from desktop:
+      // - Uses pre-rendered ripple canvases (cannot change color mid-animation)
+      // - Color stays yellow (no yellow→red transition like desktop)
+      // - Instead: pulse speed + opacity provide damage feedback
+      //
+      // Performance: Zero cost - just multiplier calculations on existing values.
+      //
+      // Trigger: Set enemy.shieldFlashFrames=3 and enemy.shieldWobble=3 on shield hit.
+      // Location: Bullet collision code (~line 6607) sets these values.
+
       // Check if enemy is shielded
       var isShielded = enemy.shielded === true;
+
+      // Update shield visual effects (decay timers each frame)
+      if (enemy.shieldFlashFrames > 0) enemy.shieldFlashFrames--;
+      if (enemy.shieldWobble > 0) enemy.shieldWobble *= 0.6; // Exponential decay
+
+      // Calculate shield damage percentage for visual feedback (opacity + pulse rate)
+      var shieldDamagePercent = 0;
+      if (isShielded) {
+        var shieldHits = enemy.shieldHits || 0;
+        var shieldBreakThreshold = level >= 9 ? 25 : 15;
+        shieldDamagePercent = Math.min(shieldHits / shieldBreakThreshold, 1); // 0=healthy, 1=almost broken
+      }
 
       // Draw ripple effect (PRE-RENDERED)
       // Uses the pre-generated animation frames from `initPreRenderedAssets`
       // based on the current beat phase.
-      var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
+
+      // Faster Pulse Rate: Shield pulses faster as it takes damage (1.0x → 1.5x speed)
+      // Healthy shield: 1.0x normal speed | Critical shield: 1.5x faster pulsing
+      var beatPhaseMultiplier = isShielded ? (1 + shieldDamagePercent * 0.5) : 1;
+      var beatPhase = ((time % BPM_INTERVAL) / BPM_INTERVAL) * beatPhaseMultiplier;
+      beatPhase = beatPhase % 1; // Keep in 0-1 range
       var rippleAlpha = 1 - beatPhase;
 
       if (rippleAlpha > 0.05) {
@@ -4109,20 +4145,33 @@
           var rippleCanvas = frames[frameIndex];
 
           if (rippleCanvas) {
-            // Center the ripple canvas
-            // Note: pre-rendered canvases are fixed size (114px regular, 264px boss)
-            // We draw them unscaled to preserve line width?
-            // No, we matched the maxRadius to the enemy type roughly.
-            // Regular: maxRadius 55 -> Dia 110. Enemy width 50.
-            // Wait, original: `rippleRadius = beatPhase * enemy.width`.
-            // Max ripple dia = 2 * enemy.width = 100.
-            // Our canvas is 110. Close enough.
-            // Boss: width 150. Max ripple dia = 300.
-            // Our canvas is 260. Close enough.
+            // Apply visual feedback effects for shielded enemies
+            var finalAlpha = (key === 'shield_outer') ? (rippleAlpha * 0.7) : (rippleAlpha * 0.4);
+            var wobbleOffset = 0;
 
-            // Draw centered
-            ctx.globalAlpha = (key === 'shield_outer') ? (rippleAlpha * 0.7) : (rippleAlpha * 0.4);
-            ctx.drawImage(rippleCanvas, cx - rippleCanvas.width / 2, cy - rippleCanvas.height / 2);
+            if (isShielded) {
+              // Opacity Degradation: Shield fades as it takes damage (1.0 → 0.5 alpha)
+              // Healthy shield: 1.0x full opacity | Critical shield: 0.5x faded
+              var opacityMultiplier = 0.5 + (1 - shieldDamagePercent) * 0.5; // 1.0 (healthy) to 0.5 (critical)
+              finalAlpha *= opacityMultiplier;
+
+              // Flash Effect: Shield brightens briefly when hit (+0.4 alpha for 3 frames)
+              if (enemy.shieldFlashFrames > 0) {
+                finalAlpha = Math.min(1.0, finalAlpha + 0.4); // Boost alpha for flash
+              }
+
+              // Shield wobble effect - pulse size when hit (abs ensures it only expands)
+              if (enemy.shieldWobble > 0) {
+                wobbleOffset = Math.abs(Math.sin(Date.now() * 0.3)) * enemy.shieldWobble;
+              }
+
+            }
+
+            // Draw shield with effects applied (flash and wobble only, no color change)
+            ctx.globalAlpha = finalAlpha;
+            var drawW = rippleCanvas.width + wobbleOffset;
+            var drawH = rippleCanvas.height + wobbleOffset;
+            ctx.drawImage(rippleCanvas, cx - drawW / 2, cy - drawH / 2, drawW, drawH);
             ctx.globalAlpha = 1.0;
           }
         }
@@ -4704,11 +4753,30 @@
       }
 
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // BOSS SHIELD VISUAL FEEDBACK (Mobile)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Same four effects as enemy shields, but tied to boss health % instead of hits:
+      // 1. Flash Effect - Shield brightens when hit
+      // 2. Wobble Effect - Shield pulses in size when hit
+      // 3. Faster Pulse Rate - Ripple animates faster as boss health decreases
+      // 4. Opacity Degradation - Shield fades as boss health decreases
+      //
+      // Trigger: Set boss.shieldFlashFrames=3 and boss.shieldWobble=3 in damageBoss()
+      // when boss.shielded is true (~line 4806).
+
       // Draw boss ripple effect at 123 BPM (PRE-RENDERED)
       var bossCx = boss.x + boss.width / 2;
       var bossCy = boss.y + boss.height / 2;
       var time = Date.now();
-      var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
+
+      // Calculate boss shield damage percentage for visual feedback (based on boss health)
+      var bossDamagePercent = boss.shielded ? (1 - (boss.health / boss.maxHealth)) : 0;
+
+      // Faster Pulse Rate: Boss shield pulses faster as boss health decreases (1.0x → 1.5x)
+      var bossBeatMultiplier = boss.shielded ? (1 + bossDamagePercent * 0.5) : 1;
+      var beatPhase = ((time % BPM_INTERVAL) / BPM_INTERVAL) * bossBeatMultiplier;
+      beatPhase = beatPhase % 1; // Keep in 0-1 range
       var rippleAlpha = 1 - beatPhase;
 
       var key = boss.isPurpleBoss ? 'purple' : (boss.isRedBoss ? 'red' : 'green');
@@ -4724,8 +4792,9 @@
         }
       }
 
-      // Second boss ripple
-      var beatPhase2 = ((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL;
+      // Second boss ripple (also affected by damage speed multiplier)
+      var beatPhase2 = (((time + BPM_INTERVAL / 2) % BPM_INTERVAL) / BPM_INTERVAL) * bossBeatMultiplier;
+      beatPhase2 = beatPhase2 % 1; // Keep in 0-1 range
       var rippleAlpha2 = 1 - beatPhase2;
       if (rippleAlpha2 > 0.05 && frames) {
         var frameIndex2 = Math.floor(beatPhase2 * (frames.length - 1));
@@ -4737,6 +4806,10 @@
         }
       }
 
+      // Update boss shield visual effects (decay timers)
+      if (boss.shieldFlashFrames > 0) boss.shieldFlashFrames--;
+      if (boss.shieldWobble > 0) boss.shieldWobble *= 0.6; // Exponential decay
+
       // Draw golden shield ripple when boss is shielded
       if (boss.shielded && rippleAlpha > 0.05) {
         var shieldFrames = preRenderedRipples['shield_outer_boss'];
@@ -4744,10 +4817,30 @@
           var frameIndex = Math.floor(beatPhase * (shieldFrames.length - 1));
           var sCanvas = shieldFrames[frameIndex];
           if (sCanvas) {
-            ctx.globalAlpha = rippleAlpha * 0.7;
-            // Scale up 1.2x to match original huge shield
-            var sw = sCanvas.width * 1.2;
-            var sh = sCanvas.height * 1.2;
+            // Apply visual feedback effects
+            var finalAlpha = rippleAlpha * 0.7;
+
+            // Opacity Degradation: Boss shield fades with damage (1.0 → 0.5 alpha)
+            var bossOpacityMultiplier = 0.5 + (1 - bossDamagePercent) * 0.5; // 1.0 (healthy) to 0.5 (critical)
+            finalAlpha *= bossOpacityMultiplier;
+
+            var wobbleOffset = 0;
+
+            // Flash Effect: Shield brightens briefly when hit (+0.4 alpha for 3 frames)
+            if (boss.shieldFlashFrames > 0) {
+              finalAlpha = Math.min(1.0, finalAlpha + 0.4); // Boost alpha for flash
+            }
+
+            // Shield wobble effect - pulse size when hit (abs ensures it only expands)
+            if (boss.shieldWobble > 0) {
+              wobbleOffset = Math.abs(Math.sin(Date.now() * 0.3)) * boss.shieldWobble;
+            }
+
+            // Draw shield with effects applied (flash and wobble only, no color change)
+            ctx.globalAlpha = finalAlpha;
+            // Scale up 1.2x to match original huge shield + wobble
+            var sw = sCanvas.width * 1.2 + wobbleOffset;
+            var sh = sCanvas.height * 1.2 + wobbleOffset;
             ctx.drawImage(sCanvas, bossCx - sw / 2, bossCy - sh / 2, sw, sh);
             ctx.globalAlpha = 1.0;
           }
@@ -4759,7 +4852,9 @@
           var frameIndex = Math.floor(beatPhase * (innerShieldFrames.length - 1));
           var iCanvas = innerShieldFrames[frameIndex];
           if (iCanvas) {
-            ctx.globalAlpha = rippleAlpha * 0.5;
+            // Apply same opacity degradation to inner shield
+            var innerAlpha = rippleAlpha * 0.5 * bossOpacityMultiplier;
+            ctx.globalAlpha = innerAlpha;
             // Scale 0.6x (should match original logic)
             // But wait, if pre-rendered is "boss" size, maybe 0.8?
             // Original: innerRadius = rippleRadius * 0.6.
@@ -4804,6 +4899,9 @@
 
       // Check if boss is shielded
       if (boss.shielded) {
+        // Trigger visual feedback effects (zero performance cost)
+        boss.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
+        boss.shieldWobble = 3;        // Wobble amount in pixels
         return; // No damage when shielded
       }
 
@@ -6602,6 +6700,10 @@
                 enemy.shieldHits = 0;
               }
               enemy.shieldHits++;
+
+              // Trigger visual feedback effects (zero performance cost)
+              enemy.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
+              enemy.shieldWobble = 3;        // Wobble amount in pixels
 
               // Break shield permanently - 15 hits for levels 1-8, 25 for levels 9+
               var shieldBreakThreshold = level >= 9 ? 25 : 15;

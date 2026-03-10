@@ -3492,8 +3492,26 @@
       var drawX = cx - drawWidth / 2;
       var drawY = cy - drawHeight / 2;
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // SHIELD VISUAL FEEDBACK SYSTEM (Desktop)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Provides visual indicators when shielded enemies are hit:
+      // 1. Flash Effect - Shield brightens briefly when hit (3 frames, +0.4 alpha boost)
+      // 2. Wobble Effect - Shield pulses in size when hit (oscillates, exponential decay)
+      // 3. Color Degradation - Shield transitions yellow→orange→red as it takes damage
+      //
+      // Implementation: Direct stroke color modification during arc() drawing.
+      // Performance: Zero cost - just value calculations, no extra draw calls.
+      //
+      // Trigger: Set enemy.shieldFlashFrames=3 and enemy.shieldWobble=3 on shield hit.
+      // Location: Bullet collision code (~line 5817) sets these values.
+
       // Check if enemy is shielded (formation enemy before 3 morphs)
       var isShielded = enemy.shielded === true;
+
+      // Update shield visual effects (decay timers each frame)
+      if (enemy.shieldFlashFrames > 0) enemy.shieldFlashFrames--;
+      if (enemy.shieldWobble > 0) enemy.shieldWobble *= 0.6; // Exponential decay
 
       // Draw ripple effect for all enemies at 123 BPM
       var beatPhase = (time % BPM_INTERVAL) / BPM_INTERVAL;
@@ -3501,17 +3519,30 @@
       var rippleRadius = beatPhase * maxRipple;
       var rippleAlpha = 1 - beatPhase;
 
+      // Apply wobble effect to shield radius (abs ensures it only expands, never negative)
+      if (isShielded && enemy.shieldWobble > 0) {
+        rippleRadius += Math.abs(Math.sin(Date.now() * 0.3)) * enemy.shieldWobble;
+      }
+
       // Different colors based on enemy type (golden shield color when protected)
       var rippleColor;
       if (isShielded) {
-        // Golden/yellow shield ripple - fades to white as it weakens from hits
+        // Shield ripple - transitions from yellow (healthy) to red (damaged)
         var shieldHits = enemy.shieldHits || 0;
         var shieldBreakThreshold = level >= 9 ? 25 : 15;
-        var shieldWeakness = Math.min(shieldHits / shieldBreakThreshold, 1); // 0 to 1
-        // Interpolate from golden (255, 215, 0) to light yellow/white (255, 255, 200)
-        var g = Math.round(215 + (255 - 215) * shieldWeakness); // 215 -> 255
-        var b = Math.round(0 + 200 * shieldWeakness); // 0 -> 200
-        rippleColor = 'rgba(255, ' + g + ', ' + b + ', ' + (rippleAlpha * 0.7) + ')';
+        var shieldWeakness = Math.min(shieldHits / shieldBreakThreshold, 1); // 0 to 1 (0=healthy, 1=almost broken)
+
+        // Color transition: Yellow (255, 215, 0) -> Orange -> Red (255, 50, 0)
+        var g = Math.round(215 - (165 * shieldWeakness)); // 215 -> 50 (yellow to red)
+        var b = Math.round(0); // Keep blue at 0 for yellow->red transition
+        var finalAlpha = rippleAlpha * 0.7;
+
+        // Apply flash effect - boost alpha when hit
+        if (enemy.shieldFlashFrames > 0) {
+          finalAlpha = Math.min(1.0, finalAlpha + 0.4);
+        }
+
+        rippleColor = 'rgba(255, ' + g + ', ' + b + ', ' + finalAlpha + ')';
       } else if (enemy.type.indexOf('_red') !== -1) {
         rippleColor = 'rgba(255, 80, 80, ' + (rippleAlpha * 0.4) + ')';
       } else if (enemy.type === 'enemy1') {
@@ -3534,9 +3565,11 @@
       // Draw second inner ripple for shielded enemies
       if (isShielded) {
         var innerRippleRadius = rippleRadius * 0.6;
+        // Inner shield also transitions yellow -> red based on damage
+        var innerG = Math.round(255 - (155 * shieldWeakness)); // 255 -> 100 (bright yellow to orange-red)
         ctx.beginPath();
         ctx.arc(cx, cy, innerRippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (rippleAlpha * 0.5) + ')';
+        ctx.strokeStyle = 'rgba(255, ' + innerG + ', 100, ' + (rippleAlpha * 0.5) + ')';
         ctx.lineWidth = 3;
         ctx.stroke();
       }
@@ -4104,22 +4137,55 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // ── Visual Effects: Golden Shield Ripple ───────────────────────────────────
-      // When boss is shielded, draw larger golden ripple overlay
+      // ═══════════════════════════════════════════════════════════════════════════
+      // BOSS SHIELD VISUAL FEEDBACK (Desktop)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Same three effects as enemy shields, but tied to boss health instead of hits:
+      // 1. Flash Effect - Shield brightens when hit
+      // 2. Wobble Effect - Shield pulses in size when hit
+      // 3. Color Degradation - Shield transitions yellow→red based on boss health %
+      //
+      // Trigger: Set boss.shieldFlashFrames=3 and boss.shieldWobble=3 in damageBoss()
+      // when boss.shielded is true (~line 4210).
+
+      // Update boss shield visual effects (decay timers each frame)
+      if (boss.shieldFlashFrames > 0) boss.shieldFlashFrames--;
+      if (boss.shieldWobble > 0) boss.shieldWobble *= 0.6; // Exponential decay
+
       if (boss.shielded) {
-        // Outer shield ripple (130% of boss width, thicker line)
-        var shieldRippleRadius = beatPhase * maxBossRipple * 1.3;
+        // Calculate visual effect modifiers
+        var finalAlpha = bossRippleAlpha * 0.7;
+        var wobbleOffset = 0;
+
+        // Shield flash effect - brighten when hit (+0.4 alpha boost for 3 frames)
+        if (boss.shieldFlashFrames > 0) {
+          finalAlpha = Math.min(1.0, finalAlpha + 0.4);
+        }
+
+        // Shield wobble effect - pulse size when hit (abs ensures radius never negative)
+        if (boss.shieldWobble > 0) {
+          wobbleOffset = Math.abs(Math.sin(Date.now() * 0.3)) * boss.shieldWobble;
+        }
+
+        // Color degradation - boss shield transitions yellow→red based on boss health
+        var bossHealthPercent = boss.health / boss.maxHealth; // 1.0 = full health, 0 = dead
+        var bossWeakness = 1 - bossHealthPercent; // 0 = healthy, 1 = almost dead
+        var bossShieldG = Math.round(215 - (165 * bossWeakness)); // 215->50 (yellow to red)
+
+        // Outer shield ripple (130% of boss width, thicker line) + wobble
+        var shieldRippleRadius = beatPhase * maxBossRipple * 1.3 + wobbleOffset;
         ctx.beginPath();
         ctx.arc(bossCx, bossCy, shieldRippleRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 215, 0, ' + (bossRippleAlpha * 0.7) + ')'; // Gold
+        ctx.strokeStyle = 'rgba(255, ' + bossShieldG + ', 0, ' + finalAlpha + ')'; // Yellow->Red based on boss health
         ctx.lineWidth = 5;
         ctx.stroke();
 
         // Inner shield ripple (60% of outer, thinner line)
         var innerShieldRadius = shieldRippleRadius * 0.6;
+        var bossInnerG = Math.round(255 - (155 * bossWeakness)); // 255->100
         ctx.beginPath();
         ctx.arc(bossCx, bossCy, innerShieldRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 100, ' + (bossRippleAlpha * 0.5) + ')'; // Bright yellow
+        ctx.strokeStyle = 'rgba(255, ' + bossInnerG + ', 100, ' + (bossRippleAlpha * 0.5) + ')';
         ctx.lineWidth = 3;
         ctx.stroke();
       }
@@ -4211,6 +4277,11 @@
         boss.health -= 0.5; // Half damage through shield
         bossBlinking = true;
         bossBlinkTimer = 6; // Short blink for chip damage
+
+        // Trigger visual feedback effects (zero performance cost)
+        boss.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
+        boss.shieldWobble = 3;        // Wobble amount in pixels
+
         return; // Exit early, no defeat check
       }
 
@@ -5815,6 +5886,10 @@
                 enemy.shieldHits = 0;
               }
               enemy.shieldHits++;
+
+              // Trigger visual feedback effects (zero performance cost)
+              enemy.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
+              enemy.shieldWobble = 3;        // Wobble amount in pixels
 
               // Break shield permanently - 15 hits for levels 1-8, 25 for levels 9+
               var shieldBreakThreshold = level >= 9 ? 25 : 15;
