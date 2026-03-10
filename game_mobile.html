@@ -966,10 +966,10 @@
      */
     /**
      * Submits the current score to the global Firebase leaderboard.
-     * Sanitizes Instagram handle input and prevents duplicate submissions.
+     * Sanitizes player name/handle input and prevents duplicate submissions.
      *
      * Submission flow (same as desktop):
-     * 1. Read Instagram handle from input field
+     * 1. Read player name/handle from input field (accepts any name, not just Instagram)
      * 2. Sanitize: Remove @<>'" characters, limit to 30 chars
      * 3. Save sanitized handle to localStorage for autofill
      * 4. Disable submit button (prevents double-submit)
@@ -983,11 +983,16 @@
      * - Tracks 'platform': 'mobile' in scoreData and analytics
      * - Includes 'movement_group' (A/B test data)
      *
-     * Handle sanitization:
+     * Name/handle sanitization:
+     * - Accepts any player name: gamer tags, @socials, Discord handles, real names, etc.
      * - Removes @ prefix (user may type @username)
      * - Removes <, >, ', " (XSS prevention)
      * - Limits to 30 characters (prevents overflow)
      * - Empty string → 'Anonymous'
+     *
+     * Backend compatibility:
+     * - Input field labeled "Player name or handle" (user-friendly)
+     * - Database field still named 'instagram' (no backend changes needed)
      *
      * Score deduplication:
      * - Only submits if score >= previously submitted score
@@ -997,7 +1002,7 @@
       var igHandle = document.getElementById('igInput').value.trim();
       var sanitized = igHandle.replace(/[@<>'"]/g, '').substring(0, 30);
 
-      // Save Instagram handle for future autofill (pre-populates input on next game)
+      // Save player name/handle for future autofill (pre-populates input on next game)
       if (sanitized) {
         localStorage.setItem('nonx_ig_handle', sanitized);
       }
@@ -5180,19 +5185,43 @@
 
     /**
      * Returns the submit form (placed below buttons).
-     * Only shown if score beats personal best and meets minimum threshold.
+     * Only shown if score beats BOTH local personal best AND last Firebase submission.
+     *
+     * Submission threshold logic:
+     * - Must beat MAX(local high score, last Firebase submission)
+     * - Prevents submitting worse scores to global leaderboard
+     * - Matches player expectations (must beat personal record)
+     *
+     * @param {number} submittedScore - Last score submitted to Firebase (from getEffectiveSubmittedScore)
+     * @returns {string} HTML for submission form or hidden placeholder
      */
     function buildLeaderboardSubmitHTML(submittedScore) {
-      // submittedScore must be captured BEFORE addHighScore() runs,
-      // otherwise highScores[0] already equals the current score.
+      // Show form only if current score beats BOTH local personal best AND last Firebase submission.
+      // This prevents submitting lower scores and matches player expectations.
+      //
+      // Logic:
+      // - localBest: Highest score in local top-10 list (personal record)
+      // - firebaseBest: Last score successfully submitted to Firebase (submittedScore param)
+      // - threshold: Higher of the two (must beat whichever is greater)
+      //
+      // Edge cases handled:
+      // - Never submitted: threshold = localBest (must beat personal best)
+      // - Cleared localStorage: threshold = firebaseBest (can't submit worse than Firebase)
+      // - Normal: threshold = max(both) (must beat highest of either)
+
       var html = "";
-      if (score > submittedScore) {
+      var localBest = highScores[0] || 0; // Highest local score, or 0 if none
+      var firebaseBest = submittedScore; // Last Firebase submission (passed as param)
+      var threshold = Math.max(localBest, firebaseBest); // Must beat whichever is higher
+
+      if (score > threshold) {
         var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
         html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
-        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
+        html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 4px;'>Submit to Global Leaderboard:</div>";
+        html += "<div style='font-size: 12px; color: #888; margin-bottom: 8px;'>Use your gamer tag, @social, or any name!</div>";
         html += "<div style='display:flex; justify-content:center; align-items:center; gap:8px;'>";
-        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + savedHandle + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
-        html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; white-space:nowrap;'>Submit Score</button>";
+        html += "<input type='text' id='igInput' placeholder='Player name or handle (optional)' value='" + savedHandle + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
+        html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; white-space:nowrap;'>Submit Score</button>";
         html += "</div>";
         html += "</div>";
       } else {
