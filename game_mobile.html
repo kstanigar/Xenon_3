@@ -458,7 +458,8 @@
 
       <h3>Controls</h3>
       <ul>
-        <li>Drag to move your ship</li>
+        <li>Full Movement ON: Drag to move</li>
+        <li>Full Movement OFF: Drag to move horizontally only</li>
         <li>Auto-fire enabled</li>
         <li>Tap Pause to pause</li>
       </ul>
@@ -1111,6 +1112,9 @@
         }
         var html = "<div style='margin-top:12px;text-align:center;'>";
         html += "<div style='color:#FFD700;font-weight:bold;margin-bottom:8px;font-size:14px;'>🏆 Global Top 10</div>";
+        // Two-column layout on mobile (min-width:140px keeps 2 columns on ~360-414px phones)
+        // Rationale: Single column makes leaderboard too tall, pushing Play button off-screen
+        // 2 columns = compact layout, no scrolling needed to reach Play button
         html += "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;'>";
         html += "<div style='min-width:140px;'>" + cols[0] + "</div>";
         html += "<div style='min-width:140px;'>" + cols[1] + "</div>";

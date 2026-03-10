@@ -659,10 +659,13 @@
         cols[col] += "</div>";
       }
 
-      // Assemble final two-column layout with flex-wrap for responsive fallback
-      var html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 28px;text-align:left;padding:4px 0;'>";
-      html += "<div style='min-width:170px;'>" + cols[0] + "</div>";
-      html += "<div style='min-width:170px;'>" + cols[1] + "</div>";
+      // Assemble final two-column layout (stays 2 columns even on mobile)
+      // Two-column layout on mobile (min-width:140px keeps 2 columns on ~360-414px phones)
+      // Rationale: Single column makes leaderboard too tall, pushing Play button off-screen
+      // 2 columns = compact layout, no scrolling needed to reach Play button
+      var html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;padding:4px 0;'>";
+      html += "<div style='min-width:140px;'>" + cols[0] + "</div>";
+      html += "<div style='min-width:140px;'>" + cols[1] + "</div>";
       html += "</div>";
       content.innerHTML = html;
     }
