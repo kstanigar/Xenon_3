@@ -35,6 +35,75 @@
 
   Dependencies: None (no external libraries or frameworks).
   Entry point: index.html → launchGame() → game.html
+
+  ============================================================
+  ANALYTICS DOCUMENTATION
+  ============================================================
+  GA4 Property : G-9ECFZ9JBE5
+  Platform tag : 'desktop' (sent on all in-game events)
+  Version      : analytics_version: '3.0'
+                 Injected automatically by fireEvent() wrapper.
+                 Bump ONLY when gameplay mechanics change
+                 (hitbox, boss logic, scoring). Do NOT bump for
+                 instrumentation-only changes — use deploy date.
+
+  Dev mode     : Shift+D toggles devMode. All fireEvent() calls
+                 are suppressed to console and never sent to GA4.
+                 Console output is cyan-styled for easy reading.
+
+  fireEvent(eventName, params)
+    Central wrapper for all GA4 event calls in this file.
+    Automatically merges { analytics_version: '3.0' } into every
+    event payload so no individual call needs to set it manually.
+    Individual events may still set it explicitly — harmless dupe.
+
+  Events fired from this file (26 total):
+  ┌─────────────────────┬──────────────────────────────────────────┐
+  │ Event               │ Key Parameters                           │
+  ├─────────────────────┼──────────────────────────────────────────┤
+  │ session_start       │ ab_music_group, platform, music_variant  │
+  │ first_visit         │ ab_music_group, platform, music_variant  │
+  │ returning_user      │ ab_music_group, platform, visit_count    │
+  │ game_start          │ ab_music_group, movement_group,          │
+  │                     │ is_replay, games_played                  │
+  │ wave_reached        │ level_number, phase, score               │
+  │ boss_attempt        │ boss_id, level_reached, score,           │
+  │                     │ session_duration_seconds                 │
+  │ boss_defeated       │ boss_id, level_reached, score,           │
+  │                     │ session_duration_seconds                 │
+  │ player_death        │ level_reached, phase, score,             │
+  │                     │ session_duration_seconds                 │
+  │ player_won          │ score, session_duration_seconds          │
+  │ game_complete       │ outcome (victory/death/abandoned),       │
+  │                     │ level_reached, score,                    │
+  │                     │ session_duration_seconds                 │
+  │ powerup_collected   │ powerup_type, level_reached, score       │
+  │ play_again          │ score, level_reached, death_phase,       │
+  │                     │ replay_tier, bonus_hp, continue          │
+  │ leave_game          │ outcome, score, level_reached            │
+  │ leaderboard_submit  │ score, rank                              │
+  │ bug_report_submitted│ —                                        │
+  │ survey_submitted    │ —                                        │
+  │ survey_dismissed    │ —                                        │
+  │ music_toggled       │ music_variant, score, level_reached      │
+  └─────────────────────┴──────────────────────────────────────────┘
+
+  A/B Tests active:
+    ab_music_group  : A = Music ON (default), B = Music OFF
+                      Assigned once, stored in localStorage.
+                      nonx_ab_music_group. Never reassigned.
+    movement_group  : A = Horizontal only, B = Full movement
+                      Player preference, not random assignment.
+
+  analytics_version history:
+    (none) — Pre-analytics / QA data. Discard.
+    2.0    — Broken boss spawn (score gate), indestructible
+             mobile minions, untuned hitbox. Discard.
+    3.0    — Current. Boss fix, hitbox inset, minion fix,
+             movement as player preference.
+    3.0+   — Full instrumentation (all events carry version
+             via wrapper). Deploy date: ~Mar 10 2026.
+             Use date filter when full coverage required.
   ============================================================
 -->
 <!DOCTYPE html>
@@ -942,7 +1011,7 @@
         );
         return;
       }
-      gtag('event', eventName, params);
+      gtag('event', eventName, Object.assign({ analytics_version: '3.0' }, params));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

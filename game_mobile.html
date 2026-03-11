@@ -50,6 +50,63 @@
 
   Dependencies: None (no external libraries or frameworks).
   Entry point: index.html → launchGame() → game_mobile.html
+
+  ============================================================
+  ANALYTICS DOCUMENTATION
+  ============================================================
+  GA4 Property : G-9ECFZ9JBE5
+  Platform tag : 'mobile' (sent on all in-game events)
+  Version      : analytics_version: '3.0'
+                 Injected automatically by fireEvent() wrapper.
+                 Bump ONLY when gameplay mechanics change.
+                 Do NOT bump for instrumentation-only changes.
+
+  Dev mode     : Shift+D toggles devMode. All fireEvent() calls
+                 suppressed to console, never sent to GA4.
+
+  fireEvent(eventName, params)
+    Central wrapper for all GA4 events in this file.
+    Automatically merges { analytics_version: '3.0' } into every
+    event payload. Mirrors game.html — keep in sync.
+
+  Events fired: identical to game.html (26 events).
+  See game.html ANALYTICS DOCUMENTATION for full event table.
+
+  Mobile-specific analytics differences vs game.html:
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Replay Incentive System (mobile only — desktop port pending)│
+  │                                                             │
+  │ play_again fires with additional params:                    │
+  │   replay_tier  : 1–4 (which incentive tier was shown)      │
+  │   bonus_hp     : 15, 25, or 50 (HP bonus granted)          │
+  │   continue     : true = Continue from Level X              │
+  │                  false = Play Again from Level 1            │
+  │   death_phase  : 'green', 'red', or 'purple'               │
+  │                                                             │
+  │ Tier logic:                                                 │
+  │   Tier 1 — First visit death, any level (+15 HP, L1)       │
+  │   Tier 2 — Replay death, green phase (+15 HP, death level) │
+  │   Tier 3 — Replay death, red phase (+25 HP, L1)            │
+  │   Tier 4 — Replay death, purple phase (+50 HP, L1)         │
+  │                                                             │
+  │ CRITICAL: isReplay resets immediately after game_start.    │
+  │ isReplaySession is captured BEFORE that reset and persists  │
+  │ for the full run. Without isReplaySession, Tiers 2–4 never │
+  │ fire. Do not modify this timing without a full trace.       │
+  └─────────────────────────────────────────────────────────────┘
+
+  Difficulty tuning vs desktop (affects wave_reached/death data):
+    Red phase bullet speed  : ×1.15 (desktop: ×1.40)
+    Purple phase bullet speed: ×1.35 (desktop: ×1.65)
+    Green phase             : identical to desktop
+    arrowheadExploded mult  : 1.6 (desktop: 2.4)
+    Enemy counts L9–12      : 16, 17, 19, 22
+
+  GA4 Custom Dimensions needed for replay analytics:
+    death_phase, replay_tier, bonus_hp, continue
+    Status: ⚠️ Needs registration in GA4 Admin → Custom Definitions
+
+  analytics_version history: see game.html ANALYTICS DOCUMENTATION
   ============================================================
 -->
 <!DOCTYPE html>
@@ -921,7 +978,7 @@
         );
         return;
       }
-      gtag('event', eventName, params);
+      gtag('event', eventName, Object.assign({ analytics_version: '3.0' }, params));
     }
 
     // ── Session & User Identity Events ───────────────────────────────────────
