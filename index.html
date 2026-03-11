@@ -24,6 +24,51 @@
     Leave as '' to buffer locally only (useful for debugging via
     localStorage.getItem('nonex_event_queue')).
 
+  ============================================================
+  ANALYTICS DOCUMENTATION
+  ============================================================
+  GA4 Property : G-9ECFZ9JBE5
+  Version      : analytics_version: '3.0'
+                 Injected automatically by trackEvent() wrapper.
+
+  trackEvent(name, data)
+    Central wrapper for all GA4 events in this file.
+    Respects user consent — events suppressed if user has opted
+    out (nonex_analytics = 'off'), EXCEPT analytics_toggled which
+    always fires so consent changes are always recorded.
+    Automatically merges { analytics_version: '3.0' } into every
+    event payload via Object.assign.
+
+  Events fired from this file (7 total):
+  ┌─────────────────────┬──────────────────────────────────────────┐
+  │ Event               │ Key Parameters                           │
+  ├─────────────────────┼──────────────────────────────────────────┤
+  │ menu_view           │ referrer, music_variant, ab_music_group, │
+  │                     │ platform, analytics_version              │
+  │ play_clicked        │ platform, music_variant, ab_music_group, │
+  │                     │ analytics_version                        │
+  │ platform_selected   │ platform                                 │
+  │ music_toggled       │ value ('on'/'off')                       │
+  │ movement_toggled    │ value, movement_group ('A'/'B')          │
+  │ analytics_toggled   │ value ('on'/'off') — always fires        │
+  └─────────────────────┴──────────────────────────────────────────┘
+
+  Note: platform_selected, music_toggled, movement_toggled, and
+  analytics_toggled do not carry ab_music_group or other session
+  context — they fire on user action, before game launch.
+
+  A/B Test assignment (happens in this file):
+    ab_music_group : Assigned on first visit if not in localStorage.
+                     50/50 split: 'A' (music on) or 'B' (music off).
+                     Stored in localStorage.nonx_ab_music_group.
+                     Passed to game files via URL or localStorage.
+
+  Known data quality issue:
+    platform_selected fires 'computer' for desktop users.
+    game.html and game_mobile.html send 'desktop' or 'mobile'.
+    This creates a fragmented platform dimension in GA4.
+    Fix: normalise 'computer' → 'desktop' in next release.
+
   Dependencies: None (no external libraries or frameworks).
   ============================================================
 -->
@@ -574,7 +619,7 @@
 
       // Send to Google Analytics if gtag is available
       if (typeof gtag !== 'undefined') {
-        gtag('event', name, data || {});
+        gtag('event', name, Object.assign({ analytics_version: '3.0' }, data || {}));
       }
     }
 
