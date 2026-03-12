@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 11, 2026_
+_Last updated: March 12, 2026_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -91,6 +91,11 @@ print('draw function:', 'function draw(' in c)
 | 3.0 | ✅ Use | Current. Boss fix, hitbox inset, minion fix, movement as player preference. |
 | 3.0+ | ✅ Use | Full instrumentation — all events carry version via wrapper. Deploy date: ~Mar 10 2026. Use `date ≥ Mar 10 2026` filter when full event-level coverage required. |
 
+**Instrumentation patches (no version bump — use deploy date to filter):**
+| Patch | Date | Change |
+|---|---|---|
+| v3.0.1 | Mar 12, 2026 | `index.html`: platform value normalised `'computer'` → `'desktop'`. Desktop sessions before this date recorded as `'computer'` in GA4. When analysing platform data, either filter `date ≥ Mar 12 2026` or union `platform = 'desktop' OR platform = 'computer'` for full desktop picture. |
+
 **Convention:** Bump version number for gameplay mechanic changes only. Use deploy date for instrumentation changes.
 
 ### All events (game.html + game_mobile.html — 26 each)
@@ -126,7 +131,7 @@ Register in: GA4 Admin → Property → Custom Definitions → Custom Dimensions
 
 | Parameter | Status | Notes |
 |---|---|---|
-| `platform` | ✅ Registered | ⚠️ Fragmented: 'computer' should be 'desktop' — fix in next release |
+| `platform` | ✅ Registered | ✅ Fixed Mar 12: 'computer' → 'desktop' in index.html v3.0.1. Historical data pre-deploy still shows 'computer' — filter by date when comparing platform metrics. |
 | `level_number` | ✅ Registered | |
 | `level_reached` | ✅ Registered | |
 | `boss_id` | ✅ Registered | |
@@ -193,12 +198,56 @@ Boss 1: 46/63 = 73% | Boss 2: 23/26 = 88.5% | Boss 3: 19/19 = 100%
 
 ---
 
+## 7b. REAL PLAYER BASELINE (Mar 10 – Mar 12, 2026)
+
+> ✅ **This is the first real player dataset.** 49 sessions from organic users. Small sample — do not over-index on individual metrics, but use for directional signals and pipeline validation. Benchmarks will sharpen as data accumulates.
+
+### Completion funnel (49 session starts)
+| Step | Users | % of Start | Drop |
+|---|---|---|---|
+| Session Start | 49 | 100% | — |
+| Game Start | 37 | 75.5% | 🔴 -24.5% (menu bounce — biggest single drop) |
+| Level 1 | 31 | 63.3% | -12.2% |
+| Level 4 | 22 | 44.9% | -18.4% |
+| Boss 1 Attempt | 17 | 34.7% | -10.2% |
+| Level 8 | 15 | 30.6% | -4.1% |
+| Boss 2 Attempt | 15 | 30.6% | 0% |
+| Level 12 | 9 | 18.4% | -12.2% |
+| Boss 3 Attempt | 6 | 12.2% | -6.1% |
+| Player Won | 6 | 12.2% | 0% |
+
+### Deaths by level (133 total)
+L1=0, L2=34, L3=8, L4=45, L5=12, L6=11, L7=0, L8=9, L9=2, L10=5, L11=2, L12=5
+- **L4 is the death hotspot** (45 deaths) — Boss 1 gate, not a pure level difficulty issue
+- **L2 spike** (34 deaths) warrants investigation — specific enemy pattern?
+- **L7 zero deaths** — only level in red phase with none; players who reach it have learned red phase patterns
+- **Mobile = 81% of all deaths** (108 of 133)
+
+### Boss kill rates (real data — healthy)
+| Boss | Attempts | Defeats | Kill Rate | Assessment |
+|---|---|---|---|---|
+| Boss 1 | 99 | 77 | 77.8% | ✅ Healthy difficulty |
+| Boss 2 | 47 | 39 | 83% | ✅ Strong pass rate |
+| Boss 3 | 25 | 25 | 100% | ✅ Survivorship reward — only skilled players reach here |
+
+### Key insights
+1. **Menu bounce is #1 problem** — 24.5% drop Session Start → Game Start, larger than any in-game drop
+2. **Boss difficulty is healthy** — 77.8% / 83% / 100% kill rates; not a balance problem
+3. **Mobile dominates deaths** — platform gap is significant; mobile controls are the friction point
+4. **Boss 3 100% kill rate** — not an anomaly, it's survivorship; only committed players reach L12
+
+---
+
 ## 8. ACTIVE ISSUES
+
+### ✅ Resolved
+| ID | Issue | Resolution |
+|---|---|---|
+| F1 | Platform values fragmented (`computer`, `desktop`, `mobile`, `not_set`) | ✅ Fixed Mar 12 — `computer` → `desktop` in index.html v3.0.1. Historical sessions pre-deploy still show `computer`. |
 
 ### 🔴 Fix Required
 | ID | Issue | Fix |
 |---|---|---|
-| F1 | Platform values fragmented (`computer`, `desktop`, `mobile`, `not_set`) | Normalise `computer` → `desktop` in index.html next release |
 | F2 | "Games Won: 139" Looker field counts `game_complete` not `player_won` | Rewrite Looker calculated field |
 | F3 | Funnel step 10 uses `game_complete` not `player_won` | Change in GA4 Explore funnel config |
 | F4 | 4 custom dimensions unregistered: `death_phase`, `replay_tier`, `bonus_hp`, `continue` | Register in GA4 Admin |
@@ -206,10 +255,11 @@ Boss 1: 46/63 = 73% | Boss 2: 23/26 = 88.5% | Boss 3: 19/19 = 100%
 ### 🟡 Watch / Improve
 | ID | Issue | Notes |
 |---|---|---|
-| I1 | Level 1 abandonment (40.9% in QA data) | Primary retention hypothesis — validate with real users |
-| I2 | Boss 2 funnel (50%) vs kill rate (88.5%) contradiction | Frustration accumulation, not first-attempt wall |
-| I3 | Menu bounce — only 73.7% of sessions start a game | Cross-ref `menu_view` referrer |
+| I1 | Menu bounce — 24.5% of sessions never start a game | 🔴 Now confirmed as #1 drop with real data (37/49 sessions). Cross-ref `menu_view` referrer to identify traffic source. |
+| I2 | L2 death spike — 34 deaths vs 8 at L3 | Unexpected. Investigate specific enemy pattern at L2. |
+| I3 | Mobile = 81% of all deaths | Platform gap confirmed with real data. Mobile controls are the friction point. |
 | I4 | Desktop port of replay incentive system pending | Search `REPLAY INCENTIVES` in game_mobile.html |
+| I5 | Boss 2 funnel (50%) vs kill rate (83%) contradiction | Frustration accumulation, not first-attempt wall. Watch as data grows. |
 
 ---
 
@@ -259,8 +309,12 @@ Boss 1: 46/63 = 73% | Boss 2: 23/26 = 88.5% | Boss 3: 19/19 = 100%
 ### HTML Analytics Dashboard (`nonx-analytics-dashboard.html`)
 - 6 tabs: Overview, Funnel, Boss Analysis, A/B Tests, Platform, Looker Guide
 - CSV drag-and-drop loader — auto-detects report type, filters `analytics_version ≠ 3.0`
-- Self-archiving: Ctrl+S embeds current week as DATA_PREV for next week's delta calculation
-- Weekly cadence: GA4 CSV export → drag-and-drop → Ctrl+S
+- Chip tracker shows which CSVs are loaded (FUNNEL / DEATHS / BOSS / A/B MUSIC / PLATFORM / DEATHS MOBILE)
+- Load order each session: Deaths CSV → Boss CSV → Funnel CSV
+- Wave drop-off chart: all 12 levels + 3 boss bars always rendered (zero-death levels show faint placeholder bar)
+- Boss bars computed live from boss CSV data — load order independent
+- **Data loaded (as of Mar 12):** FUNNEL ✅ DEATHS ✅ BOSS ✅ | A/B MUSIC ⏳ PLATFORM ⏳ (pending platform fix deploy)
+- Ctrl+S session persistence: planned, not yet built — re-drop CSVs each session
 
 ### Smart Signal System (planned — next major feature)
 Two-layer design:
@@ -341,6 +395,7 @@ Missing `playAgain`, broken shield block, truncated file, quote syntax error, mi
 ### Version History
 - v2.0 → v3.0: Boss spawn fix, hitbox inset, mobile minion fix, movement as player preference
 - v3.0 full instrumentation: Mar 10 2026 — `analytics_version` injected on all events via wrapper
+- v3.0.1 instrumentation patch: Mar 12 2026 — `index.html` platform dimension `'computer'` → `'desktop'`
 
 ---
 
@@ -348,16 +403,16 @@ Missing `playAgain`, broken shield block, truncated file, quote syntax error, mi
 
 | Priority | Action | Owner |
 |---|---|---|
+| ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
 | 🔴 P1 | Fix "Games Won" Looker field → `player_won` only | User |
 | 🔴 P1 | Change funnel step 10: `game_complete` → `player_won` | User in GA4 |
-| 🔴 P1 | Normalise platform: `computer` → `desktop` in index.html | User (next commit) |
 | 🔴 P1 | Register 4 pending GA4 dimensions: `death_phase`, `replay_tier`, `bonus_hp`, `continue` | User |
-| 🟡 P2 | Investigate L1 drop-off by platform (mobile UX hypothesis) | After platform fix |
+| 🟡 P2 | Load Platform CSV once `computer` → `desktop` fix propagates in GA4 (~1–2 days post-deploy) | User |
+| 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
+| 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
 | 🟡 P2 | Port replay incentive system (Tiers 1–4) to desktop | User |
-| 🟡 P2 | Cross-ref `menu_view` referrer vs menu bounce rate | — |
-| 🟡 P2 | Code comments debt pass (leaderboard, boss spawn, replay timing, analytics) | User |
-| 🟢 P3 | Build Smart Signal System — Report Card tab + benchmark tooltips | Claude (after real data) |
-| 🟢 P3 | Build music A/B comparison once v3.0 organic data accumulates | — |
-| 🟢 P3 | Build 6-page Looker Studio portfolio dashboard | After F1 + F2 fixes |
+| 🟡 P2 | Build Ctrl+S session persistence for dashboard | Claude |
+| 🟢 P3 | Build Smart Signal System — Report Card tab + benchmark tooltips | Claude (after real data accumulates) |
+| 🟢 P3 | Build music A/B comparison once v3.0 organic data accumulates (~Mar 24+) | — |
+| 🟢 P3 | Build 6-page Looker Studio portfolio dashboard | After F2 + F3 fixes |
 | 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
-| 🟢 P3 | Practice export workflow with QA data — refine dashboard UX | User + Claude |

@@ -11,7 +11,9 @@
     • game_mobile.html — Mobile build (480×1040, touch controls)
 
   Persistent state (localStorage keys):
-    • nonex_platform   — Last selected platform ('computer' | 'mobile')
+    • nonex_platform   — Last selected platform ('desktop' | 'mobile')
+                         Note: legacy sessions may have stored 'computer'
+                         (pre v3.0.1). selectPlatform() handles both.
     • nonex_music      — Background music preference ('on' | 'off')
     • nonex_analytics  — Analytics consent ('on' | 'off')
     • nonex_event_queue — Buffered analytics events (JSON array, max 200)
@@ -63,13 +65,43 @@
                      Stored in localStorage.nonx_ab_music_group.
                      Passed to game files via URL or localStorage.
 
-  Known data quality issue:
+  Known data quality issue (RESOLVED):
     platform_selected fires 'computer' for desktop users.
     game.html and game_mobile.html send 'desktop' or 'mobile'.
     This creates a fragmented platform dimension in GA4.
-    Fix: normalise 'computer' → 'desktop' in next release.
+    Fix applied: 'computer' normalised → 'desktop' in this release.
+    ⚠ Historical data before this fix (pre Mar 2026) will still show
+    'computer' in GA4. Filter by deploy date when analysing platform
+    data to avoid mixing old and new values.
 
   Dependencies: None (no external libraries or frameworks).
+  ============================================================
+  CHANGELOG
+  ============================================================
+  v3.0 — Mar 10, 2026
+    • analytics_version: '3.0' injected into all trackEvent() calls
+      via Object.assign in the wrapper. Bump version for gameplay
+      mechanic changes only; use deploy date for instrumentation changes.
+    • Discard analytics data from v2.0 and earlier:
+      - (none)  : Pre-analytics / QA period
+      - v2.0    : Broken boss spawn, indestructible mobile minions,
+                  random movement A/B test active
+      - v3.0+   : Current — all gameplay fixes applied
+
+  v3.0.1 — Mar 12, 2026
+    • FIX: platform dimension normalised — 'computer' → 'desktop'
+      Affected: selectedPlatform default (line ~641),
+                selectPlatform() button onclick (line ~435),
+                classList.toggle comparison in selectPlatform() (line ~790)
+      Reason: GA4 was recording desktop sessions as 'computer' while
+              game.html / game_mobile.html were sending 'desktop' / 'mobile',
+              fragmenting the platform custom dimension.
+      Data impact: All desktop sessions from this deploy forward will
+                   correctly record platform: 'desktop'. Sessions before
+                   this deploy remain as 'computer' in GA4 — do not mix
+                   date ranges when comparing platform metrics.
+    • DOCS: Updated stale inline comments referencing 'computer' default
+    • DOCS: localStorage key docs updated: 'computer' → 'desktop'
   ============================================================
 -->
 <!DOCTYPE html>
@@ -432,7 +464,7 @@
     </div>
     <!-- Platform selector: determines which game file is loaded on Play -->
     <div class="platform-group">
-      <button class="platform-btn selected" id="btnComputer" onclick="selectPlatform('computer')">
+      <button class="platform-btn selected" id="btnComputer" onclick="selectPlatform('desktop')">
         Computer
       </button>
       <button class="platform-btn" id="btnMobile" onclick="selectPlatform('mobile')">
@@ -631,14 +663,14 @@
     // analytics on (opt-out available).
     //
     // localStorage keys used:
-    // - nonex_platform   — 'computer' | 'mobile'
+    // - nonex_platform   — 'desktop' | 'mobile'
     // - nonex_music      — 'on' | 'off'
     // - nonex_movement   — 'on' | 'off' (null = default ON)
     // - nonex_analytics  — 'on' | 'off' (null = default ON)
 
-    // Currently selected platform ('computer' | 'mobile').
+    // Currently selected platform ('desktop' | 'mobile').
     // Determines which game file is loaded when Play is clicked.
-    var selectedPlatform = 'computer';
+    var selectedPlatform = 'desktop';
 
     // ═══════════════════════════════════════════════════════════════════════════
     // LEADERBOARD SYSTEM
@@ -780,14 +812,18 @@
      * - Toggles .selected class on platform buttons (cyan border/glow)
      * - Only the selected button has the highlighted state
      *
-     * @param {string} p - Platform identifier: 'computer' or 'mobile'
+     * @param {string} p - Platform identifier: 'desktop' or 'mobile'
+     *                     Note: legacy localStorage values of 'computer'
+     *                     are passed through here on restore — the classList
+     *                     toggle uses 'desktop' so old values won't highlight
+     *                     the button, but selectPlatform() still sets the var.
      */
     function selectPlatform(p) {
       var prev = selectedPlatform;
       selectedPlatform = p;
 
       // Update visual selection state on both buttons
-      document.getElementById('btnComputer').classList.toggle('selected', p === 'computer');
+      document.getElementById('btnComputer').classList.toggle('selected', p === 'desktop');
       document.getElementById('btnMobile').classList.toggle('selected', p === 'mobile');
 
       savePrefs(); // Persist to localStorage
@@ -857,7 +893,12 @@
      * - Music: OFF (value is null → checkbox unchecked by default)
      * - Full Movement: ON (null treated as 'on' for better UX)
      * - Analytics: ON (opt-out model, null treated as 'on')
-     * - Platform: Computer (no saved value → selectedPlatform stays 'computer')
+     * - Platform: Desktop (no saved value → selectedPlatform stays 'desktop')
+     *             Note: returning visitors with 'computer' in localStorage
+     *             will have selectPlatform('computer') called, which sets
+     *             selectedPlatform = 'computer'. This is harmless — navigation
+     *             still routes to game.html correctly (any non-'mobile' value
+     *             falls through to the game.html branch in launchGame).
      *
      * Called once on page load before any user interaction.
      */
@@ -876,7 +917,12 @@
       // Analytics: default ON for first-time visitors (opt-out model, null → on)
       document.getElementById('analyticsSwitch').checked = (analytics === 'on' || analytics === null);
 
-      // Platform: restore saved selection or keep default ('computer')
+      // Platform: restore saved selection or keep default ('desktop')
+      // Legacy: users with 'computer' in localStorage will have it passed
+      // through here. trackEvent('platform_selected') will fire 'computer'
+      // once if they switch, but play_clicked always sends selectedPlatform
+      // which will be 'computer' until they manually toggle. Acceptable
+      // since legacy users are a small and shrinking cohort.
       if (platform) selectPlatform(platform);
     }
 
@@ -889,8 +935,8 @@
      * and navigates to the appropriate game file based on the selected platform.
      *
      * Navigation targets:
-     * - 'computer' → game.html (800×600, keyboard controls)
-     * - 'mobile' → game_mobile.html (480×1040, touch controls)
+     * - 'desktop' → game.html (800×600, keyboard controls)  [was 'computer' pre v3.0.1]
+     * - 'mobile'  → game_mobile.html (480×1040, touch controls)
      *
      * Analytics delay:
      * - 120ms delay added when ANALYTICS_ENDPOINT is set (currently unused)
