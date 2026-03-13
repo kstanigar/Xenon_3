@@ -4876,15 +4876,25 @@
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
       html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
-      if (!wasReplay) {
-        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
-      } else if (level >= 2 && level <= 4) {
-        html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
-      } else if (redPhase) {
-        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
-      } else if (purplePhase) {
+      // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
+      // Universal rules regardless of session count:
+      //   Purple death (levels 9-12) → +50 HP always
+      //   Red death    (levels 5-8)  → +25 HP always
+      //   Green death  (levels 2-4)  → Resume from level (+15 HP, replay only)
+      //   Green death  (level 1)     → +15 HP
+      // Uses deathPhase NOT redPhase/purplePhase flags — redPhase stays true through
+      // purple phase, so flag-based checks always matched red first (showed +25 for purple).
+      // To revert to session-gated tiers: restore wasReplay checks and redPhase/purplePhase
+      // conditionals from git history.
+      if (deathPhase === 'purple') {
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+      } else if (deathPhase === 'red') {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+      } else if (wasReplay && level >= 2 && level <= 4) {
+        // Green phase replay: offer resume from death level
+        html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
       } else {
+        // Green phase level 1, or first-ever death
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
@@ -5001,16 +5011,19 @@
       document.getElementById('gameOver').style.display = 'none';
       document.getElementById('victory').style.display = 'none';
 
-      // Determine tier and bonus HP for analytics
+      // REPLAY INCENTIVE TIER LOGIC — SIMPLIFIED (Mar 2026)
+      // Universal: phase at death determines bonus, regardless of session count.
+      // Tier 3 = red (+25), Tier 4 = purple (+50), Tier 1/2 = green (+15).
+      // Removed !isReplaySession first-death gate for red/purple — first-time
+      // deaths in red/purple now receive full phase bonus immediately.
+      // To revert: restore 'if (!isReplaySession) { tier=1; bonusHP=15; }' as first branch.
       var tier, bonusHP;
-      if (!isReplaySession) {
-        tier = 1; bonusHP = 15;
-      } else if (deathPhase === 'purple') {
+      if (deathPhase === 'purple') {
         tier = 4; bonusHP = 50;
       } else if (deathPhase === 'red') {
         tier = 3; bonusHP = 25;
       } else {
-        tier = 1; bonusHP = 15; // green phase level 1 fallback
+        tier = 1; bonusHP = 15; // green phase — Tier 1 or Tier 2 continue
       }
 
       // Track replay — fired before reset so score/level reflect the just-finished session
@@ -5379,21 +5392,25 @@
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
         html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
 
-        // Tier-based replay buttons
-        if (!wasReplay) {
-          // Tier 1 — first visit death, any level
-          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
-        } else if (level >= 2 && level <= 4) {
-          // Tier 2 — replay death in green phase levels 2-4
-          html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
-        } else if (redPhase) {
-          // Tier 3 — replay death in red phase
-          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
-        } else if (purplePhase) {
-          // Tier 4 — replay death in purple phase
+        // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
+        // Universal rules regardless of session count:
+        //   Purple death (levels 9-12) → +50 HP always
+        //   Red death    (levels 5-8)  → +25 HP always
+        //   Green death  (levels 2-4)  → Resume from level (+15 HP, replay only)
+        //   Green death  (level 1)     → +15 HP
+        // Uses deathPhase NOT redPhase/purplePhase flags — redPhase stays true through
+        // purple phase, so flag-based checks always matched red first (showed +25 for purple).
+        // To revert to session-gated tiers: restore !wasReplay outer gate and
+        // redPhase/purplePhase conditionals from git history.
+        if (deathPhase === 'purple') {
           html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+        } else if (deathPhase === 'red') {
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+        } else if (wasReplay && level >= 2 && level <= 4) {
+          // Green phase replay: offer resume from death level
+          html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
         } else {
-          // Tier 1 fallback — replay death on level 1
+          // Green phase level 1, or first-ever death
           html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
         }
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
@@ -5641,14 +5658,15 @@
           }
           html += "<br><br>";
           html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
-          if (!wasReplay) {
-            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
-          } else if (level >= 2 && level <= 4) {
-            html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
-          } else if (redPhase) {
-            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
-          } else if (purplePhase) {
+          // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
+          // Matches main death screen logic. Uses deathPhase, not redPhase/purplePhase flags.
+          // To revert: restore !wasReplay outer gate and redPhase/purplePhase conditionals.
+          if (deathPhase === 'purple') {
             html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+          } else if (deathPhase === 'red') {
+            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+          } else if (wasReplay && level >= 2 && level <= 4) {
+            html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
           } else {
             html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
           }
@@ -6455,23 +6473,22 @@
         level = 1;
         health = CONFIG.startingHealth;
 
-        // REPLAY INCENTIVES — tiered HP bonus based on phase at death
-        // Tier 1: first visit death any level → +15 HP, start level 1
-        // Tier 2: replay death levels 2-4 → +15 HP, continue from death level
-        // Tier 3: replay death red phase → +25 HP, start level 1
-        // Tier 4: replay death purple phase → +50 HP, start level 1
+        // REPLAY HP BONUS — SIMPLIFIED (Mar 2026)
+        // Universal: phase at death determines bonus, regardless of session count.
+        //   Purple death → +50 HP | Red death → +25 HP | Green death → +15 HP
+        // Removed !isReplaySession first-death gate — first-time red/purple deaths
+        // now receive full phase bonus immediately.
+        // To revert: restore 'if (!isReplaySession) { replayBonusHP=15; }' as first branch.
         var replayBonusHP = 0;
         var replayBonusLabel = '';
-        if (!isReplaySession) {
-          replayBonusHP = 15;
-          replayBonusLabel = '+15 Replay Bonus HP!';
-        } else if (deathPhase === 'purple') {
+        if (deathPhase === 'purple') {
           replayBonusHP = 50;
           replayBonusLabel = '+50 Replay Bonus HP!';
         } else if (deathPhase === 'red') {
           replayBonusHP = 25;
           replayBonusLabel = '+25 Replay Bonus HP!';
         } else {
+          // Green phase — Tier 1 (+15 HP) or Tier 2 continue (also +15 HP)
           replayBonusHP = 15;
           replayBonusLabel = '+15 Replay Bonus HP!';
         }
