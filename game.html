@@ -603,7 +603,7 @@
           </div>
           <div class="powerup-item">
             <canvas class="pu-icon" id="puQuad" width="32" height="32"></canvas>
-            <span>Quad Laser — four simultaneous shots</span>
+            <span>Triple/Quad Laser — three or four simultaneous shots</span>
           </div>
         </div>
 
@@ -733,7 +733,7 @@
      * @returns {string} UUID string
      */
     function generateUUID() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
         var r = Math.random() * 16 | 0;
         var v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
