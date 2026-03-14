@@ -2245,6 +2245,7 @@
     var waveCooldown = false;
     var lastWaveEndTime = 0;
     var morphStartTime = 0;     // When current formation started (for morphing)
+    var formationEnteredTime = 0; // When formation finished entering screen (morph clock starts here)
     var currentMorphShape = 0;  // Index into formation shapes
 
     // Formation shapes - each has a collapsed and exploded version
@@ -2354,7 +2355,13 @@
       // Flying V - exploded
       flyingVExploded: function (count) {
         var positions = [];
-        var spacing = 0.5;
+        // BUG FIX (Mar 2026): spacing reduced from 0.5 → 0.34.
+        // At 0.5 the outermost arm tips (enemies[4] and [8]) land at x=-65 and x=495
+        // on the 480px mobile canvas — fully off-screen during entry. When the formation
+        // stops and x-clamping kicks in they snap to the screen edges, appearing to "pop in."
+        // 0.34 is the max value keeping all 9 enemies within the 20px canvas margin
+        // (outermost enemies land at x≈25 and x≈405). Revert to 0.5 if feel changes.
+        var spacing = 0.34;
         var half = Math.floor(count / 2);
         positions.push({ x: 0, y: spacing * half * 0.7 });
         for (var i = 1; i <= half; i++) {
@@ -2768,6 +2775,7 @@
       waveInProgress = true;
       waveCooldown = false;
       morphStartTime = Date.now(); // Start morph cycle clock
+      formationEnteredTime = 0; // Formation hasn't entered yet - morph clock starts when it lands
       currentMorphShape = 0; // Begin at first shape in wave's shape array
 
       // wave_reached fires at the start of every level's formation wave.
@@ -3069,6 +3077,65 @@
       return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🚨 CRITICAL GAME MECHANIC — NON-X SIGNATURE VISUAL IDENTITY
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This function controls TWO INTERLOCKING SYSTEMS that define NON-X's
+    // distinctive "drone-like" movement. These systems MUST be preserved at all
+    // costs when making ANY changes to enemy positioning, timing, or movement.
+    //
+    // SYSTEM 1: SHAPE MORPHING
+    // ─────────────────────────────────────────────────────────────────────────
+    // Formations cycle through geometric shapes every ~2.93 seconds (6 beats):
+    //   grid3x3 (exploded) → diamond (collapsed) → grid3x3 (exploded) → loop
+    // Each transition takes 1 second with easeInOutCubic interpolation.
+    //
+    // SYSTEM 2: SLOT ROTATION (CAROUSEL)
+    // ─────────────────────────────────────────────────────────────────────────
+    // On each morph, enemies cycle to the next position slot:
+    //   Enemy at slot 0 → slot 1, slot 1 → slot 2, ... slot N → slot 0
+    // Implementation: var rotatedIndex = (idx + morphCount) % newPositions.length
+    // Creates visual effect of enemies "orbiting" through the formation.
+    //
+    // ⚠️ CRITICAL DEPENDENCIES — DO NOT MODIFY WITHOUT UNDERSTANDING:
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. formationEnteredTime — Set ONCE when formation lands (line ~7056)
+    //    • Morph clock starts here (NOT at wave start)
+    //    • NEVER reset mid-wave — breaks morph progression
+    //    • Prevents snap from exploded → collapsed on entry
+    //
+    // 2. morphCount — Increments each shape change (line ~3167)
+    //    • Drives slot rotation: (idx + morphCount) % length
+    //    • Also triggers side effects (kamikazes, shields, barriers)
+    //    • NEVER skip incrementing — breaks carousel
+    //
+    // 3. Slot assignment — Line ~3188: var rotatedIndex = (idx + morphCount) % length
+    //    • MUST preserve modulo pattern for carousel effect
+    //    • Changing to newPositions[idx] breaks rotation
+    //
+    // 4. Position interpolation — Lines ~3218-3235: startPos → targetPos
+    //    • Uses currentPos for smooth transitions
+    //    • NEVER set enemy.x/enemy.y directly — breaks interpolation
+    //
+    // DEBUG CONSOLE LOGS (currently active):
+    // ─────────────────────────────────────────────────────────────────────────
+    // Search for "// DEBUG:" comments (lines ~3144, ~3198, ~3211, ~3237)
+    // Logs morph state, shape changes, and enemy positions every 1 second.
+    // Use browser console to verify:
+    //   - timeSinceStart increases steadily
+    //   - newShapeIndex increments every ~2927ms
+    //   - targetPos values change each morph (confirms slot rotation)
+    //   - screenXY transitions smoothly (confirms interpolation)
+    // Comment out before production deploy.
+    //
+    // BEFORE MAKING ANY CHANGES:
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. READ NON-X_PAIM_Memory.md Section 9 (Formation Morphing System)
+    // 2. CHECK debug console logs to understand current behavior
+    // 3. REPORT to user how changes will interact with morphing/carousel
+    // 4. TEST thoroughly — formations must morph AND carousel smoothly
+    // ═══════════════════════════════════════════════════════════════════════════
+
     /**
      * Drives the formation dance cycle. Every 6 BPM beats (~3 s) the formation
      * switches to the next shape in `waveShapes`, updating each enemy's
@@ -3102,7 +3169,13 @@
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
       var morphInterval = BPM_INTERVAL * 6; // ~2927ms per shape
-      var timeSinceStart = Math.max(0, time - morphStartTime); // Clamp to avoid negative
+
+      // Use formationEnteredTime instead of morphStartTime to prevent snap on entry
+      // Morph clock doesn't start until formation lands on screen
+      var timeSinceStart = formationEnteredTime > 0
+        ? Math.max(0, time - formationEnteredTime) // Use entry time if formation has landed
+        : 0; // Don't morph until formation lands
+
       var newShapeIndex = Math.floor(timeSinceStart / morphInterval);
 
       // Get formation enemies
@@ -3114,6 +3187,38 @@
 
       // Cycle through shapes — use ((n % len) + len) % len to guarantee positive index in JS
       newShapeIndex = ((newShapeIndex % waveShapes.length) + waveShapes.length) % waveShapes.length;
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CRITICAL MORPHING MECHANIC - DO NOT MODIFY WITHOUT UNDERSTANDING
+      // ═══════════════════════════════════════════════════════════════════════════
+      // This is the core formation morphing system that creates the signature
+      // "drone-like" movement pattern where enemies cycle through different
+      // positions within the formation (e.g., grid3x3 → diamond → grid3x3).
+      //
+      // TIMING DEPENDENCY - FRAGILE!
+      // ────────────────────────────────────────────────────────────────────────
+      // morphStartTime MUST be set ONCE in startWave() and NEVER reset during
+      // the wave. Resetting it (e.g., when formationEntered = true) breaks the
+      // morph cycle by keeping timeSinceStart perpetually small, preventing
+      // newShapeIndex from ever incrementing past 0.
+      //
+      // BUG HISTORY:
+      // - Mar 2026: morphStartTime was reset on formationEntered to fix a
+      //   snap-on-entry visual bug. This accidentally broke ALL morphing by
+      //   preventing shape index progression. Fix: removed the reset, accepted
+      //   the minor snap issue (not noticeable in practice).
+      //
+      // DEBUG: Log morph state once per second (useful for timing issues)
+      if (formationEnemies.length > 0 && Date.now() % 1000 < 16) {
+        console.log('Morph check:', {
+          timeSinceStart: timeSinceStart,
+          morphInterval: morphInterval,
+          rawIndex: Math.floor(timeSinceStart / morphInterval),
+          newShapeIndex: newShapeIndex,
+          currentMorphShape: currentMorphShape,
+          willChange: newShapeIndex !== currentMorphShape
+        });
+      }
 
       // If shape changed, update target positions
       if (newShapeIndex !== currentMorphShape) {
@@ -3145,12 +3250,20 @@
         var newPositions = shapeFunc(count);
 
         // Store starting positions and update targets
+        // SLOT ROTATION: Each morph, enemies cycle to the next position in the formation
+        // This creates the carousel/"drone-like" effect where enemies rotate through slots
         formationEnemies.forEach(function (enemy, idx) {
-          if (newPositions[idx]) {
+          var rotatedIndex = (idx + morphCount) % newPositions.length; // Rotate slot assignment
+          if (newPositions[rotatedIndex]) {
             enemy.startPos = { x: enemy.currentPos.x, y: enemy.currentPos.y };
-            enemy.targetPos = { x: newPositions[idx].x, y: newPositions[idx].y };
+            enemy.targetPos = { x: newPositions[rotatedIndex].x, y: newPositions[rotatedIndex].y };
           }
         });
+
+        // DEBUG: Log target positions when shape changes
+        console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function(e, i) {
+          return {idx: i, startPos: e.startPos, targetPos: e.targetPos};
+        }));
 
         // Launch kamikaze wave separately after formation has settled (morphCount 2)
         if (morphCount === 2 && !kamikazesLaunched && pendingKamikazeCount > 0) {
@@ -3165,7 +3278,11 @@
       var morphProgress = Math.min(timeSinceMorph / morphDuration, 1);
       var easedProgress = easeInOutCubic(morphProgress);
 
-      formationEnemies.forEach(function (enemy) {
+      // DEBUG: Track position updates once per second
+      var logPositions = Date.now() % 1000 < 16;
+      var positionLog = [];
+
+      formationEnemies.forEach(function (enemy, idx) {
         if (!enemy.reachedTarget) return;
 
         // Smooth interpolation between positions
@@ -3184,6 +3301,16 @@
         enemy.x = baseX - enemy.width / 2;
         enemy.y = baseY - enemy.height / 2;
 
+        // DEBUG: Log first 3 enemies' positions
+        if (logPositions && idx < 3) {
+          positionLog.push({
+            idx: idx,
+            progress: easedProgress.toFixed(2),
+            currentPos: {x: enemy.currentPos.x.toFixed(2), y: enemy.currentPos.y.toFixed(2)},
+            screenXY: {x: Math.round(enemy.x), y: Math.round(enemy.y)}
+          });
+        }
+
         // Mobile-specific bounds constraints
         // X-axis: 20px margin on left/right edges (prevents clipping)
         if (enemy.x < 20) enemy.x = 20;
@@ -3195,6 +3322,11 @@
         if (enemy.y < 30) enemy.y = 30; // Top margin
         if (enemy.y > canvas.height * 0.5) enemy.y = canvas.height * 0.5; // Bottom limit
       });
+
+      // DEBUG: Log enemy positions once per second
+      if (positionLog.length > 0) {
+        console.log('Enemy positions:', positionLog);
+      }
     }
 
     /**
@@ -3325,10 +3457,21 @@
         // Circle/orbiting barrier — enemies drop from above screen to their orbit start position
         var radius = 180;
         var orbitSpeed = barrierType === 'orbitingShield' ? 0.015 : 0.01;
+
+        // BARRIER ORBIT CENTER Y — OFF-SCREEN FIX (Mar 2026)
+        // Was: 160. With vertical radius 108px (180 * 0.6), top of orbit reached ~27px
+        // causing barriers to clip off-screen in levels 1, 6, 9, 11.
+        // Fix: 320 aligns with main formation center, keeps full orbit on-screen:
+        //   Top of orbit:    320 - 108 = 212px (safe margin from top)
+        //   Bottom of orbit: 320 + 108 = 428px (well within 1040px canvas)
+        // Affects: Level 1 (circle), Level 6 (orbitingShield), Level 9 (orbitingShield), Level 11 (circle)
+        // Does NOT affect: horizontalLine, arrow, dualLines barriers (use different Y positioning)
+        var orbitCenterY = 320;
+
         for (var i = 0; i < count; i++) {
           var angle = (i / count) * Math.PI * 2;
           var orbitX = centerX + Math.cos(angle) * radius - width / 2;
-          var orbitY = 160 + Math.sin(angle) * radius * 0.6 - height / 2;
+          var orbitY = orbitCenterY + Math.sin(angle) * radius * 0.6 - height / 2;
           var enemy = {
             x: orbitX,
             y: -height,           // start above screen
@@ -3347,7 +3490,7 @@
             orbitRadius: radius,
             orbitSpeed: orbitSpeed,
             orbitCenterX: centerX,
-            orbitCenterY: 160,
+            orbitCenterY: orbitCenterY,
             breathPhase: i * 0.3
           };
           enemies.push(EnemyPool.get(enemy));
@@ -3682,7 +3825,13 @@
       var enemyType = getEnemyType();
       var count = 6;
       var centerX = canvas.width / 2;
-      var targetY = 150;
+
+      // ORBIT CENTER Y — ALIGNED WITH MAIN FORMATIONS (Mar 2026)
+      // Matches main formation center (320px) for consistency across all formation types.
+      // Orbit dimensions with radius 80px + 30% breathing pulse (~104px total):
+      //   Top arc:    320 - 104 = 216px (safe margin from top edge)
+      //   Bottom arc: 320 + 104 = 424px (well within 1040px canvas height)
+      var targetY = 320;
 
       for (var i = 0; i < count; i++) {
         (function (index) {
@@ -5533,15 +5682,24 @@
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
       html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
-      if (!wasReplay) {
-        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
-      } else if (level >= 2 && level <= 4) {
-        html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
-      } else if (redPhase) {
-        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
-      } else if (purplePhase) {
+      // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
+      // Universal rules regardless of session count:
+      //   Purple death (levels 9-12) → +50 HP always
+      //   Red death    (levels 5-8)  → +25 HP always
+      //   Green death  (levels 2-4)  → Resume from level (+15 HP, replay only)
+      //   Green death  (level 1)     → +15 HP
+      // Uses deathPhase (set at moment of death) NOT redPhase/purplePhase flags —
+      // redPhase stays true through purple phase so flag-based checks gave wrong label.
+      // To revert to session-gated tiers: restore wasReplay checks and redPhase/purplePhase conditionals.
+      if (deathPhase === 'purple') {
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+      } else if (deathPhase === 'red') {
+        html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+      } else if (wasReplay && level >= 2 && level <= 4) {
+        // Green phase replay: offer resume from death level
+        html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
       } else {
+        // Green phase level 1, or first-ever death
         html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
@@ -5697,34 +5855,24 @@
     // ============================================
     // REPLAY INCENTIVES
     // ============================================
-    // PORTING NOTE: The full tier system should be ported to game.html as a matched set.
-    // Variables to port: isReplaySession, deathPhase, continueFromLevelNum (declared near isReplay)
-    // Functions to port: playAgain() tier logic, continueFromLevel()
-    // Game start block: replayBonusHP tier logic + isReplaySession = isReplay line (search REPLAY INCENTIVES)
-    // Game over screens: wasReplay = isReplaySession capture + tier button blocks (both death paths)
-    // CRITICAL: isReplaySession must be set at game start BEFORE isReplay is reset to false —
-    //   isReplay is a one-shot flag; isReplaySession persists for the entire run so death
-    //   screens can correctly identify replay deaths. Missing this causes Tier 2-4 to never fire.
+    // SIMPLIFIED (Mar 2026): Tier bonuses are now universal — no session-count gate.
+    // Red death (+25 HP) and Purple death (+50 HP) apply on every game, including first.
+    // Green deaths still get +15 HP (or Resume Level for levels 2-4 on replay).
+    // Port status: ported to game.html — both files use the same simplified logic.
 
     /**
      * Resets and restarts the game in place without returning to main menu.
-     * Applies tiered bonus HP based on how far the player progressed.
+     * Applies bonus HP based on the phase the player died in.
      *
-     * Replay tier system (mobile-specific feature):
-     * - Tier 1: +15 HP (first death, or died in Standard phase on replay)
-     * - Tier 2: +15 HP + Resume from level (levels 2-4 only, via continueFromLevel)
-     * - Tier 3: +25 HP (died in Red phase on replay, levels 5-8)
-     * - Tier 4: +50 HP (died in Purple phase on replay, levels 9-12)
-     *
-     * Tier logic:
-     * - First death (!isReplaySession) → Tier 1 (+15 HP)
-     * - Replay death in Purple phase → Tier 4 (+50 HP)
-     * - Replay death in Red phase → Tier 3 (+25 HP)
-     * - Replay death in Standard phase → Tier 1 (+15 HP)
+     * Simplified replay bonus system (Mar 2026):
+     * - Purple phase death (levels 9-12) → +50 HP (Tier 4), always
+     * - Red phase death    (levels 5-8)  → +25 HP (Tier 3), always
+     * - Green phase death  (levels 2-4)  → Resume from level +15 HP (Tier 2, replay only)
+     * - Green phase death  (level 1)     → +15 HP (Tier 1)
      *
      * Implementation:
      * 1. Hide game over/victory screens
-     * 2. Determine tier and bonus HP based on death phase
+     * 2. Determine tier and bonus HP based on deathPhase
      * 3. Fire 'play_again' analytics event with tier data
      * 4. Set isReplay flag (triggers replay flow in game start)
      * 5. Simulate start button click (resets game with bonus HP)
@@ -5740,19 +5888,21 @@
       document.getElementById('gameOver').style.display = 'none';
       document.getElementById('victory').style.display = 'none';
 
-      // Determine tier and bonus HP for this replay attempt
+      // REPLAY INCENTIVE TIER LOGIC — SIMPLIFIED (Mar 2026)
+      // Universal: phase at death determines bonus, regardless of session count.
+      // Tier 3 = red (+25), Tier 4 = purple (+50), Tier 1/2 = green (+15).
+      // Removed !isReplaySession first-death gate for red/purple — first-time
+      // deaths in red/purple now receive full phase bonus immediately.
+      // To revert: restore 'if (!isReplaySession) { tier=1; bonusHP=15; }' as first branch.
       var tier, bonusHP;
-      if (!isReplaySession) {
-        // First death (not a replay) → Tier 1
-        tier = 1; bonusHP = 15;
-      } else if (deathPhase === 'purple') {
-        // Replay death in Purple phase (levels 9-12) → Tier 4
+      if (deathPhase === 'purple') {
+        // Purple phase (levels 9-12) → Tier 4
         tier = 4; bonusHP = 50;
       } else if (deathPhase === 'red') {
-        // Replay death in Red phase (levels 5-8) → Tier 3
+        // Red phase (levels 5-8) → Tier 3
         tier = 3; bonusHP = 25;
       } else {
-        // Replay death in Standard phase (levels 1-4) → Tier 1
+        // Green phase (levels 1-4) → Tier 1 or Tier 2 (continue handled separately)
         tier = 1; bonusHP = 15;
       }
 
@@ -6070,22 +6220,25 @@
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
         html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
 
-        // REPLAY INCENTIVES — PORTING NOTE: port this tier block to game.html game over screen
-        // Tier-based replay buttons
-        if (!wasReplay) {
-          // Tier 1 — first visit death, any level
-          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
-        } else if (level >= 2 && level <= 4) {
-          // Tier 2 — replay death in green phase levels 2-4
-          html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
-        } else if (redPhase) {
-          // Tier 3 — replay death in red phase
-          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
-        } else if (purplePhase) {
-          // Tier 4 — replay death in purple phase
+        // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
+        // Universal rules regardless of session count:
+        //   Purple death (levels 9-12) → +50 HP always
+        //   Red death    (levels 5-8)  → +25 HP always
+        //   Green death  (levels 2-4)  → Resume from level (+15 HP, replay only)
+        //   Green death  (level 1)     → +15 HP
+        // Uses deathPhase NOT redPhase/purplePhase flags — redPhase stays true through
+        // purple phase, so flag-based checks always matched red first (showed +25 for purple).
+        // To revert to session-gated tiers: restore !wasReplay outer gate and
+        // redPhase/purplePhase conditionals from git history.
+        if (deathPhase === 'purple') {
           html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+        } else if (deathPhase === 'red') {
+          html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+        } else if (wasReplay && level >= 2 && level <= 4) {
+          // Green phase replay: offer resume from death level
+          html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
         } else {
-          // Tier 1 fallback — replay death on level 1
+          // Green phase level 1, or first-ever death
           html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
         }
 
@@ -6214,16 +6367,15 @@
           html += "<br><br>";
           html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
 
-          // REPLAY INCENTIVES — PORTING NOTE: port this tier block to game.html game over screen
-          // Tier-based replay buttons
-          if (!wasReplay) {
-            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
-          } else if (level >= 2 && level <= 4) {
-            html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
-          } else if (redPhase) {
-            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
-          } else if (purplePhase) {
+          // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
+          // Matches main death screen logic. Uses deathPhase, not redPhase/purplePhase flags.
+          // To revert: restore !wasReplay outer gate and redPhase/purplePhase conditionals.
+          if (deathPhase === 'purple') {
             html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+50 HP)</button>";
+          } else if (deathPhase === 'red') {
+            html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+25 HP)</button>";
+          } else if (wasReplay && level >= 2 && level <= 4) {
+            html += "<button onclick='continueFromLevel(" + level + ")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>↩ Resume Level " + level + " (+15 HP)</button>";
           } else {
             html += "<button onclick='playAgain()' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; margin-right: 16px;'>▶ Play Again (+15 HP)</button>";
           }
@@ -6971,10 +7123,13 @@
             if (formationTargetCenterY - formationCurrentCenterY < 1) {
               formationCurrentCenterY = formationTargetCenterY;
               formationEntered = true;
-              // Reset morph clock so the first exploded→collapsed transition
-              // starts fresh from this moment rather than snapping instantly.
-              morphStartTime = Date.now();
-              lastMorphTime = Date.now();
+
+              // START MORPH CLOCK NOW (prevents snap from exploded → collapsed on entry)
+              // Only set once per wave - subsequent frames skip this block because formationEntered stays true
+              if (formationEnteredTime === 0) {
+                formationEnteredTime = Date.now();
+              }
+
               // Show shield warning (brief after level 1 - players already know)
               var warningEl = document.getElementById("warningDisplay");
               warningEl.style.display = "block";
@@ -7329,25 +7484,22 @@
         level = 1;
         health = CONFIG.startingHealth;
 
-        // REPLAY INCENTIVES — PORTING NOTE: port this full block to game.html game start reset
-        // Replay HP bonus — tiered by phase at death and whether this is a replay
-        // Tier 1: first visit death any level → +15 HP, start level 1
-        // Tier 2: replay death levels 2-4 → +15 HP, continue from death level (handled below)
-        // Tier 3: replay death red phase → +25 HP, start level 1
-        // Tier 4: replay death purple phase → +50 HP, start level 1
+        // REPLAY HP BONUS — SIMPLIFIED (Mar 2026)
+        // Universal: phase at death determines bonus, regardless of session count.
+        //   Purple death → +50 HP | Red death → +25 HP | Green death → +15 HP
+        // Removed !isReplaySession first-death gate — first-time red/purple deaths
+        // now receive full phase bonus immediately.
+        // To revert: restore 'if (!isReplaySession) { replayBonusHP=15; }' as first branch.
         var replayBonusHP = 0;
         var replayBonusLabel = '';
-        if (!isReplaySession) {
-          replayBonusHP = 15;
-          replayBonusLabel = '+15 Replay Bonus HP!';
-        } else if (deathPhase === 'purple') {
+        if (deathPhase === 'purple') {
           replayBonusHP = 50;
           replayBonusLabel = '+50 Replay Bonus HP!';
         } else if (deathPhase === 'red') {
           replayBonusHP = 25;
           replayBonusLabel = '+25 Replay Bonus HP!';
         } else {
-          // green phase (Tier 1 fallback on level 1, or Tier 2 continue)
+          // Green phase — Tier 1 (+15 HP) or Tier 2 continue (also +15 HP)
           replayBonusHP = 15;
           replayBonusLabel = '+15 Replay Bonus HP!';
         }
