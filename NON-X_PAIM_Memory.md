@@ -380,7 +380,13 @@ Delta: ↑ green = improving | ↓ red = worsening | → grey = stable | ~ yello
 6. **Data sharing:** Screenshots + CSV exports (no direct GA4/Looker access possible).
 7. **Claude rule:** Never recommend destructive operations without full dependency trace.
 8. **Claude rule:** Never diagnose game over bugs without asking level + score + context first.
-9. **Practice runs:** QA data is valid for workflow practice — builds readiness for real data launch.
+9. **Claude rule:** When fixing positioning bugs, ALWAYS clarify which enemy/entity type needs adjustment:
+   - **Main Formation** (slot rotation formations: grid, diamond, V, circle) - levels 1-12, targetY in `spawnMorphingFormation()`
+   - **Barriers** (circle, orbitingShield, horizontalLine, arrow, dualLines) - separate positioning per type
+   - **Legacy Formations** (spiral, pincer, sine wave) - reserved for pink levels, separate positioning
+   - **Boss/Kamikazes/Boss Minions** - separate positioning systems
+   - Do NOT assume "formation" means main formation - verify which entity type from screenshots/context
+10. **Practice runs:** QA data is valid for workflow practice — builds readiness for real data launch.
 
 ---
 
@@ -392,10 +398,36 @@ Deleting Firebase collection → submit form stopped appearing. Root cause: `add
 ### Mobile Fixes (all resolved)
 Missing `playAgain`, broken shield block, truncated file, quote syntax error, missing survey/blink functions — all fixed. `buildSurveyHTML` replaced with slide-down banner — now banned in CI.
 
+### Barrier Positioning Bug (~30 min confusion, March 14, 2026)
+User reported enemies off-screen in levels 1, 6, 9 (screenshots). Claude initially misidentified as main formation positioning issue and attempted to adjust `targetY` in `spawnMorphingFormation()` multiple times. User clarified the highlighted enemies were **barriers** (circular/orbiting obstacles), NOT main formation enemies. Root cause: Barrier orbit center at y=160 was too high. Fix: moved to y=320. **Lesson:** Always clarify which enemy/entity type (main formation vs barriers vs legacy formations) before adjusting positioning - added as Workflow Rule #9.
+
 ### Version History
 - v2.0 → v3.0: Boss spawn fix, hitbox inset, mobile minion fix, movement as player preference
 - v3.0 full instrumentation: Mar 10 2026 — `analytics_version` injected on all events via wrapper
 - v3.0.1 instrumentation patch: Mar 12 2026 — `index.html` platform dimension `'computer'` → `'desktop'`
+- Mar 14 2026 — mobile barrier positioning fix: circular/orbiting barriers moved from y=160 → y=320
+
+### Barrier Orbit Positioning Fix (Mar 14, 2026) — Mobile Only
+**Problem:** Circular and orbiting shield barriers (levels 1, 6, 9, 11) were positioned too high on screen. Orbit center at y=160 with vertical radius 108px caused top of orbit to reach y≈27px, clipping barriers off-screen at the top edge. User screenshots showed 2-4 barriers clearly above visible area.
+
+**Root cause confusion:** Initially misidentified as main formation positioning issue. After clarification, identified as separate barrier orbit positioning bug affecting only `'circle'` and `'orbitingShield'` barrier types.
+
+**Fix:** Moved barrier orbit center from y=160 → y=320 in `spawnBarrier()` function (game_mobile.html line ~3331).
+- Aligns barrier orbit with main formation center (both at y=320)
+- Top of orbit: 320 - 108 = 212px (safe margin)
+- Bottom of orbit: 320 + 108 = 428px (well within 1040px canvas)
+
+**Affected levels:**
+- Level 1 (Green): `'circle'` barrier (5 barriers) - orbit moved down 160px
+- Level 6 (Red): `'orbitingShield'` barrier (6 barriers) - orbit moved down 160px
+- Level 9 (Purple): `'orbitingShield'` barrier (8 barriers) - orbit moved down 160px
+- Level 11 (Purple): `'circle'` barrier (8 barriers) - orbit moved down 160px
+
+**Unaffected levels:** Levels 2, 4, 8, 10, 12 use different barrier types (`horizontalLine`, `arrow`, `dualLines`) with different Y positioning (y=468px), unchanged by this fix.
+
+**Code location:** game_mobile.html lines ~3324-3351 (spawnBarrier function, circle/orbitingShield case)
+
+**To revert:** Change `var orbitCenterY = 320;` back to `160` (both inline calculation and enemy property)
 
 ---
 

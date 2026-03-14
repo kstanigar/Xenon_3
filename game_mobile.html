@@ -3325,10 +3325,21 @@
         // Circle/orbiting barrier — enemies drop from above screen to their orbit start position
         var radius = 180;
         var orbitSpeed = barrierType === 'orbitingShield' ? 0.015 : 0.01;
+
+        // BARRIER ORBIT CENTER Y — OFF-SCREEN FIX (Mar 2026)
+        // Was: 160. With vertical radius 108px (180 * 0.6), top of orbit reached ~27px
+        // causing barriers to clip off-screen in levels 1, 6, 9, 11.
+        // Fix: 320 aligns with main formation center, keeps full orbit on-screen:
+        //   Top of orbit:    320 - 108 = 212px (safe margin from top)
+        //   Bottom of orbit: 320 + 108 = 428px (well within 1040px canvas)
+        // Affects: Level 1 (circle), Level 6 (orbitingShield), Level 9 (orbitingShield), Level 11 (circle)
+        // Does NOT affect: horizontalLine, arrow, dualLines barriers (use different Y positioning)
+        var orbitCenterY = 320;
+
         for (var i = 0; i < count; i++) {
           var angle = (i / count) * Math.PI * 2;
           var orbitX = centerX + Math.cos(angle) * radius - width / 2;
-          var orbitY = 160 + Math.sin(angle) * radius * 0.6 - height / 2;
+          var orbitY = orbitCenterY + Math.sin(angle) * radius * 0.6 - height / 2;
           var enemy = {
             x: orbitX,
             y: -height,           // start above screen
@@ -3347,7 +3358,7 @@
             orbitRadius: radius,
             orbitSpeed: orbitSpeed,
             orbitCenterX: centerX,
-            orbitCenterY: 160,
+            orbitCenterY: orbitCenterY,
             breathPhase: i * 0.3
           };
           enemies.push(EnemyPool.get(enemy));
@@ -3682,7 +3693,13 @@
       var enemyType = getEnemyType();
       var count = 6;
       var centerX = canvas.width / 2;
-      var targetY = 150;
+
+      // ORBIT CENTER Y — ALIGNED WITH MAIN FORMATIONS (Mar 2026)
+      // Matches main formation center (320px) for consistency across all formation types.
+      // Orbit dimensions with radius 80px + 30% breathing pulse (~104px total):
+      //   Top arc:    320 - 104 = 216px (safe margin from top edge)
+      //   Bottom arc: 320 + 104 = 424px (well within 1040px canvas height)
+      var targetY = 320;
 
       for (var i = 0; i < count; i++) {
         (function (index) {
