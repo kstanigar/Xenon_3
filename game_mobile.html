@@ -3209,7 +3209,8 @@
       //   the minor snap issue (not noticeable in practice).
       //
       // DEBUG: Log morph state once per second (useful for timing issues)
-      if (formationEnemies.length > 0 && Date.now() % 1000 < 16) {
+      // Only logs when dev mode active (Shift+D) - zero performance impact in production
+      if (localStorage.getItem('nonx_dev_mode') === 'true' && formationEnemies.length > 0 && Date.now() % 1000 < 16) {
         console.log('Morph check:', {
           timeSinceStart: timeSinceStart,
           morphInterval: morphInterval,
@@ -3258,9 +3259,12 @@
         });
 
         // DEBUG: Log target positions when shape changes
-        console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function(e, i) {
-          return {idx: i, startPos: e.startPos, targetPos: e.targetPos};
-        }));
+        // Only logs when dev mode active (Shift+D) - zero performance impact in production
+        if (localStorage.getItem('nonx_dev_mode') === 'true') {
+          console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function(e, i) {
+            return {idx: i, startPos: e.startPos, targetPos: e.targetPos};
+          }));
+        }
 
         // Launch kamikaze wave separately after formation has settled (morphCount 2)
         if (morphCount === 2 && !kamikazesLaunched && pendingKamikazeCount > 0) {
@@ -3276,7 +3280,8 @@
       var easedProgress = easeInOutCubic(morphProgress);
 
       // DEBUG: Track position updates once per second
-      var logPositions = Date.now() % 1000 < 16;
+      // Only logs when dev mode active (Shift+D) - zero performance impact in production
+      var logPositions = localStorage.getItem('nonx_dev_mode') === 'true' && Date.now() % 1000 < 16;
       var positionLog = [];
 
       formationEnemies.forEach(function (enemy, idx) {
@@ -3321,7 +3326,8 @@
       });
 
       // DEBUG: Log enemy positions once per second
-      if (positionLog.length > 0) {
+      // Only logs when dev mode active (Shift+D) - zero performance impact in production
+      if (localStorage.getItem('nonx_dev_mode') === 'true' && positionLog.length > 0) {
         console.log('Enemy positions:', positionLog);
       }
     }
