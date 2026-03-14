@@ -310,7 +310,13 @@ print('draw function:', 'function draw(' in c)
 - `game_mobile.html` → ~7512 lines, brace diff 0, draw function present
 
 ### CI required functions (both files)
+**Core functions (original):**
 `startFromCard`, `playAgain`, `showSurveyBanner`, `collapseSurveyBanner`, `submitSurvey`, `dismissSurvey`, `playerTakeDamage`, `shouldShowSurvey`, `buildBugButtonHTML`, `openBugReport`, `submitBugReport`, `fireEvent`, `if (playerBlinking) return`, `game_complete`, `'outcome': 'victory'`, `'outcome': 'death'`, `'outcome': 'abandoned'`, `bug_report_submitted`
+
+**Added Mar 2026 session 5:**
+`generateUUID`, `getPlayerId`, `PLAYER_ID`, `updateMorphingFormation`, `spawnMorphingFormation`, `formationEnteredTime`, `spawnBarrier`, `updateBarriers`, `shieldFlashFrames`, `shieldWobble`
+
+**Total checks:** 27 required functions + 10 new checks = 37 checks per file
 
 **Banned patterns (both files):** `buildSurveyHTML`, `'phase'.*'standard'`
 
@@ -861,6 +867,22 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 14 2026 (session 4) — mobile barrier positioning fix: circular/orbiting barriers moved from y=160 → y=320, spiral formation aligned to y=320
 - Mar 14 2026 (session 5) — barrier spawn timing fix: barriers now spawn at formation landing (t=2.3s) instead of first morph (t=5.2s), reducing action lull from 7-9s to 2.3s (both files)
 - Mar 14 2026 (session 5) — added barriers to levels 3, 5, 7: horizontalLine (L3, 5 count), circle (L5, 6 count), orbitingShield (L7, 7 count) — all 12 levels now have barriers (both files)
+- Mar 14 2026 (session 5) — updated CI integrity checks: added 10 new function checks (Player ID system, formation morphing, barriers, shield feedback) — total 37 checks per file
+
+### CI/CD Integrity Check Update (Mar 14, 2026 session 5)
+**Purpose:** Ensure critical new functions added in recent sessions are validated in CI pipeline.
+
+**New checks added (10 total):**
+- **Player ID System:** `generateUUID`, `getPlayerId`, `PLAYER_ID` (leaderboard security)
+- **Formation Morphing:** `updateMorphingFormation`, `spawnMorphingFormation`, `formationEnteredTime` (signature mechanic)
+- **Barrier System:** `spawnBarrier`, `updateBarriers` (all 12 levels use barriers)
+- **Shield Visual Feedback:** `shieldFlashFrames`, `shieldWobble` (player feedback)
+
+**File:** `.github/workflows/integrity-check.yml`
+
+**Result:** CI now validates 37 required functions per file (was 27), ensuring recent features are tested on every PR.
+
+---
 
 ### Barrier Addition to Levels 3, 5, 7 (Mar 14, 2026 session 5) — Both Files
 **Purpose:** Complete barrier coverage across all 12 levels for consistent difficulty progression.

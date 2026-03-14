@@ -44,6 +44,25 @@ jobs:
           check "'outcome': 'death'"
           check "'outcome': 'abandoned'"
           check "bug_report_submitted"
+
+          # Player ID System (leaderboard security - Mar 2026)
+          check "function generateUUID"
+          check "function getPlayerId"
+          check "var PLAYER_ID"
+
+          # Formation Morphing System (signature mechanic - Mar 2026)
+          check "function updateMorphingFormation"
+          check "function spawnMorphingFormation"
+          check "var formationEnteredTime"
+
+          # Barrier System (all 12 levels - Mar 2026)
+          check "function spawnBarrier"
+          check "function updateBarriers"
+
+          # Shield Visual Feedback (player feedback - Mar 2026)
+          check "shieldFlashFrames"
+          check "shieldWobble"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -99,6 +118,25 @@ jobs:
           check "'outcome': 'death'"
           check "'outcome': 'abandoned'"
           check "bug_report_submitted"
+
+          # Player ID System (leaderboard security - Mar 2026)
+          check "function generateUUID"
+          check "function getPlayerId"
+          check "var PLAYER_ID"
+
+          # Formation Morphing System (signature mechanic - Mar 2026)
+          check "function updateMorphingFormation"
+          check "function spawnMorphingFormation"
+          check "var formationEnteredTime"
+
+          # Barrier System (all 12 levels - Mar 2026)
+          check "function spawnBarrier"
+          check "function updateBarriers"
+
+          # Shield Visual Feedback (player feedback - Mar 2026)
+          check "shieldFlashFrames"
+          check "shieldWobble"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
