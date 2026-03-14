@@ -2673,7 +2673,7 @@
       3: {
         enemyType: 'enemy3',
         waves: [
-          { count: 10, kamikazes: 2, shapes: ['circleExploded', 'circle'], barrier: null }
+          { count: 10, kamikazes: 2, shapes: ['circleExploded', 'circle'], barrier: 'horizontalLine', barrierCount: 5 }
         ]
       },
       4: {
@@ -2685,7 +2685,7 @@
       5: {
         enemyType: 'enemy1_red',
         waves: [
-          { count: 16, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: null }
+          { count: 16, kamikazes: 2, shapes: ['grid4x4Exploded', 'grid4x4'], barrier: 'circle', barrierCount: 6 }
         ]
       },
       6: {
@@ -2697,7 +2697,7 @@
       7: {
         enemyType: 'enemy3_red',
         waves: [
-          { count: 10, kamikazes: 3, shapes: ['doubleVExploded', 'doubleV'], barrier: null }
+          { count: 10, kamikazes: 3, shapes: ['doubleVExploded', 'doubleV'], barrier: 'orbitingShield', barrierCount: 7 }
         ]
       },
       8: {
@@ -3231,14 +3231,11 @@
           document.getElementById("warningDisplay").style.display = "none";
         }
 
-        // Spawn barrier after first collapse (morphCount 1 = collapsed state)
-        if (morphCount === 1 && !barrierSpawned) {
-          var levelData = LEVEL_WAVES[level];
-          var waveData = levelData.waves[currentWave - 1];
-          if (waveData.barrier) {
-            spawnBarrier(waveData.barrier, waveData.barrierCount || 5);
-          }
-        }
+        // BARRIER SPAWN MOVED — PACING FIX (Mar 2026)
+        // Barriers now spawn at formation landing (see formationEntered block below)
+        // instead of first morph. This reduces the action lull from 7-9s to 2.3s.
+        // Old trigger was: morphCount === 1 (t=5.2s from wave start)
+        // New trigger is: formationEntered = true (t=2.3s from wave start)
 
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
@@ -7128,6 +7125,32 @@
               // Only set once per wave - subsequent frames skip this block because formationEntered stays true
               if (formationEnteredTime === 0) {
                 formationEnteredTime = Date.now();
+              }
+
+              // ═══════════════════════════════════════════════════════════════════════
+              // BARRIER SPAWN — PACING FIX (Mar 2026)
+              // ═══════════════════════════════════════════════════════════════════════
+              // Spawn barriers immediately when formation lands (t=2.3s from wave start)
+              // instead of waiting for first morph (t=5.2s).
+              //
+              // BEFORE: Formation lands → Wait 2.9s → Formation morphs → Barriers spawn
+              //         Total lull: 7-9 seconds before barriers fully on-screen
+              //
+              // AFTER:  Formation lands → Barriers spawn immediately
+              //         Total lull: 2.3 seconds (barriers start descending right away)
+              //
+              // Barriers still descend smoothly from off-screen (1.8-4.2s descent time
+              // depending on type), so player sees continuous action during the lull.
+              //
+              // REVERT: Move this block back to morphCount === 1 trigger (line ~3235)
+              // ═══════════════════════════════════════════════════════════════════════
+              if (!barrierSpawned) {
+                var levelData = LEVEL_WAVES[level];
+                var waveData = levelData.waves[currentWave - 1];
+                if (waveData && waveData.barrier) {
+                  spawnBarrier(waveData.barrier, waveData.barrierCount || 5);
+                  barrierSpawned = true;
+                }
               }
 
               // Show shield warning (brief after level 1 - players already know)

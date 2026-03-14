@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 13, 2026 (session 2)_
+_Last updated: March 14, 2026 (session 4)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -36,11 +36,253 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - Power-ups: Health, Shield, Double Laser, Triple Laser, Quad Laser
 - Win condition: defeat all 3 bosses → `player_won` fires
 
-### Upcoming gameplay additions (not yet implemented)
-- Pink levels 13–15 + "impossible boss" / "forever play" mode
-- Red and Purple bosses need difficulty increase
-- Red level 7 needs difficulty increase
-- Note: legacy formation movement patterns for pink phase are **already implemented** in the codebase (marked as reserved) — they will be activated by boss scripting in the pink phase expansion
+### Entity Type Taxonomy (Universal Naming Convention)
+**CRITICAL:** Always use these exact terms when discussing positioning, spawning, or movement bugs. See Workflow Rule #9.
+
+| Entity Type | Description | Spawn Function | Active Levels | Current Y Position |
+|---|---|---|---|---|
+| **Main Formation** | Slot rotation morphing formations (grid, diamond, V, circle) | `spawnMorphingFormation()` | 1-12 | 320 |
+| **Barriers** | Non-shooting obstacles (circle, orbitingShield, horizontalLine, arrow, dualLines) | `spawnBarrier()` | 1,2,4,6,8,9,10,11,12 | 320 (circle/orbit), 468 (others) |
+| **Legacy Formations** | Reserved enemy formations (spiral, pincer, sine wave) | `spawnSpiralFormation()`, `spawnPincerFormation()`, `spawnSineWaveFormation()` | Reserved for pink 13-15 | 320 (ready, dormant) |
+| **Boss** | 3 main bosses (green, red, purple) + future pink boss | `spawnBoss()` | 4, 8, 12 (+ future 15) | 245 (settle point) |
+| **Boss Minions** | Orbiting enemies around boss | `spawnBossMinion()` | During boss fights | Orbit around boss |
+| **Kamikazes** | Enemies that dive at player | `spawnKamikaze()` | Various levels | 320 (center) |
+
+**Key distinctions:**
+- **Barriers** = obstacles that don't shoot
+- **Spiral Formation** = legacy enemy formation (6 enemies in orbital pattern, shoots at player)
+- **Main Formation** = current slot rotation system (levels 1-12)
+
+### Entity Entry Timing Reference (Both Files)
+
+**Formation Entry Mechanics:**
+- Formation starts at y=-200 (off-screen above)
+- Descends using lerp: `formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * 0.045`
+- Lands at y=320 (mobile) or y=300 (desktop)
+- Entry time: **~2.3 seconds** (136 frames @ 60 FPS)
+
+**Morph System:**
+- Morph clock starts when `formationEntered = true` (formation lands)
+- Morph interval: 2927ms (6 beats @ 123 BPM) = **~2.93 seconds**
+- Morphs trigger at: morphCount === 1, 2, 3, etc.
+
+**Timeline from Wave Start (CURRENT - After Barrier Timing Fix):**
+
+| Time | Main Formation | Barriers | Kamikazes | Event |
+|---|---|---|---|---|
+| **t=0s** | Spawns, descending | — | — | `startWave()` called |
+| **t=2.3s** | **Lands** | **Spawn, start descending** | — | `formationEntered = true` |
+| **t=4-6.5s** | Static (exploded) | **Fully on-screen** | — | Barriers reach orbit/positions |
+| **t=5.2s** | **Collapses** (first morph) | Active | — | `morphCount = 1` |
+| **t=8.2s** | Morphing | Active | **Launch** | `morphCount = 2` |
+| **t=11.1s** | Morphing | Active | Active | `morphCount = 3`, shield warning hides |
+
+**Per-Level Barrier & Kamikaze Counts:**
+
+| Level | Phase | Formation Count | Barrier Type | Barrier Count | Kamikaze Count |
+|---|---|---|---|---|---|
+| 1 | Green | 9 | circle | 5 | 2 |
+| 2 | Green | 9 | horizontalLine | 5 | 2 |
+| 3 | Green | 10 | horizontalLine | 5 | 2 |
+| 4 | Green | 9 | arrow | 5 | 2 |
+| 5 | Red | 16 | circle | 6 | 2 |
+| 6 | Red | 11 | orbitingShield | 6 | 2 |
+| 7 | Red | 10 | orbitingShield | 7 | 3 |
+| 8 | Red | 10 | dualLines | 8 | 3 |
+| 9 | Purple | 16 | orbitingShield | 8 | 3 |
+| 10 | Purple | 17 | dualLines | 10 | 4 |
+| 11 | Purple | 19 | circle | 8 | 4 |
+| 12 | Purple | 22 | arrow | 8 | 5 |
+
+✅ All levels now have barriers (added to levels 3, 5, 7 in Mar 2026 session 5)
+
+---
+
+## 1b. PLANNED FEATURES & ROADMAP
+
+### P1 — High Priority (Next Sprint)
+
+**1. Add Barriers to Levels 3, 5, 7** ✅ **COMPLETED (Mar 14, 2026 session 5)**
+- Status: ✅ Implemented
+- Implementation: Updated LEVEL_WAVES config in both game.html and game_mobile.html
+- Barrier types added:
+  - Level 3: horizontalLine (5 barriers) - Simple pattern for green phase
+  - Level 5: circle (6 barriers) - Moderate challenge for red phase start
+  - Level 7: orbitingShield (7 barriers) - Higher difficulty for mid-red phase
+- Files modified: game.html (lines ~2420, 2432, 2444), game_mobile.html (lines ~2676, 2688, 2700)
+- Result: All 12 levels now have barrier formations
+
+**2. Horizontal Movement Bonus (1.5x Score Multiplier)**
+- Purpose: Incentivize horizontal-only movement, create skill-based scoring tier
+- Implementation:
+  - Check `localStorage.nonx_movement_preference === 'horizontal'`
+  - Apply 1.5x multiplier to all score events (enemy kills, powerups, boss defeats)
+  - Display indicator: "BONUS MODE: +50% Score" in UI during gameplay
+  - Track in analytics: `score_multiplier` parameter (1.0 or 1.5)
+- Analytics impact: New dimension `score_multiplier`, update `game_start` event
+- Version bump: analytics_version 3.0 → 3.1 (gameplay mechanic change)
+
+**3. Check Level 12 for Off-Screen Enemies**
+- Action: Visual inspection + debug console logs
+- Check: Main formation, barriers, boss minions, kamikazes
+- Platform: Both desktop and mobile
+- Report: Screenshot any off-screen entities with Y coordinates
+
+**4. Increase Boss 2 & Boss 3 Difficulty**
+- Current issue: Boss 2 kill rate 83%, Boss 3 kill rate 100% (too easy for late game)
+- Target: Boss 2 ~70-75%, Boss 3 ~80-85%
+- Implementation options (needs user decision):
+  - Increase boss health (HP multiplier)
+  - Increase bullet speed (faster projectiles)
+  - Increase bullet frequency (more shots per volley)
+  - Add more minions
+  - Faster shield cycling (less vulnerable time)
+  - Reduce shield vulnerability window
+- Analytics impact: Boss kill rates should drop; track via `boss_defeated` / `boss_attempt` ratio
+
+### P2 — Medium Priority (Future Sprint)
+
+**5. Adaptive Difficulty Control System**
+- Purpose: AI-controlled difficulty adjustment based on player performance
+- Status: Design phase — needs architecture discussion
+- Implementation approach (3 options):
+
+  **Option A: Per-Level Difficulty Multipliers**
+  ```javascript
+  var DIFFICULTY_CONFIG = {
+    enemyCount: 1.0,      // Multiplier for enemy spawn count
+    bulletSpeed: 1.0,     // Multiplier for enemy bullet speed
+    shieldStrength: 1.0,  // Multiplier for enemy shield hits
+    playerDamage: 1.0,    // Multiplier for damage dealt to player
+    healthDropRate: 1.0   // Multiplier for health powerup spawn chance
+  };
+  ```
+  - AI adjusts multipliers each level based on player death rate, time to complete, health remaining
+  - Values range: 0.7 (easier) to 1.3 (harder)
+  - Stored in localStorage, persists across sessions
+
+  **Option B: Phase-Based Difficulty Scaling**
+  - Separate configs for green/red/purple phases
+  - AI adjusts entire phase difficulty based on completion rate
+  - Simpler than per-level, less granular
+
+  **Option C: Real-Time Dynamic Adjustment**
+  - AI monitors player health, deaths, time alive
+  - Adjusts difficulty mid-level (reduce enemy spawns if player struggling)
+  - Most complex, requires careful tuning to avoid feeling "fake"
+
+- Analytics impact: New events `difficulty_adjusted` with parameters: `adjustment_type`, `old_value`, `new_value`, `trigger_reason`
+- User testing phase: Manual adjustment first, observe analytics, then enable AI
+- Version bump: analytics_version 3.1 → 3.2 (major mechanic change)
+
+**6. Pink Levels — Infinite Mode (Separate HTML Page)**
+- Purpose: Endless gameplay for skilled players, easter egg content
+- Implementation:
+  - New file: `game_pink.html` (separate page to reduce computing load on main game)
+  - Structure: Levels 13-15 loop infinitely (13 → 14 → 15 → 13...)
+  - No level notifications: Continuous play, no "Level 14" popup
+  - Pink boss at level 15: Defeating boss loops back to level 13 (seamless)
+  - Unlock condition: Defeat purple boss (level 12) in main game
+  - Entry point: Victory screen shows "Continue to Pink Mode" button
+  - Legacy formations active: Spiral, pincer, sine wave patterns
+  - Difficulty: Hardest in game, bullet speed +40% over purple phase
+  - Exit condition: Player death only (no victory screen, just leaderboard submit)
+
+- Analytics impact:
+  - New page: `game_pink.html` → new `page_location` value
+  - New events: `pink_mode_entered`, `pink_loop_completed` (each time player defeats pink boss)
+  - Track: `pink_loops_completed` (how many times player defeated pink boss)
+  - Track: `pink_session_duration`, `pink_max_score`
+  - Leaderboard: Separate pink mode leaderboard (top score in pink mode only)
+
+- Files to create:
+  - `game_pink.html` (clone game_mobile.html or game.html, modify wave loop logic)
+  - Update `game.html` and `game_mobile.html` victory screens (add pink mode button)
+
+---
+
+## 1c. ANALYTICS IMPACT SUMMARY
+
+### Version Bumps Required
+
+| Feature | Version Change | Reason |
+|---|---|---|
+| Barriers added to L3, L5, L7 | 3.0 → 3.0 (no bump) | Difficulty tweak, not mechanic change |
+| Horizontal movement bonus (1.5x score) | 3.0 → 3.1 | New scoring mechanic |
+| Boss 2 & 3 difficulty increase | 3.1 → 3.1 (no bump) | Balance change, not mechanic change |
+| Adaptive difficulty system | 3.1 → 3.2 | Major mechanic change (AI-controlled) |
+| Pink mode infinite loop | 3.2 → 3.3 | New game mode, separate page |
+
+### New Events Required
+
+| Event Name | Trigger | Key Parameters | Version |
+|---|---|---|---|
+| `difficulty_adjusted` | AI changes difficulty mid-session | `adjustment_type`, `old_value`, `new_value`, `trigger_reason`, `level_number` | 3.2+ |
+| `pink_mode_entered` | Player clicks "Continue to Pink Mode" on victory screen | `score`, `session_duration_seconds` | 3.3+ |
+| `pink_loop_completed` | Player defeats pink boss, loops back to L13 | `loops_completed`, `score`, `session_duration_seconds` | 3.3+ |
+| `pink_mode_death` | Player dies in pink mode | `loops_completed`, `level_reached`, `score`, `session_duration_seconds` | 3.3+ |
+
+### New Custom Dimensions Required
+
+| Parameter Name | Type | Source Events | Purpose |
+|---|---|---|---|
+| `score_multiplier` | Dimension (text) | All score-generating events | Track 1.0 (full movement) vs 1.5 (horizontal-only) |
+| `adjustment_type` | Dimension (text) | `difficulty_adjusted` | What was adjusted (enemyCount, bulletSpeed, etc.) |
+| `old_value` | Metric (number) | `difficulty_adjusted` | Value before adjustment |
+| `new_value` | Metric (number) | `difficulty_adjusted` | Value after adjustment |
+| `trigger_reason` | Dimension (text) | `difficulty_adjusted` | Why AI adjusted (high_death_rate, low_health, etc.) |
+| `loops_completed` | Metric (number) | `pink_loop_completed`, `pink_mode_death` | How many times player defeated pink boss |
+
+### Existing Events to Update
+
+| Event | New Parameter | Purpose |
+|---|---|---|
+| `game_start` | `score_multiplier` | Track which scoring tier player is in |
+| `wave_reached` | `score_multiplier` | Track scoring tier at each level |
+| `player_death` | `score_multiplier` | See if horizontal-only players die more/less |
+| `boss_defeated` | `score_multiplier` | Compare boss success rate by movement type |
+| `player_won` | `score_multiplier` | Win rate comparison |
+
+### Dashboard Updates Needed
+
+**When horizontal movement bonus launches (v3.1):**
+- Add score multiplier filter to all explorations
+- Create new exploration: "Movement Type Comparison" (horizontal vs full)
+  - Tab 1: Win rate by movement type
+  - Tab 2: Avg score by movement type
+  - Tab 3: Avg level reached by movement type
+  - Tab 4: Death rate by level (separate lines for 1.0x and 1.5x)
+
+**When adaptive difficulty launches (v3.2):**
+- Create new exploration: "Difficulty Adjustments"
+  - Tab 1: Frequency of adjustments by level
+  - Tab 2: Most common adjustment types
+  - Tab 3: Player retention before/after adjustment
+  - Tab 4: Avg session duration with/without adjustments
+
+**When pink mode launches (v3.3):**
+- Create new exploration: "Pink Mode Performance"
+  - Tab 1: Entry rate (% of winners who enter pink mode)
+  - Tab 2: Loop completion distribution (0 loops, 1 loop, 2 loops, etc.)
+  - Tab 3: Avg session duration in pink mode
+  - Tab 4: Top scores in pink mode
+- Add pink mode filter to global explorations (exclude pink data from main game analysis)
+
+### Data Quality Considerations
+
+**Score Multiplier (v3.1):**
+- Historical data (v3.0) has no multiplier → assume 1.0 for pre-v3.1 sessions
+- Filter recommendation: `analytics_version = '3.1' OR analytics_version = '3.0'` when comparing score distributions (3.0 = baseline, 3.1 = with multiplier)
+
+**Adaptive Difficulty (v3.2):**
+- Pre-v3.2 sessions have static difficulty → not comparable to v3.2+
+- Recommendation: Analyze v3.2+ separately, use v3.1 as baseline for "before AI difficulty"
+- Risk: If AI makes game too easy, completion rate may spike (not a true skill improvement)
+
+**Pink Mode (v3.3):**
+- Completely separate game mode → ALWAYS filter by page_location
+- Main game analysis: `page_location CONTAINS 'game.html' OR page_location CONTAINS 'game_mobile.html'` (exclude game_pink.html)
+- Pink mode analysis: `page_location CONTAINS 'game_pink.html'` only
 
 ---
 
@@ -263,8 +505,9 @@ L1=0, L2=34, L3=8, L4=45, L5=12, L6=11, L7=0, L8=9, L9=2, L10=5, L11=2, L12=5
 | F5 | Mobile L4 V-formation: 2 enemies appearing after formation stops | ✅ Fixed Mar 13 — `flyingVExploded` spacing reduced from 0.5 → 0.34 in `game_mobile.html`. See Section 9 for details. |
 | F6 | Purple phase replay button showing "+25 HP" instead of "+50 HP" | ✅ Fixed Mar 13 — root cause: `redPhase` flag stays `true` through purple phase, so `redPhase` check fired before `purplePhase` check. Fixed in both files by switching button logic to use `deathPhase` string. Combined with replay incentive simplification (see Section 9). |
 | F7 | Desktop replay incentive system not ported | ✅ Fixed Mar 13 — full tier system ported to `game.html`, matching mobile. Both files now use identical simplified logic. |
-| F8 | Mobile spiral formation partially off-screen | ✅ Fixed Mar 13 (session 2) — `spawnSpiralFormation` `targetY` raised from 150 → 220. See Section 9 Fix 3. |
+| F8 | Mobile spiral formation partially off-screen | ✅ Fixed Mar 14 (session 4) — `spawnSpiralFormation` `targetY` raised from 150 → 320 to align with main formations and barriers. |
 | F9 | Desktop formation snaps/jumps to collapsed position at first morph | ✅ Fixed Mar 13 (session 2) — `morphStartTime` and `lastMorphTime` now reset inside `formationEntered = true` block, matching existing mobile behaviour. See Section 9 Fix 4. |
+| F10 | Mobile barriers off-screen (levels 1, 6, 9, 11) | ✅ Fixed Mar 14 (session 4) — Barrier orbit center moved from y=160 → y=320. Affects circle and orbitingShield barrier types only. See Version History for full details. |
 
 ### 🟡 Watch / Improve
 | ID | Issue | Notes |
@@ -615,9 +858,59 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 13 2026 — gameplay fixes: L4 V-formation pop-in (mobile), replay incentive simplification + purple button bug (both files)
 - Mar 13 2026 (session 2) — formation fixes: spiral orbit center Y 150→220 (mobile), morph clock reset at formationEntered (desktop)
 - Mar 13 2026 (session 3) — formation morphing + slot rotation system: fixed entry snap bug (both files), added `formationEnteredTime` tracking, comprehensive documentation
-- Mar 14 2026 — mobile barrier positioning fix: circular/orbiting barriers moved from y=160 → y=320, spiral formation aligned to y=320
+- Mar 14 2026 (session 4) — mobile barrier positioning fix: circular/orbiting barriers moved from y=160 → y=320, spiral formation aligned to y=320
+- Mar 14 2026 (session 5) — barrier spawn timing fix: barriers now spawn at formation landing (t=2.3s) instead of first morph (t=5.2s), reducing action lull from 7-9s to 2.3s (both files)
+- Mar 14 2026 (session 5) — added barriers to levels 3, 5, 7: horizontalLine (L3, 5 count), circle (L5, 6 count), orbitingShield (L7, 7 count) — all 12 levels now have barriers (both files)
 
-### Barrier Orbit Positioning Fix (Mar 14, 2026) — Mobile Only
+### Barrier Addition to Levels 3, 5, 7 (Mar 14, 2026 session 5) — Both Files
+**Purpose:** Complete barrier coverage across all 12 levels for consistent difficulty progression.
+
+**Barriers added:**
+- **Level 3** (Green): `horizontalLine`, 5 barriers - Simple side-to-side movement pattern
+- **Level 5** (Red): `circle`, 6 barriers - Circular orbit pattern for red phase start
+- **Level 7** (Red): `orbitingShield`, 7 barriers - Faster orbit for increased mid-red challenge
+
+**Implementation:** Updated `LEVEL_WAVES` configuration in both files
+- game.html: Lines 2420, 2432, 2444
+- game_mobile.html: Lines 2676, 2688, 2700
+- Total change: 6 lines (2 per level - barrier type + count)
+
+**Result:** All 12 levels now have barrier formations. No more barrier-less levels.
+
+**Analytics impact:** None - no version bump needed (difficulty balance tweak, not mechanic change).
+
+---
+
+### Barrier Spawn Timing Fix (Mar 14, 2026 session 5) — Both Files
+**Problem:** Wave start pacing had a 7-9 second lull where nothing happened. Formation descended (2.3s), then sat static in exploded state (2.9s), then morphed and barriers spawned (t=5.2s), then barriers descended (1.8-4.2s more) before being fully on-screen. Players were just watching for 7-9 seconds before meaningful action started.
+
+**Root cause:** Barrier spawn was triggered at first morph (`morphCount === 1`) which happens 2.93 seconds after formation lands. This delayed barrier entry unnecessarily.
+
+**Fix:** Moved barrier spawn trigger from `morphCount === 1` to `formationEntered = true` block.
+- Barriers now spawn immediately when formation lands (t=2.3s from wave start)
+- Barriers still descend smoothly from off-screen (1.8-4.2s depending on type)
+- Player sees continuous action (barriers descending) during formation's static phase
+- Total lull reduced: 7-9 seconds → 2.3 seconds (68-74% reduction)
+
+**Timeline comparison:**
+| Event | Before | After | Change |
+|---|---|---|---|
+| Formation lands | t=2.3s | t=2.3s | No change |
+| Barriers spawn | t=5.2s | t=2.3s | -2.9s (spawn immediately) |
+| Barriers on-screen | t=7-9s | t=4-6.5s | -3s (visible earlier) |
+| Kamikazes launch | t=8.2s | t=8.2s | No change |
+
+**Code locations:**
+- game.html: Line ~6310 (barrier spawn added to formationEntered block), Line ~2999 (old morphCount trigger removed)
+- game_mobile.html: Line ~7127 (barrier spawn added to formationEntered block), Line ~3235 (old morphCount trigger removed)
+
+**To revert:** Move barrier spawn code from `formationEntered = true` block back to `morphCount === 1` conditional. See comment markers in both files.
+
+**Analytics impact:** None — no events or timing changes, just visual pacing improvement.
+
+---
+
+### Barrier Orbit Positioning Fix (Mar 14, 2026 session 4) — Mobile Only
 **Problem:** Circular and orbiting shield barriers (levels 1, 6, 9, 11) were positioned too high on screen. Orbit center at y=160 with vertical radius 108px caused top of orbit to reach y≈27px, clipping barriers off-screen at the top edge. User screenshots showed 2-4 barriers clearly above visible area.
 
 **Root cause confusion:** Initially misidentified as main formation positioning issue. After clarification, identified as separate barrier orbit positioning bug affecting only `'circle'` and `'orbitingShield'` barrier types.
