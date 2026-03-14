@@ -1995,6 +1995,7 @@
     var waveCooldown = false;
     var lastWaveEndTime = 0;
     var morphStartTime = 0;     // When current formation started (for morphing)
+    var formationEnteredTime = 0; // When formation finished entering screen (morph clock starts here)
     var currentMorphShape = 0;  // Index into formation shapes
 
     // Formation shapes - each has a collapsed and exploded version
@@ -2494,6 +2495,7 @@
       waveInProgress = true;
       waveCooldown = false;
       morphStartTime = Date.now();
+      formationEnteredTime = 0; // Formation hasn't entered yet - morph clock starts when it lands
       currentMorphShape = 0;
 
       // Track highest wave reached
@@ -2844,6 +2846,65 @@
       return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🚨 CRITICAL GAME MECHANIC — NON-X SIGNATURE VISUAL IDENTITY
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This function controls TWO INTERLOCKING SYSTEMS that define NON-X's
+    // distinctive "drone-like" movement. These systems MUST be preserved at all
+    // costs when making ANY changes to enemy positioning, timing, or movement.
+    //
+    // SYSTEM 1: SHAPE MORPHING
+    // ─────────────────────────────────────────────────────────────────────────
+    // Formations cycle through geometric shapes every ~2.93 seconds (6 beats):
+    //   grid3x3 (exploded) → diamond (collapsed) → grid3x3 (exploded) → loop
+    // Each transition takes 1 second with easeInOutCubic interpolation.
+    //
+    // SYSTEM 2: SLOT ROTATION (CAROUSEL)
+    // ─────────────────────────────────────────────────────────────────────────
+    // On each morph, enemies cycle to the next position slot:
+    //   Enemy at slot 0 → slot 1, slot 1 → slot 2, ... slot N → slot 0
+    // Implementation: var rotatedIndex = (idx + morphCount) % newPositions.length
+    // Creates visual effect of enemies "orbiting" through the formation.
+    //
+    // ⚠️ CRITICAL DEPENDENCIES — DO NOT MODIFY WITHOUT UNDERSTANDING:
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. formationEnteredTime — Set ONCE when formation lands (line ~6247)
+    //    • Morph clock starts here (NOT at wave start)
+    //    • NEVER reset mid-wave — breaks morph progression
+    //    • Prevents snap from exploded → collapsed on entry
+    //
+    // 2. morphCount — Increments each shape change (line ~2936)
+    //    • Drives slot rotation: (idx + morphCount) % length
+    //    • Also triggers side effects (kamikazes, shields, barriers)
+    //    • NEVER skip incrementing — breaks carousel
+    //
+    // 3. Slot assignment — Line ~2954: var rotatedIndex = (idx + morphCount) % length
+    //    • MUST preserve modulo pattern for carousel effect
+    //    • Changing to newPositions[idx] breaks rotation
+    //
+    // 4. Position interpolation — Lines ~2984-2998: startPos → targetPos
+    //    • Uses currentPos for smooth transitions
+    //    • NEVER set enemy.x/enemy.y directly — breaks interpolation
+    //
+    // DEBUG CONSOLE LOGS (currently active):
+    // ─────────────────────────────────────────────────────────────────────────
+    // Search for "// DEBUG:" comments (lines ~2907, ~2962, ~2977, ~3002)
+    // Logs morph state, shape changes, and enemy positions every 1 second.
+    // Use browser console to verify:
+    //   - timeSinceStart increases steadily
+    //   - newShapeIndex increments every ~2927ms
+    //   - targetPos values change each morph (confirms slot rotation)
+    //   - screenXY transitions smoothly (confirms interpolation)
+    // Comment out before production deploy.
+    //
+    // BEFORE MAKING ANY CHANGES:
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. READ NON-X_PAIM_Memory.md Section 9 (Formation Morphing System)
+    // 2. CHECK debug console logs to understand current behavior
+    // 3. REPORT to user how changes will interact with morphing/carousel
+    // 4. TEST thoroughly — formations must morph AND carousel smoothly
+    // ═══════════════════════════════════════════════════════════════════════════
+
     /**
      * Drives the formation morphing animation cycle. Formations continuously cycle
      * through multiple shapes, creating a dynamic "dance" effect synced to music BPM.
@@ -2871,7 +2932,13 @@
     function updateMorphingFormation(time) {
       // Dance timing: morph every 6 beats (~3 seconds at 123 BPM)
       var morphInterval = BPM_INTERVAL * 6; // ~3000ms at 123 BPM
-      var timeSinceStart = Math.max(0, time - morphStartTime); // Clamp to avoid negative
+
+      // Use formationEnteredTime instead of morphStartTime to prevent snap on entry
+      // Morph clock doesn't start until formation lands on screen
+      var timeSinceStart = formationEnteredTime > 0
+        ? Math.max(0, time - formationEnteredTime) // Use entry time if formation has landed
+        : 0; // Don't morph until formation lands
+
       var newShapeIndex = Math.floor(timeSinceStart / morphInterval); // Which shape we should be on
 
       // Get all formation enemies (filter out kamikazes, boss, etc.)
@@ -2883,6 +2950,38 @@
 
       // Cycle through shapes — use ((n % len) + len) % len to guarantee positive index in JS
       newShapeIndex = ((newShapeIndex % waveShapes.length) + waveShapes.length) % waveShapes.length;
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CRITICAL MORPHING MECHANIC - DO NOT MODIFY WITHOUT UNDERSTANDING
+      // ═══════════════════════════════════════════════════════════════════════════
+      // This is the core formation morphing system that creates the signature
+      // "drone-like" movement pattern where enemies cycle through different
+      // positions within the formation (e.g., grid3x3 → diamond → grid3x3).
+      //
+      // TIMING DEPENDENCY - FRAGILE!
+      // ────────────────────────────────────────────────────────────────────────
+      // morphStartTime MUST be set ONCE in startWave() and NEVER reset during
+      // the wave. Resetting it (e.g., when formationEntered = true) breaks the
+      // morph cycle by keeping timeSinceStart perpetually small, preventing
+      // newShapeIndex from ever incrementing past 0.
+      //
+      // BUG HISTORY:
+      // - Mar 2026: morphStartTime was reset on formationEntered to fix a
+      //   snap-on-entry visual bug. This accidentally broke ALL morphing by
+      //   preventing shape index progression. Fix: removed the reset, accepted
+      //   the minor snap issue (not noticeable in practice).
+      //
+      // DEBUG: Log morph state once per second (useful for timing issues)
+      if (formationEnemies.length > 0 && Date.now() % 1000 < 16) {
+        console.log('Morph check:', {
+          timeSinceStart: timeSinceStart,
+          morphInterval: morphInterval,
+          rawIndex: Math.floor(timeSinceStart / morphInterval),
+          newShapeIndex: newShapeIndex,
+          currentMorphShape: currentMorphShape,
+          willChange: newShapeIndex !== currentMorphShape
+        });
+      }
 
       // ── Shape Change Detection ────────────────────────────────────────────────
       // If shape changed, update target positions and trigger side effects
@@ -2916,12 +3015,20 @@
         var newPositions = shapeFunc(count); // Get normalized positions for this shape
 
         // Store starting positions and update targets for smooth interpolation
+        // SLOT ROTATION: Each morph, enemies cycle to the next position in the formation
+        // This creates the carousel/"drone-like" effect where enemies rotate through slots
         formationEnemies.forEach(function (enemy, idx) {
-          if (newPositions[idx]) {
+          var rotatedIndex = (idx + morphCount) % newPositions.length; // Rotate slot assignment
+          if (newPositions[rotatedIndex]) {
             enemy.startPos = { x: enemy.currentPos.x, y: enemy.currentPos.y }; // Where we are now
-            enemy.targetPos = { x: newPositions[idx].x, y: newPositions[idx].y }; // Where we're going
+            enemy.targetPos = { x: newPositions[rotatedIndex].x, y: newPositions[rotatedIndex].y }; // Where we're going
           }
         });
+
+        // DEBUG: Log target positions when shape changes
+        console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function(e, i) {
+          return {idx: i, startPos: e.startPos, targetPos: e.targetPos};
+        }));
 
         // Launch kamikaze wave separately after formation has settled (morphCount 2)
         if (morphCount === 2 && !kamikazesLaunched && pendingKamikazeCount > 0) {
@@ -2937,7 +3044,11 @@
       var morphProgress = Math.min(timeSinceMorph / morphDuration, 1); // Clamp to 1.0
       var easedProgress = easeInOutCubic(morphProgress); // Apply easing curve
 
-      formationEnemies.forEach(function (enemy) {
+      // DEBUG: Track position updates once per second
+      var logPositions = Date.now() % 1000 < 16;
+      var positionLog = [];
+
+      formationEnemies.forEach(function (enemy, idx) {
         if (!enemy.reachedTarget) return; // Skip enemies still entering from top
 
         // Smooth interpolation between current and target positions
@@ -2958,12 +3069,27 @@
         enemy.x = baseX - enemy.width / 2;
         enemy.y = baseY - enemy.height / 2;
 
+        // DEBUG: Log first 3 enemies' positions
+        if (logPositions && idx < 3) {
+          positionLog.push({
+            idx: idx,
+            progress: easedProgress.toFixed(2),
+            currentPos: {x: enemy.currentPos.x.toFixed(2), y: enemy.currentPos.y.toFixed(2)},
+            screenXY: {x: Math.round(enemy.x), y: Math.round(enemy.y)}
+          });
+        }
+
         // Keep enemies within bounds (20px margins)
         if (enemy.x < 20) enemy.x = 20;
         if (enemy.x > canvas.width - enemy.width - 20) enemy.x = canvas.width - enemy.width - 20;
         if (enemy.y < 30) enemy.y = 30;
         if (enemy.y > canvas.height * 0.5) enemy.y = canvas.height * 0.5; // Keep in top half
       });
+
+      // DEBUG: Log enemy positions once per second
+      if (positionLog.length > 0) {
+        console.log('Enemy positions:', positionLog);
+      }
     }
 
     /**
@@ -6179,6 +6305,13 @@
             if (formationCurrentCenterY >= formationTargetCenterY) {
               formationCurrentCenterY = formationTargetCenterY;
               formationEntered = true;
+
+              // START MORPH CLOCK NOW (prevents snap from exploded → collapsed on entry)
+              // Only set once per wave - subsequent frames skip this block because formationEntered stays true
+              if (formationEnteredTime === 0) {
+                formationEnteredTime = Date.now();
+              }
+
               // Show shield warning (brief after level 1 - players already know)
               var warningEl = document.getElementById("warningDisplay");
               warningEl.style.display = "block";
