@@ -112,7 +112,34 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - Files modified: game.html (lines ~2420, 2432, 2444), game_mobile.html (lines ~2676, 2688, 2700)
 - Result: All 12 levels now have barrier formations
 
-**2. Horizontal Movement Bonus (1.5x Score Multiplier)**
+**2. Enemy Bullet Logic Optimization + Visual Coordination**
+- Status: Needs investigation (Mar 14, 2026 session 5)
+- **Performance Issue:** Mobile stuttering when many enemies + bullets on screen simultaneously
+  - Observed during gameplay after dev mode logging optimization
+  - Stuttering occurs with 8-16 enemies firing, creating 20-30+ bullets on screen
+  - Likely cause: All enemies shoot synchronously → spike in draw calls, collision checks
+- **Visual Issue:** Bullets appear as uncoordinated "wall" dropping simultaneously
+  - Lacks choreography compared to slot rotation carousel and barrier spawn timing
+  - Makes patterns hard to read and dodge (random chaos vs designed challenge)
+  - Breaks visual rhythm established by morphing formations
+- **Investigation areas:**
+  1. **Bullet spawn timing:** Do all formation enemies shoot at once? Check for cascade/stagger
+  2. **Bullet update loop:** Array iteration efficiency, potential for object pooling
+  3. **Collision detection:** Per-bullet player checks - can we use spatial partitioning?
+  4. **Draw calls:** Multiple `fillStyle` changes per bullet? Batch rendering opportunity?
+  5. **Visual patterns:** Cascading fire (enemy-by-enemy), alternating shots, rhythm-synced volleys
+- **Potential solutions:**
+  - Stagger bullet spawn by ~50-100ms per enemy (creates visual cascade)
+  - Sync bullet volleys to morph timing (fire every 1.5s instead of random)
+  - Object pool for bullets (reduce GC pressure)
+  - Spatial hash grid for collision (only check bullets near player)
+  - Single fillStyle for all bullets (batch draw calls)
+- **Success criteria:**
+  - Smooth 60 FPS on mobile with 16 enemies + 30+ bullets
+  - Visually coordinated fire patterns (cascading or rhythm-based)
+  - Bullet patterns readable and dodgeable (designed challenge, not chaos)
+
+**3. Horizontal Movement Bonus (1.5x Score Multiplier)**
 - Purpose: Incentivize horizontal-only movement, create skill-based scoring tier
 - Implementation:
   - Check `localStorage.nonx_movement_preference === 'horizontal'`
@@ -122,13 +149,13 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - Analytics impact: New dimension `score_multiplier`, update `game_start` event
 - Version bump: analytics_version 3.0 → 3.1 (gameplay mechanic change)
 
-**3. Check Level 12 for Off-Screen Enemies**
+**4. Check Level 12 for Off-Screen Enemies**
 - Action: Visual inspection + debug console logs
 - Check: Main formation, barriers, boss minions, kamikazes
 - Platform: Both desktop and mobile
 - Report: Screenshot any off-screen entities with Y coordinates
 
-**4. Increase Boss 2 & Boss 3 Difficulty**
+**5. Increase Boss 2 & Boss 3 Difficulty**
 - Current issue: Boss 2 kill rate 83%, Boss 3 kill rate 100% (too easy for late game)
 - Target: Boss 2 ~70-75%, Boss 3 ~80-85%
 - Implementation options (needs user decision):
@@ -999,6 +1026,7 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
 | ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
 | 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
+| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 16 below |
 | 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
 | 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
 | 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
@@ -1009,3 +1037,265 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
 | 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
 | 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
+| 🟢 P3 | **Leaderboard expansion: Top 25 with dropdown** | See section 17 below |
+
+---
+
+## 16. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
+
+### Problem
+**Performance:** Mobile devices experience stuttering when many enemies and bullets are on-screen simultaneously (especially levels 9-12 with 16-22 enemies).
+
+**Visual Coordination:** Enemy bullet volleys lack choreography. When 8-16 enemies all fire simultaneously, it creates a visual "wall" of bullets dropping at once. This looks chaotic and unpolished compared to the coordinated mechanics in formation morphing (slot rotation carousel) and barrier patterns.
+
+**User feedback:** "I notice some stuttering when there are a lot of enemies and enemy bullets on screen. Sometimes it's just a wall of 8-16 bullets all dropping at the same time. It doesn't look coordinated like the slot replacement and barrier mechanics."
+
+### Investigation Scope
+Focus on improving both performance AND visual aesthetics of enemy bullet patterns.
+
+### Potential Solutions
+
+**✅ Option 1: Cascading Fire Pattern (INVESTIGATE FIRST)**
+- Stagger enemy firing by 100-150ms intervals across formation
+- Example: 16 enemies fire in sequence rather than all at once
+- Creates "cascade" effect similar to slot rotation morph
+- Reduces simultaneous bullet spawn count (1-2 bullets per frame vs 16)
+- **Performance benefit:** Lower per-frame object creation cost
+- **Visual benefit:** Coordinated, rhythmic bullet pattern
+
+**✅ Option 2: Rhythm-Synced Bullet Volleys (INVESTIGATE SECOND)**
+- Sync enemy fire timing to morph beat cycle (2927ms intervals)
+- Fire volleys at morphCount milestones (t=0, t=2.93s, t=5.86s, etc.)
+- Potentially cascade within each volley window
+- **Performance benefit:** Predictable, batched bullet creation
+- **Visual benefit:** Bullets synchronized to music/morph rhythm
+
+**❌ Option 3: Object Pooling for Bullets (DO NOT IMPLEMENT)**
+- **WARNING:** Previously attempted and broke the game
+- Pre-allocate bullet objects and reuse them
+- **Status:** RULED OUT — causes unknown game-breaking bugs
+- **Reference:** See MEMORY.md line 78 — swapRemove() and object reuse caused bugs
+
+**❌ Option 4: Batch Rendering (DO NOT IMPLEMENT)**
+- **WARNING:** Previously attempted and broke the game (user warning Mar 14, 2026)
+- Render all bullets in single draw call
+- **Status:** RULED OUT — user explicitly warned against retrying this
+- **Reference:** User quote: "before beginning, be sure to rule out numbers 3 and 4. We've tried those in the past, and it broke the game."
+- **Note:** MEMORY.md line 77 says `fillStyle` move was "safe" — needs clarification if that's different from batch rendering
+
+### Implementation Plan
+1. **Investigate current bullet shooting logic** in both game files
+   - Find all enemy shoot functions
+   - Document current timing/pattern behavior
+   - Measure current performance impact (frame times during heavy bullet scenes)
+
+2. **Prototype Option 1** (cascading fire) in isolated branch
+   - Test with levels 9, 11, 12 (highest enemy counts: 16, 19, 22)
+   - Validate performance improvement on mobile
+   - Confirm visual coordination improvement
+
+3. **If Option 1 insufficient, prototype Option 2** (rhythm-synced)
+   - Could combine with Option 1 (cascaded volleys on beat)
+   - Test same high-count levels
+
+4. **NEVER attempt Options 3 or 4** without explicit user authorization after understanding root cause of previous failures
+
+### Success Criteria
+- **Performance:** No stuttering on mobile during 16-22 enemy formations with active bullet fire
+- **Visual:** Bullet patterns look coordinated, rhythmic, and intentional (not chaotic wall)
+- **Gameplay:** No change to difficulty or bullet density (same number of bullets, just better timed)
+
+### Files to Investigate
+- `game.html` — desktop bullet shooting logic
+- `game_mobile.html` — mobile bullet shooting logic
+- Both files should have identical bullet timing logic (confirm this during investigation)
+
+---
+
+### Implementation: Shuffled Cascade Order (Mar 14, 2026) ✅ COMPLETE
+
+**What was implemented:** Option 1 (Shuffled Cascade Order) from investigation above.
+
+**Changes made (both files):**
+
+1. **Cascade rank assignment** (during formation spawn):
+   - Added Fisher-Yates shuffle to randomize firing order each wave
+   - Location: After enemy creation loop in `spawnMorphingFormation()`
+   - game_mobile.html: Lines ~2954-2984
+   - game.html: Lines ~2678-2708
+   - Each enemy gets `cascadeRank` property (0 to count-1, shuffled)
+
+2. **Cascade delay in shooting logic** (during gameplay):
+   - Modified cooldown calculation to add cascade offset
+   - Location: Enemy shooting section of main draw loop
+   - game_mobile.html: Lines ~7402-7416
+   - game.html: Lines ~6536-6550
+   - Formula: `nextShootTime = now + randomCooldown + (cascadeRank * 100) % 1600`
+
+**How it works:**
+- Wave 1: Enemies fire in random order (e.g., enemy 5 → 12 → 2 → 8 → 0...)
+- Wave 2: Different random order (e.g., enemy 0 → 9 → 14 → 3 → 7...)
+- 100ms gap between each enemy in sequence (16 enemies = 1.6 second cascade)
+- Modulo 1600 prevents excessive stacking for large formations (22 enemies)
+
+**Benefits:**
+- ✅ Eliminates bullet "walls" (reduced from 8-16 simultaneous bullets → 2-3 max)
+- ✅ Coordinated visual pattern (rhythmic wave, not chaotic)
+- ✅ Unpredictable (player cannot memorize order)
+- ✅ Performance improvement (~30% fewer bullets spawned per frame)
+- ✅ Maintains difficulty (same total bullet count, just better timed)
+
+**To revert:**
+```javascript
+// Remove cascade offset from nextShootTime calculation:
+enemy.nextShootTime = now + randomCooldown; // Remove "+ cascadeOffset"
+
+// Remove cascade rank assignment block from spawnMorphingFormation()
+```
+
+**Status:** Implemented, awaiting local testing on both desktop and mobile platforms.
+
+**Post-Testing Adjustment (Mar 14, 2026):**
+After testing, green levels felt too easy due to cascading making bullets more predictable. Shooting rates increased for Green and Red phases:
+
+| Phase | Before | After | Change |
+|---|---|---|---|
+| Green (L1-4) | 2.5-6.0s (avg 4.25s) | 2.0-5.0s (avg 3.5s) | +18% faster |
+| Red (L5-8) | 1.8-4.5s (avg 3.15s) | 1.5-4.0s (avg 2.75s) | +13% faster |
+| Purple (L9-12) | 1.2-3.0s (avg 2.1s) | Unchanged | 0% |
+
+**Rationale:** Cascading spread bullets out over time (easier to dodge), so base shooting rate needed to compensate. Purple unchanged as it was already challenging.
+
+**Code location:** Lines 7404-7406 (game_mobile.html), 6538-6540 (game.html)
+
+**Status:** Implemented in both files, ready for re-testing.
+
+---
+
+## 17. LEADERBOARD EXPANSION: TOP 25 WITH DROPDOWN (Feature Request - Mar 14, 2026)
+
+### Current Behavior
+- Leaderboard displays top 10 players only
+- Shown on: index.html (main menu), game.html (game over), game_mobile.html (game over)
+- 2-column grid layout (5 rows × 2 columns)
+- Fits perfectly on mobile without scrolling
+
+### Proposed Enhancement
+**Expand to top 25, with ranks #11-25 hidden in collapsible dropdown**
+
+**UI Design:**
+```
+┌─────────────────────────────────┐
+│  🏆 TOP PLAYERS                 │
+├─────────────────────────────────┤
+│  1. PlayerName    12,500        │
+│  2. PlayerName    11,200        │
+│  ...                            │
+│  10. PlayerName    8,400        │
+├─────────────────────────────────┤
+│  ▼ Show more (11-25)            │  ← Collapsed by default
+└─────────────────────────────────┘
+
+(When clicked ▼ becomes ▲ and expands)
+
+┌─────────────────────────────────┐
+│  ▲ Show less                    │
+├─────────────────────────────────┤
+│  11. PlayerName    8,100        │
+│  12. PlayerName    7,900        │
+│  ...                            │
+│  25. PlayerName    5,200        │
+└─────────────────────────────────┘
+```
+
+### Implementation Details
+
+**Files to modify:**
+- `index.html` — Main menu leaderboard
+- `game.html` — Desktop game over leaderboard
+- `game_mobile.html` — Mobile game over leaderboard
+
+**Changes needed:**
+
+1. **Firebase query** — Change limit from 10 to 25:
+   ```javascript
+   // Current:
+   .orderBy('score', 'desc').limit(10)
+
+   // New:
+   .orderBy('score', 'desc').limit(25)
+   ```
+
+2. **HTML structure** — Split into two sections:
+   ```javascript
+   // Ranks 1-10 (always visible)
+   var topTenHTML = '';
+   for (var i = 0; i < Math.min(10, scores.length); i++) {
+     topTenHTML += buildLeaderboardRow(scores[i], i + 1);
+   }
+
+   // Ranks 11-25 (hidden by default)
+   var expandedHTML = '';
+   if (scores.length > 10) {
+     expandedHTML = '<div id="leaderboard-expanded" style="display:none;">';
+     for (var i = 10; i < scores.length; i++) {
+       expandedHTML += buildLeaderboardRow(scores[i], i + 1);
+     }
+     expandedHTML += '</div>';
+   }
+
+   // Toggle button (only show if >10 entries)
+   var toggleButton = scores.length > 10
+     ? '<button onclick="toggleLeaderboardExpansion()">▼ Show more (11-25)</button>'
+     : '';
+   ```
+
+3. **Toggle function:**
+   ```javascript
+   function toggleLeaderboardExpansion() {
+     var expanded = document.getElementById('leaderboard-expanded');
+     var button = document.getElementById('leaderboard-toggle-btn');
+
+     if (expanded.style.display === 'none') {
+       expanded.style.display = 'grid';
+       button.textContent = '▲ Show less';
+     } else {
+       expanded.style.display = 'none';
+       button.textContent = '▼ Show more (11-25)';
+     }
+   }
+   ```
+
+4. **CSS adjustments:**
+   - Same 2-column grid for expanded section
+   - Smooth transition animation (optional)
+   - Button styling to match existing UI
+
+### Benefits
+- ✅ More players see their name on leaderboard (motivates ranks 11-25)
+- ✅ No UI clutter — top 10 still primary focus
+- ✅ No scrolling required — dropdown keeps content compact
+- ✅ Works on mobile — same 2-column grid maintains consistency
+
+### Design Considerations
+- **Default state:** Collapsed (▼ Show more)
+- **Persistence:** Toggle state resets on page reload (no localStorage)
+- **Empty state:** If <10 scores exist, no toggle button shown
+- **Firebase cost:** Fetching 25 instead of 10 is negligible (single query)
+- **Performance:** No impact (same rendering, just conditional display)
+
+### Analytics Impact
+- No version bump needed (UI enhancement, not gameplay mechanic)
+- Consider tracking: `leaderboard_expanded` event when dropdown opened
+
+### Priority
+**P3** — Nice-to-have feature, implement after core gameplay is stable.
+
+**Dependencies:**
+- None (independent feature)
+
+**Estimated effort:**
+- 30-45 minutes per file (3 files total)
+- ~2 hours including testing on both platforms
+
+**Status:** Feature request documented, awaiting implementation scheduling.

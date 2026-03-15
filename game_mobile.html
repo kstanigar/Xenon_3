@@ -2952,6 +2952,36 @@
         enemies.push(EnemyPool.get(enemy));
       }
 
+      // ═══════════════════════════════════════════════════════════════════════
+      // SHUFFLED CASCADE ORDER — Visual Coordination (Mar 14, 2026)
+      // ═══════════════════════════════════════════════════════════════════════
+      // Assign randomized cascade ranks to prevent predictable left→right firing pattern.
+      // Each wave, enemies fire in a different random sequence (cascaded 100ms apart).
+      // This creates coordinated visual "wave" of bullets without allowing players to
+      // memorize firing order. Alternative to pure random (which causes bullet "walls"
+      // when 8-16 enemies fire simultaneously) or index-based cascade (predictable).
+
+      // Create array of indices [0, 1, 2, ..., count-1]
+      var cascadeOrder = [];
+      for (var i = 0; i < count; i++) {
+        cascadeOrder.push(i);
+      }
+
+      // Fisher-Yates shuffle — randomize cascade firing order
+      for (var i = cascadeOrder.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = cascadeOrder[i];
+        cascadeOrder[i] = cascadeOrder[j];
+        cascadeOrder[j] = temp;
+      }
+
+      // Assign shuffled cascade rank to each formation enemy
+      // cascadeRank determines firing order: rank 0 shoots first, rank (count-1) shoots last
+      var formationStart = enemies.length - count; // Index where this formation starts in enemies array
+      for (var i = 0; i < count; i++) {
+        enemies[formationStart + i].cascadeRank = cascadeOrder[i];
+      }
+
       // Reset shield cascade tracking
       shieldCascadeStarted = false;
       shieldCascadeTime = 0;
@@ -7371,11 +7401,20 @@
             var now = Date.now();
             if (enemy.nextShootTime && now >= enemy.nextShootTime) {
               shootEnemyBullet(enemy);
-              // Cooldown: random interval based on level
-              // Purple phase: shorter gaps (more aggressive), earlier phases: slower
-              var minGap = purplePhase ? 1200 : (redPhase ? 1800 : 2500);
-              var maxGap = purplePhase ? 3000 : (redPhase ? 4500 : 6000);
-              enemy.nextShootTime = now + minGap + Math.random() * (maxGap - minGap);
+
+              // Cooldown: random interval based on phase (Purple < Red < Green)
+              // Adjusted Mar 14, 2026: Increased difficulty after cascading made bullets easier to dodge
+              var minGap = purplePhase ? 1200 : (redPhase ? 1500 : 2000);
+              var maxGap = purplePhase ? 3000 : (redPhase ? 4000 : 5000);
+              var randomCooldown = minGap + Math.random() * (maxGap - minGap);
+
+              // Cascade delay: stagger shots using shuffled cascade rank (0 = shoots first)
+              // Prevents bullet "walls" when 8-16 enemies fire simultaneously
+              // Creates coordinated wave pattern without predictable left→right order
+              var cascadeDelay = (enemy.cascadeRank || 0) * 100; // 100ms between each enemy in sequence
+              var cascadeOffset = cascadeDelay % 1600; // Cycle cascade over 1.6s max (prevents excessive stacking)
+
+              enemy.nextShootTime = now + randomCooldown + cascadeOffset;
             } else if (!enemy.nextShootTime) {
               // Fallback for enemies that didn't get nextShootTime on spawn (fillers, barriers)
               var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
