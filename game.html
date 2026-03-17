@@ -41,7 +41,7 @@
   ============================================================
   GA4 Property : G-9ECFZ9JBE5
   Platform tag : 'desktop' (sent on all in-game events)
-  Version      : analytics_version: '3.0'
+  Version      : analytics_version: '4.0'
                  Injected automatically by fireEvent() wrapper.
                  Bump ONLY when gameplay mechanics change
                  (hitbox, boss logic, scoring). Do NOT bump for
@@ -53,7 +53,7 @@
 
   fireEvent(eventName, params)
     Central wrapper for all GA4 event calls in this file.
-    Automatically merges { analytics_version: '3.0' } into every
+    Automatically merges { analytics_version: '4.0' } into every
     event payload so no individual call needs to set it manually.
     Individual events may still set it explicitly — harmless dupe.
 
@@ -99,11 +99,15 @@
     (none) — Pre-analytics / QA data. Discard.
     2.0    — Broken boss spawn (score gate), indestructible
              mobile minions, untuned hitbox. Discard.
-    3.0    — Current. Boss fix, hitbox inset, minion fix,
+    3.0    — Boss fix, hitbox inset, minion fix,
              movement as player preference.
     3.0+   — Full instrumentation (all events carry version
              via wrapper). Deploy date: ~Mar 10 2026.
              Use date filter when full coverage required.
+    4.0    — Current. Coordinated attack system (3s/2s/1.2s
+             rhythm), shield shooting enabled, bullet speed
+             8 px/frame, boss minion shooting, level 1 gate
+             removed. Deploy date: ~Mar 17 2026.
   ============================================================
 -->
 <!DOCTYPE html>
@@ -668,7 +672,7 @@
       // ── Enemy shooting (unlocked at level 2) ────────────────────
       enemyShootChance: 0.005,  // Per-frame probability an individual enemy fires
       enemyShootIncrease: 0.002,// Shoot chance increase per level above 2
-      enemyBulletSpeed: 5,      // Enemy bullet speed in px/frame (downward)
+      enemyBulletSpeed: 8,      // Enemy bullet speed in px/frame (60% faster - bullets clearly faster than formation descent)
 
       // ── Boss triggers (score thresholds) ────────────────────────
       boss1ScoreThreshold: 400, // Boss 1 spawns when score reaches this value
@@ -718,6 +722,44 @@
 
       // Enemy types that sweep horizontally across the screen
       sideToSideEnemies: ['enemy2_red', 'enemy2_purple']
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COORDINATED ATTACK SYSTEM (Mar 2026)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Fixed-rhythm bullet patterns with three attack types: single, sync, rain
+    // Replaces random per-enemy cooldowns with choreographed coordinated attacks
+    var ATTACK_CONFIG = {
+      green: {
+        interval: 3000,              // Attack every 3 seconds
+        bulletCounts: [1, 2],        // 1-2 bullets per attack
+        rainStagger: 100,            // 100ms between rain bullets
+        patterns: {
+          single: 0.60,              // 60% single shots
+          sync: 0.25,                // 25% synchronized
+          rain: 0.15                 // 15% rain effect
+        }
+      },
+      red: {
+        interval: 2000,              // Attack every 2 seconds (+25% frequency)
+        bulletCounts: [2, 3, 4],     // 2-4 bullets per attack
+        rainStagger: 80,             // 80ms (faster rain)
+        patterns: {
+          single: 0.30,
+          sync: 0.50,
+          rain: 0.20
+        }
+      },
+      purple: {
+        interval: 1200,              // Attack every 1.2 seconds (+25% frequency)
+        bulletCounts: [3, 4, 5, 6],  // 3-6 bullets per attack
+        rainStagger: 60,             // 60ms (fastest rain)
+        patterns: {
+          single: 0.20,
+          sync: 0.30,
+          rain: 0.50
+        }
+      }
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1011,7 +1053,7 @@
         );
         return;
       }
-      gtag('event', eventName, Object.assign({ analytics_version: '3.0' }, params));
+      gtag('event', eventName, Object.assign({ analytics_version: '4.0' }, params));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1333,6 +1375,10 @@
     var gameOver = true;        // True when player is dead or hasn't started yet
     var paused = false;         // True when game is paused (P key or Pause button)
 
+    // Coordinated attack system globals (Mar 2026)
+    var lastAttackTime = 0;       // Timestamp of last coordinated attack
+    var bulletQueue = [];         // {enemy, fireTime} — for rain effect stagger
+
     // High scores array (top 10) loaded from localStorage.
     // Legacy local storage — now superseded by Firebase global leaderboard.
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
@@ -1450,6 +1496,7 @@
     var bossBlinking = false;
     var bossBlinkTimer = 0;
     var bossVisible = true;
+    var lastMinionShotTime = 0;  // Global timer for controlled minion shooting (mobile performance)
 
     // Screen shake state
     var screenShakeActive = false;
@@ -2521,6 +2568,10 @@
       pendingKamikazeCount = 0;
       kamikazesLaunched = false;
 
+      // Reset coordinated attack system (Mar 2026)
+      lastAttackTime = Date.now(); // Start attack timer fresh
+      bulletQueue = []; // Clear any queued rain bullets
+
       var waveData = levelData.waves[waveNum - 1];
       waveEnemiesRemaining = waveData.count;
 
@@ -2702,8 +2753,16 @@
       // Assign shuffled cascade rank to each formation enemy
       // cascadeRank determines firing order: rank 0 shoots first, rank (count-1) shoots last
       var formationStart = enemies.length - count; // Index where this formation starts in enemies array
+      var now = Date.now();
       for (var i = 0; i < count; i++) {
         enemies[formationStart + i].cascadeRank = cascadeOrder[i];
+
+        // FIX (Mar 2026): Set initial nextShootTime based on cascadeRank
+        // Prevents 4+ bullets firing simultaneously at wave start
+        // Spreads initial shots evenly: rank 0 at t=3s, rank 1 at t=3.5s, etc.
+        var baseDelay = 3000; // First shot at 3 seconds
+        var cascadeDelay = cascadeOrder[i] * 500; // 500ms between each enemy
+        enemies[formationStart + i].nextShootTime = now + baseDelay + cascadeDelay;
       }
 
       // ── Shield Cascade Reset ───────────────────────────────────────────────────
@@ -3838,13 +3897,35 @@
 
       var isRedBoss = (currentBoss === 2);
       var isPurpleBoss = (currentBoss === 3);
+
+      // Boss-specific health scaling (Mar 14, 2026 difficulty update)
+      // Green: 50 HP, Red: 75 HP (+50%), Purple: 100 HP (+100%)
+      var bossHealth = CONFIG.bossHealth; // 50 HP base (green boss)
+      if (isRedBoss) {
+        bossHealth = 75; // Red boss: +50% health
+      } else if (isPurpleBoss) {
+        bossHealth = 100; // Purple boss: +100% health (finale boss)
+      }
+
+      // Boss-specific shield cycle timing (Mar 14, 2026 difficulty update)
+      // Green: 5s/5s, Red: 4s/4s (faster), Purple: 3s/3s (aggressive)
+      var shieldDuration = 5000; // Green boss default
+      var shieldCooldown = 5000;
+      if (isRedBoss) {
+        shieldDuration = 4000; // Red boss: faster shield cycling
+        shieldCooldown = 4000;
+      } else if (isPurpleBoss) {
+        shieldDuration = 3000; // Purple boss: aggressive shield cycling
+        shieldCooldown = 3000;
+      }
+
       boss = {
         x: canvas.width / 2 - 75,
         y: -150,
         width: 150,
         height: 150,
-        health: CONFIG.bossHealth,
-        maxHealth: CONFIG.bossHealth,
+        health: bossHealth,
+        maxHealth: bossHealth,
         speed: CONFIG.bossSpeed,
         direction: 1,
         verticalDirection: 1, // For red/purple boss vertical movement
@@ -3854,9 +3935,23 @@
         // Boss shield system
         shielded: true, // Start with shield
         shieldStartTime: Date.now(),
-        shieldDuration: 5000, // 5 seconds on
-        shieldCooldown: 5000, // 5 seconds off (only for red/purple boss)
-        shieldCycling: isRedBoss || isPurpleBoss // Red and purple bosses cycle shields
+        shieldDuration: shieldDuration,
+        shieldCooldown: shieldCooldown,
+        shieldCycling: isRedBoss || isPurpleBoss, // Red and purple bosses cycle shields
+        // Attack state system (4 unpredictable states)
+        currentAttackState: 0, // 0=RANDOM, 1=RAPID, 2=SPREAD, 3=AIMED
+        stateStartTime: Date.now(),
+        stateDuration: (isPurpleBoss ? 2000 : (isRedBoss ? 2000 : 2500)) +
+          Math.random() * (isPurpleBoss ? 500 : (isRedBoss ? 1000 : 1000)),
+        stateShotCount: 0,
+        lastStateShotTime: 0,
+        rapidBurstCount: isPurpleBoss ? 7 : (isRedBoss ? 5 : 3),
+        burstInterval: isPurpleBoss ? 150 : (isRedBoss ? 180 : 200),
+        spreadBurstCount: isPurpleBoss ? 3 : (isRedBoss ? 3 : 2),
+        bulletsPerSpread: isPurpleBoss ? 4 : (isRedBoss ? 3 : 2),
+        aimedShotCount: isPurpleBoss ? 3 : (isRedBoss ? 2 : 1),
+        stateCycleMin: isPurpleBoss ? 2000 : (isRedBoss ? 2000 : 2500),
+        stateCycleMax: isPurpleBoss ? 2500 : (isRedBoss ? 3000 : 3500)
       };
     }
 
@@ -3869,7 +3964,9 @@
       if (orbitersInitialized) return;
       orbitersInitialized = true;
 
-      var orbiterCount = boss.isPurpleBoss ? 8 : (boss.isRedBoss ? 6 : 4);
+      // Orbiter count scaling (Mar 14, 2026 difficulty update)
+      // Green: 4, Red: 7 (+3), Purple: 10 (+6)
+      var orbiterCount = boss.isPurpleBoss ? 10 : (boss.isRedBoss ? 7 : 4);
       maxOrbiters = orbiterCount;
 
       for (var i = 0; i < orbiterCount; i++) {
@@ -4207,6 +4304,27 @@
         }
       }
 
+      // ───────────────────────────────────────────────────────────────────────
+      // Global Minion Shooting (Mobile Performance Optimized)
+      // ───────────────────────────────────────────────────────────────────────
+      // One random minion shoots every N seconds with phase-based probability
+      // Instead of each minion shooting independently (which causes bullet spam)
+      var now = Date.now();
+      var minionShootInterval = currentBoss === 3 ? 2000 : 3000; // Purple: 2s, Others: 3s
+
+      if (now - lastMinionShotTime >= minionShootInterval && bossMinions.length > 0) {
+        // Phase-based shoot probability: 30% green, 60% red, 90% purple
+        var shootProbability = currentBoss === 3 ? 0.90 : (currentBoss === 2 ? 0.60 : 0.30);
+
+        if (Math.random() < shootProbability) {
+          // Pick ONE random minion to shoot
+          var randomMinion = bossMinions[Math.floor(Math.random() * bossMinions.length)];
+          shootEnemyBullet(randomMinion);
+        }
+
+        lastMinionShotTime = now;
+      }
+
       // Spawn new minions
       if (Math.random() < CONFIG.bossMinionSpawnChance) {
         createBossMinion();
@@ -4302,26 +4420,127 @@
           }
         }
 
-        // ── Boss Shooting ──────────────────────────────────────────────────────
-        // Random per-frame chance to fire a bullet (CONFIG.bossShootChance = 0.02)
-        if (Math.random() < CONFIG.bossShootChance) {
-          // Bullet speed scales with boss tier
-          var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1; // Boss 1: base + 1
-          if (boss.isRedBoss) {
-            bossBulletSpeed = CONFIG.enemyBulletSpeed + 3; // Boss 2: base + 3 (faster)
-          } else if (boss.isPurpleBoss) {
-            bossBulletSpeed = CONFIG.enemyBulletSpeed + 4; // Boss 3: base + 4 (fastest)
-          }
+        // ═══════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        // BOSS ATTACK STATE SYSTEM (Mar 14, 2026 - Unpredictable Attack Patterns)
+        // ═══════════════════════════════════════════════════════════════════════
+        // 4 attack states that cycle randomly every 2-3 seconds:
+        // State 0 (RANDOM): Random chance single shot (unpredictable)
+        // State 1 (RAPID): N consecutive rapid shots (green:3, red:5, purple:7)
+        // State 2 (SPREAD): N spread volleys (green:2×2bullets, red:3×3bullets, purple:3×4bullets)
+        // State 3 (AIMED): N shots aimed at player (green:1, red:2, purple:3)
 
-          // Spawn bullet from boss center-bottom
-          enemyBullets.push({
-            x: Math.floor(boss.x + boss.width / 2 - 4), // Center on boss
-            y: Math.floor(boss.y + boss.height),         // Bottom edge
-            width: 8,
-            height: 15,
-            speed: bossBulletSpeed,
-            isBossBullet: true // Flag for damage/collision handling
-          });
+        var now = Date.now();
+        var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1;
+        if (boss.isRedBoss) {
+          bossBulletSpeed = CONFIG.enemyBulletSpeed + 3;
+        } else if (boss.isPurpleBoss) {
+          bossBulletSpeed = CONFIG.enemyBulletSpeed + 4;
+        }
+
+        var centerX = Math.floor(boss.x + boss.width / 2);
+        var centerY = Math.floor(boss.y + boss.height);
+
+        // Check if should switch to new random attack state
+        if (now - boss.stateStartTime >= boss.stateDuration) {
+          boss.currentAttackState = Math.floor(Math.random() * 4); // Pick state 0-3 randomly
+          boss.stateStartTime = now;
+          boss.stateShotCount = 0;
+          boss.lastStateShotTime = 0;
+          // Randomize next state duration
+          boss.stateDuration = boss.stateCycleMin +
+            Math.random() * (boss.stateCycleMax - boss.stateCycleMin);
+        }
+
+        // Execute current attack state
+        switch (boss.currentAttackState) {
+          case 0: // RANDOM_FIRE - Random chance single shot
+            if (Math.random() < CONFIG.bossShootChance) {
+              enemyBullets.push({
+                x: centerX - 4,
+                y: centerY,
+                width: 8,
+                height: 15,
+                speed: bossBulletSpeed,
+                isBossBullet: true
+              });
+            }
+            break;
+
+          case 1: // RAPID_BURST - Consecutive rapid shots
+            if (boss.stateShotCount < boss.rapidBurstCount) {
+              if (now - boss.lastStateShotTime >= boss.burstInterval) {
+                enemyBullets.push({
+                  x: centerX - 4,
+                  y: centerY,
+                  width: 8,
+                  height: 15,
+                  speed: bossBulletSpeed,
+                  isBossBullet: true
+                });
+                boss.stateShotCount++;
+                boss.lastStateShotTime = now;
+              }
+            }
+            break;
+
+          case 2: // SPREAD_VOLLEY - Multiple spread shots
+            if (boss.stateShotCount < boss.spreadBurstCount) {
+              if (now - boss.lastStateShotTime >= 300) { // 300ms between spreads
+                // Fire spread shot
+                var spreadAngle = boss.isPurpleBoss ? 60 : (boss.isRedBoss ? 40 : 30);
+                var angleStep = boss.bulletsPerSpread > 1 ?
+                  spreadAngle / (boss.bulletsPerSpread - 1) : 0;
+                var startAngle = -spreadAngle / 2;
+
+                for (var i = 0; i < boss.bulletsPerSpread; i++) {
+                  var angle = (startAngle + angleStep * i) * Math.PI / 180;
+                  var dx = Math.sin(angle) * 2;
+                  var dy = Math.cos(angle) * bossBulletSpeed;
+
+                  enemyBullets.push({
+                    x: centerX - 4 + dx,
+                    y: centerY,
+                    width: 8,
+                    height: 15,
+                    speed: dy,
+                    dx: dx,
+                    isBossBullet: true
+                  });
+                }
+                boss.stateShotCount++;
+                boss.lastStateShotTime = now;
+              }
+            }
+            break;
+
+          case 3: // AIMED_SHOTS - Shots aimed at player position
+            if (boss.stateShotCount < boss.aimedShotCount) {
+              if (now - boss.lastStateShotTime >= boss.burstInterval) {
+                // Calculate angle to player
+                var playerCenterX = player.x + player.width / 2;
+                var playerCenterY = player.y + player.height / 2;
+                var angleToPlayer = Math.atan2(playerCenterY - centerY, playerCenterX - centerX);
+
+                // Fire bullet toward player
+                var bulletSpeed = bossBulletSpeed * 0.8; // Slightly slower for aimed shots
+                var dx = Math.cos(angleToPlayer) * bulletSpeed;
+                var dy = Math.sin(angleToPlayer) * bulletSpeed;
+
+                enemyBullets.push({
+                  x: centerX - 4,
+                  y: centerY,
+                  width: 8,
+                  height: 15,
+                  speed: dy,
+                  dx: dx,
+                  isBossBullet: true
+                });
+                boss.stateShotCount++;
+                boss.lastStateShotTime = now;
+              }
+            }
+            break;
         }
       }
 
@@ -5335,6 +5554,166 @@
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COORDINATED ATTACK SYSTEM (Mar 2026)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Returns the attack configuration for the current phase (green/red/purple)
+     * @returns {Object} Attack config with interval, bulletCounts, patterns, rainStagger
+     */
+    /**
+     * Returns the attack configuration for the current phase (green/red/purple)
+     * During boss fights, intervals are doubled to reduce bullet spam (mobile performance)
+     * @returns {Object} Attack config with interval, bulletCounts, patterns, rainStagger
+     */
+    function getPhaseConfig() {
+      var config;
+      if (purplePhase) config = ATTACK_CONFIG.purple;
+      else if (redPhase) config = ATTACK_CONFIG.red;
+      else config = ATTACK_CONFIG.green;
+
+      // If boss active, slow down coordinated attacks (2x slower for mobile performance)
+      if (bossActive) {
+        config = Object.assign({}, config); // Create shallow copy
+        config.interval *= 2; // Double interval: 3s→6s, 2s→4s, 1.2s→2.4s
+      }
+
+      return config;
+    }
+
+    /**
+     * Returns all formation enemies that can shoot (not shielded, not kamikaze, not boss, not barrier)
+     * @returns {Array} Array of shootable enemy objects
+     */
+    function getShootableEnemies() {
+      var shootable = [];
+      for (var i = 0; i < enemies.length; i++) {
+        var e = enemies[i];
+        // Can shoot if: not kamikaze, not barrier, not boss
+        if (!e.kamikaze && !e.isBarrier && e.type !== 'boss') {
+          shootable.push(e);
+        }
+      }
+      return shootable;
+    }
+
+    /**
+     * Selects N random enemies from the pool using Fisher-Yates shuffle
+     * @param {number} count - Number of enemies to select
+     * @param {Array} availableEnemies - Pool of enemies to select from
+     * @returns {Array} Selected enemy objects
+     */
+    function selectRandomEnemies(count, availableEnemies) {
+      var selected = [];
+      var pool = availableEnemies.slice();  // Copy array
+
+      // Fisher-Yates shuffle
+      for (var i = pool.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = pool[i];
+        pool[i] = pool[j];
+        pool[j] = temp;
+      }
+
+      // Take first N enemies
+      for (var i = 0; i < Math.min(count, pool.length); i++) {
+        selected.push(pool[i]);
+      }
+
+      return selected;
+    }
+
+    /**
+     * Selects attack type using weighted random based on pattern probabilities
+     * @param {Object} config - Phase config with pattern probabilities
+     * @returns {string} 'single', 'sync', or 'rain'
+     */
+    function selectAttackType(config) {
+      var rand = Math.random();
+      var cumulative = 0;
+
+      for (var type in config.patterns) {
+        cumulative += config.patterns[type];
+        if (rand <= cumulative) {
+          return type;  // Returns 'single', 'sync', or 'rain'
+        }
+      }
+      return 'single';  // Fallback
+    }
+
+    /**
+     * Executes a coordinated attack using the current phase config
+     * Selects attack type, picks enemies, and fires bullets (immediate or queued for rain)
+     */
+    function executeCoordinatedAttack(config) {
+      var now = Date.now();
+      var shootableEnemies = getShootableEnemies();
+
+      // Edge case: No enemies available
+      if (shootableEnemies.length === 0) return;
+
+      // Select attack type and bullet count
+      var attackType = selectAttackType(config);
+      var bulletCount = config.bulletCounts[Math.floor(Math.random() * config.bulletCounts.length)];
+
+      // Ensure we don't request more bullets than enemies available
+      var enemyCount = Math.min(bulletCount, shootableEnemies.length);
+
+      // For single shot, always use 1 enemy
+      if (attackType === 'single') enemyCount = 1;
+
+      var targetEnemies = selectRandomEnemies(enemyCount, shootableEnemies);
+
+      // Execute attack pattern
+      switch(attackType) {
+        case 'single':
+          shootEnemyBullet(targetEnemies[0]);
+          break;
+
+        case 'sync':
+          // All enemies fire simultaneously
+          for (var i = 0; i < targetEnemies.length; i++) {
+            shootEnemyBullet(targetEnemies[i]);
+          }
+          break;
+
+        case 'rain':
+          // Enemies fire with stagger (cascading effect)
+          for (var i = 0; i < targetEnemies.length; i++) {
+            bulletQueue.push({
+              enemy: targetEnemies[i],
+              fireTime: now + (i * config.rainStagger)
+            });
+          }
+          break;
+      }
+    }
+
+    /**
+     * Main coordinated attack update loop (called every frame)
+     * Triggers attacks on interval and processes queued rain bullets
+     */
+    function updateCoordinatedAttacks() {
+      var now = Date.now();
+      var config = getPhaseConfig();
+
+      // Trigger attack on interval
+      if (now - lastAttackTime >= config.interval) {
+        executeCoordinatedAttack(config);
+        lastAttackTime = now;
+      }
+
+      // Process queued bullets (for rain effect)
+      bulletQueue = bulletQueue.filter(function(item) {
+        if (now >= item.fireTime) {
+          shootEnemyBullet(item.enemy);
+          return false;  // Remove from queue
+        }
+        return true;  // Keep in queue
+      });
+    }
+
     /**
      * Fires one bullet downward from the bottom-centre of the given enemy.
      * Bullet speed scales with the current game phase (red: +40%, purple: +65%).
@@ -6174,6 +6553,11 @@
         ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
         bullet.y += bullet.speed;
 
+        // Angled bullet support (for boss spread shots)
+        if (bullet.dx) {
+          bullet.x += bullet.dx; // Horizontal movement for spread bullets
+        }
+
         if (bullet.y > canvas.height) {
           enemyBullets.splice(i, 1);
           continue;
@@ -6528,36 +6912,16 @@
             continue;
           }
 
-          // Enemy shooting (level 2+)
-          // Shielded enemies don't shoot
-          var canShoot = level >= 2 && !enemy.shielded && !enemy.kamikaze;
-          if (canShoot) {
-            var now = Date.now();
-            if (enemy.nextShootTime && now >= enemy.nextShootTime) {
-              shootEnemyBullet(enemy);
-
-              // Cooldown: random interval based on phase (Purple < Red < Green)
-              // Adjusted Mar 14, 2026: Increased difficulty after cascading made bullets easier to dodge
-              var minGap = purplePhase ? 1200 : (redPhase ? 1500 : 2000);
-              var maxGap = purplePhase ? 3000 : (redPhase ? 4000 : 5000);
-              var randomCooldown = minGap + Math.random() * (maxGap - minGap);
-
-              // Cascade delay: stagger shots using shuffled cascade rank (0 = shoots first)
-              // Prevents bullet "walls" when 8-16 enemies fire simultaneously
-              // Creates coordinated wave pattern without predictable left→right order
-              var cascadeDelay = (enemy.cascadeRank || 0) * 100; // 100ms between each enemy in sequence
-              var cascadeOffset = cascadeDelay % 1600; // Cycle cascade over 1.6s max (prevents excessive stacking)
-
-              enemy.nextShootTime = now + randomCooldown + cascadeOffset;
-            } else if (!enemy.nextShootTime) {
-              // Fallback for enemies that didn't get nextShootTime on spawn (fillers, barriers)
-              var shootChance = CONFIG.enemyShootChance + (level - 2) * CONFIG.enemyShootIncrease;
-              if (Math.random() < shootChance) {
-                shootEnemyBullet(enemy);
-              }
-            }
-          }
+          // NOTE: Enemy shooting moved to coordinated attack system (see below)
         }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // COORDINATED ATTACK SYSTEM (Mar 2026)
+        // ═══════════════════════════════════════════════════════════════════════
+        // Replaces per-enemy random cooldowns with choreographed attacks
+        // Three patterns: single (1 enemy), sync (simultaneous), rain (cascading)
+        // Fixed rhythm: Green 3s, Red 2.5s, Purple 1.5s
+        updateCoordinatedAttacks();
 
         // Check wave completion
         checkWaveCompletion();

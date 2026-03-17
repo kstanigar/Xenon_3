@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 14, 2026 (session 4)_
+_Last updated: March 17, 2026 (analytics v4.0 - coordinated attack system)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -12,7 +12,7 @@ This is the single source of truth for the NON-X project. It is shared with ever
 1. **Data-first workflow** — before building any visual or metric, confirm data is being captured correctly. Audit as: 🟢 Good / 🟡 Improve / 🔴 Fix.
 2. **Never recommend destructive operations** (delete Firebase collections, clear localStorage, reset GA4 properties) without tracing all dependent code first.
 3. **Never diagnose a game over screen bug** without asking: what level, what score, first game or replay?
-4. **analytics_version = 3.0** — filter ALL GA4 explorations and Looker Studio reports to this version. Bump ONLY when gameplay mechanics change, not for instrumentation fixes.
+4. **analytics_version = 4.0** — filter ALL GA4 explorations and Looker Studio reports to this version. Bump ONLY when gameplay mechanics change, not for instrumentation fixes.
 5. **Pre-launch data (Feb 10 – Mar 9, 2026) is QA/self-testing** — do not draw product conclusions or calibrate benchmarks from it.
 6. **Real player baseline starts: ~Mar 10, 2026.**
 7. **Investigate and report before making any changes** — always trace root cause first, confirm findings, then implement with comments and revert instructions.
@@ -320,9 +320,25 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - **Deploy:** GitHub Pages, auto-deploys from main, ~2–3 min after merge
 
 ### Commit message format
+**REQUIRED:** All commits MUST include Co-Authored-By attribution.
+
 ```bash
-git commit -m "feat(mobile): short description here"
+git commit -m "$(cat <<'EOF'
+feat(scope): short description here
+
+Longer description if needed (optional).
+Multiple paragraphs supported.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+EOF
+)"
 ```
+
+**Format rules:**
+- Use conventional commits: `feat(scope)`, `fix(scope)`, `perf(scope)`, `docs(scope)`
+- Scopes: `gameplay`, `mobile`, `analytics`, `ui`, `security`
+- Always end with `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
+- Use heredoc format for multi-line messages (ensures proper formatting)
 
 ### Pre-commit check (always run)
 ```bash
@@ -366,7 +382,7 @@ print('draw function:', 'function draw(' in c)
 ### Event wrappers
 | File | Function | Behaviour |
 |---|---|---|
-| `game.html` | `fireEvent(eventName, params)` | Injects `analytics_version: '3.0'` via Object.assign. Dev mode (Shift+D) suppresses to console. |
+| `game.html` | `fireEvent(eventName, params)` | Injects `analytics_version: '4.0'` via Object.assign. Dev mode (Shift+D) suppresses to console. |
 | `game_mobile.html` | `fireEvent(eventName, params)` | Identical to game.html |
 | `index.html` | `trackEvent(name, data)` | Same injection. Also gates on user consent — suppresses all events if `nonex_analytics = 'off'`, except `analytics_toggled` which always fires. |
 
@@ -375,8 +391,9 @@ print('draw function:', 'function draw(' in c)
 |---|---|---|
 | (none) | ❌ Discard | Pre-analytics / QA |
 | 2.0 | ❌ Discard | Broken boss spawn, indestructible mobile minions, untuned hitbox, random movement A/B |
-| 3.0 | ✅ Use | Current. Boss fix, hitbox inset, minion fix, movement as player preference. |
-| 3.0+ | ✅ Use | Full instrumentation — all events carry version via wrapper. Deploy date: ~Mar 10 2026. Use `date ≥ Mar 10 2026` filter when full event-level coverage required. |
+| 3.0 | ⏸️ Legacy | Boss fix, hitbox inset, minion fix, movement as player preference. |
+| 3.0+ | ⏸️ Legacy | Full instrumentation — all events carry version via wrapper. Deploy date: ~Mar 10 2026. |
+| 4.0 | ✅ Use | **Current**. Coordinated attack system (3s/2s/1.2s rhythm), shield shooting enabled, bullet speed 8 px/frame, boss minion shooting, level 1 gate removed. Deploy date: ~Mar 17 2026. |
 
 **Instrumentation patches (no version bump — use deploy date to filter):**
 | Patch | Date | Change |

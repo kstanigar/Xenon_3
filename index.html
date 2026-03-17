@@ -30,7 +30,7 @@
   ANALYTICS DOCUMENTATION
   ============================================================
   GA4 Property : G-9ECFZ9JBE5
-  Version      : analytics_version: '3.0'
+  Version      : analytics_version: '4.0'
                  Injected automatically by trackEvent() wrapper.
 
   trackEvent(name, data)
@@ -38,7 +38,7 @@
     Respects user consent — events suppressed if user has opted
     out (nonex_analytics = 'off'), EXCEPT analytics_toggled which
     always fires so consent changes are always recorded.
-    Automatically merges { analytics_version: '3.0' } into every
+    Automatically merges { analytics_version: '4.0' } into every
     event payload via Object.assign.
 
   Events fired from this file (7 total):
@@ -79,7 +79,7 @@
   CHANGELOG
   ============================================================
   v3.0 — Mar 10, 2026
-    • analytics_version: '3.0' injected into all trackEvent() calls
+    • analytics_version: '4.0' injected into all trackEvent() calls
       via Object.assign in the wrapper. Bump version for gameplay
       mechanic changes only; use deploy date for instrumentation changes.
     • Discard analytics data from v2.0 and earlier:
@@ -651,7 +651,7 @@
 
       // Send to Google Analytics if gtag is available
       if (typeof gtag !== 'undefined') {
-        gtag('event', name, Object.assign({ analytics_version: '3.0' }, data || {}));
+        gtag('event', name, Object.assign({ analytics_version: '4.0' }, data || {}));
       }
     }
 
@@ -950,7 +950,7 @@
         platform: selectedPlatform,
         music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         ab_music_group: localStorage.getItem('nonx_ab_music_group') || 'unknown',
-        analytics_version: '3.0'
+        analytics_version: '4.0'
       });
 
       // Determine destination based on platform selection
@@ -996,7 +996,7 @@
       music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
       ab_music_group: localStorage.getItem('nonx_ab_music_group') || 'unknown',
       platform: localStorage.getItem('nonex_platform') || 'not_set',
-      analytics_version: '3.0'
+      analytics_version: '4.0'
     });
   </script>
 </body>
