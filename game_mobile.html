@@ -96,9 +96,10 @@
   └─────────────────────────────────────────────────────────────┘
 
   Difficulty tuning vs desktop (affects wave_reached/death data):
-    Red phase bullet speed  : ×1.15 (desktop: ×1.40)
-    Purple phase bullet speed: ×1.35 (desktop: ×1.65)
-    Green phase             : identical to desktop
+    Base enemy bullet speed : 7 px/frame (desktop: 8 px/frame)
+    Red phase bullet speed  : 8.05 px/frame - ×1.15 (desktop: ×1.40)
+    Purple phase bullet speed: 9.45 px/frame - ×1.35 (desktop: ×1.65)
+    Green phase bullet speed: 7 px/frame (desktop: 8 px/frame)
     arrowheadExploded mult  : 1.6 (desktop: 2.4)
     Enemy counts L9–12      : 16, 17, 19, 22
 
@@ -619,7 +620,7 @@
       // Enemy shooting (starts at level 2)
       enemyShootChance: 0.003,
       enemyShootIncrease: 0.001,
-      enemyBulletSpeed: 8,  // Increased from 5 to 8 (60% faster) - bullets now clearly faster than formation descent
+      enemyBulletSpeed: 7,  // Mobile-optimized (reduced from 8 for touch control playability)
 
       // Boss settings
       boss1ScoreThreshold: 400,
