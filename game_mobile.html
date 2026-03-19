@@ -4469,18 +4469,22 @@
       var drawY = cy - drawHeight / 2;
 
       // ═══════════════════════════════════════════════════════════════════════════
-      // SHIELD VISUAL FEEDBACK SYSTEM (Mobile)
+      // SHIELD VISUAL FEEDBACK SYSTEM (Mobile) - Performance Optimized (Mar 19, 2026)
       // ═══════════════════════════════════════════════════════════════════════════
       // Provides visual indicators when shielded enemies are hit:
       // 1. Flash Effect - Shield brightens briefly when hit (3 frames, +0.4 alpha boost)
       // 2. Wobble Effect - Shield pulses in size when hit (oscillates, exponential decay)
       // 3. Faster Pulse Rate - Shield ripple animates faster as damage increases (1.0x → 1.5x)
-      // 4. Opacity Degradation - Shield fades as damage increases (1.0 → 0.5 alpha)
+      //
+      // REMOVED (Mar 19, 2026 - Performance):
+      // - Opacity Degradation - Was fading shield 1.0 → 0.5 alpha as damage increased
+      // - Rationale: Flash + wobble + faster pulse already provide sufficient feedback
+      // - Performance gain: Eliminates opacity calculations every frame for every shielded enemy
       //
       // Implementation differences from desktop:
       // - Uses pre-rendered ripple canvases (cannot change color mid-animation)
       // - Color stays yellow (no yellow→red transition like desktop)
-      // - Instead: pulse speed + opacity provide damage feedback
+      // - Pulse speed provides primary damage feedback
       //
       // Performance: Zero cost - just multiplier calculations on existing values.
       //
@@ -4546,11 +4550,6 @@
             var wobbleOffset = 0;
 
             if (isShielded) {
-              // Opacity Degradation: Shield fades as it takes damage (1.0 → 0.5 alpha)
-              // Healthy shield: 1.0x full opacity | Critical shield: 0.5x faded
-              var opacityMultiplier = 0.5 + (1 - shieldDamagePercent) * 0.5; // 1.0 (healthy) to 0.5 (critical)
-              finalAlpha *= opacityMultiplier;
-
               // Flash Effect: Shield brightens briefly when hit (+0.4 alpha for 3 frames)
               if (enemy.shieldFlashFrames > 0) {
                 finalAlpha = Math.min(1.0, finalAlpha + 0.4); // Boost alpha for flash
@@ -5360,13 +5359,15 @@
 
 
       // ═══════════════════════════════════════════════════════════════════════════
-      // BOSS SHIELD VISUAL FEEDBACK (Mobile)
+      // BOSS SHIELD VISUAL FEEDBACK (Mobile) - Performance Optimized (Mar 19, 2026)
       // ═══════════════════════════════════════════════════════════════════════════
-      // Same four effects as enemy shields, but tied to boss health % instead of hits:
+      // Same three effects as enemy shields, but tied to boss health % instead of hits:
       // 1. Flash Effect - Shield brightens when hit
       // 2. Wobble Effect - Shield pulses in size when hit
       // 3. Faster Pulse Rate - Ripple animates faster as boss health decreases
-      // 4. Opacity Degradation - Shield fades as boss health decreases
+      //
+      // REMOVED (Mar 19, 2026 - Performance):
+      // - Opacity Degradation - No longer fades shield as boss health decreases
       //
       // Trigger: Set boss.shieldFlashFrames=3 and boss.shieldWobble=3 in damageBoss()
       // when boss.shielded is true (~line 4806).
@@ -5426,10 +5427,6 @@
             // Apply visual feedback effects
             var finalAlpha = rippleAlpha * 0.7;
 
-            // Opacity Degradation: Boss shield fades with damage (1.0 → 0.5 alpha)
-            var bossOpacityMultiplier = 0.5 + (1 - bossDamagePercent) * 0.5; // 1.0 (healthy) to 0.5 (critical)
-            finalAlpha *= bossOpacityMultiplier;
-
             var wobbleOffset = 0;
 
             // Flash Effect: Shield brightens briefly when hit (+0.4 alpha for 3 frames)
@@ -5458,8 +5455,8 @@
           var frameIndex = Math.floor(beatPhase * (innerShieldFrames.length - 1));
           var iCanvas = innerShieldFrames[frameIndex];
           if (iCanvas) {
-            // Apply same opacity degradation to inner shield
-            var innerAlpha = rippleAlpha * 0.5 * bossOpacityMultiplier;
+            // No opacity degradation - use base ripple alpha only
+            var innerAlpha = rippleAlpha * 0.5;
             ctx.globalAlpha = innerAlpha;
             // Scale 0.6x (should match original logic)
             // But wait, if pre-rendered is "boss" size, maybe 0.8?
