@@ -672,7 +672,7 @@
       // ── Enemy shooting (unlocked at level 2) ────────────────────
       enemyShootChance: 0.005,  // Per-frame probability an individual enemy fires
       enemyShootIncrease: 0.002,// Shoot chance increase per level above 2
-      enemyBulletSpeed: 8,      // Enemy bullet speed in px/frame (60% faster - bullets clearly faster than formation descent)
+      enemyBulletSpeed: 7,      // Reduced from 8 for better playability (still faster than formation descent)
 
       // ── Boss triggers (score thresholds) ────────────────────────
       boss1ScoreThreshold: 400, // Boss 1 spawns when score reaches this value
@@ -697,7 +697,7 @@
 
       // ── Boss minions (spawn during boss fights) ──────────────────
       bossMinionSpeed: 2,           // Minion horizontal scroll speed in px/frame
-      bossMinionSpawnChance: 0.025, // Per-frame probability (desktop: 67% more than mobile)
+      bossMinionSpawnChance: 0.0085, // Reduced by 50% for performance (Mar 18, 2026)
 
       // ── Enemy roster per level ───────────────────────────────────
       // Each level unlocks an additional enemy type. Wave formations
@@ -1014,6 +1014,14 @@
 
     // User's movement control group (set on main menu, persists across sessions)
     var movementABGroup = initMovementABTest();
+
+    /**
+     * Score multiplier based on movement mode (Elite Tier feature)
+     * - Group A (horizontal only): 1.5x score multiplier
+     * - Group B (full movement): 1.0x score multiplier (standard)
+     * Applied to all scoring events: enemy kills, power-ups, boss defeats
+     */
+    var scoreMultiplier = (movementABGroup === 'A') ? 1.25 : 1.0;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DEVELOPER MODE
@@ -1473,15 +1481,35 @@
     var mouseActive = false;
     var mouseDown = false;
     var spacebarPressed = false;
-    var lastShotTime = 0;
-    var FIRE_COOLDOWN = 127; // ms between shots (~7.9 shots/sec, +2 more than mobile)
+
+    // Burst-fire system (Mar 18, 2026 - consistent with mobile)
+    var BURST_BULLET_COUNT = 6;       // 6 bullets per burst
+    var BURST_FIRE_INTERVAL = 130;    // 130ms between bullets in burst (650ms total)
+    var BURST_COOLDOWN = 600;         // 600ms cooldown after burst (1250ms cycle)
+    var burstShotCount = 0;           // Bullets fired in current burst
+    var lastShotTime = 0;             // Timestamp of last bullet fired
+    var burstCycleStart = 0;          // Timestamp when current burst started
 
     // Power-up state
     var hasDoubleLaser = false;
     var laserLevel = 1; // 1 = single, 2 = double, 3 = triple, 4 = quad (purple phase only)
-    var powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
-    var lastPowerupSpawnTime = 0;
-    var powerupSpawnCooldown = 5000; // 5 seconds minimum between power-ups
+
+    // POWER-UP TIMER SYSTEM (Mar 18, 2026 - Performance Optimization)
+    // Phase-based spawn intervals and starting positions:
+    // - Green (1-4): 5s intervals, starts at Shield (0)
+    // - Red (5-8): 5s intervals, starts at Laser (1)
+    // - Purple (9-12): 5s intervals, starts at Health (2)
+    // - Initial delay: 5s after formation lands or boss entrance completes
+    // Cycle order: Shield (0) → Laser (1) → Health (2) → (repeat)
+    var POWERUP_INITIAL_DELAY = 5000; // 5 seconds before first power-up
+    var POWERUP_INTERVAL_GREEN = 5000; // 5 seconds for levels 1-4
+    var POWERUP_INTERVAL_RED_PURPLE = 5000; // 5 seconds for levels 5-12
+    var powerupCycleIndex = 0; // Current position in cycle: 0=shield, 1=laser, 2=health
+    var powerupCyclesCompleted = 0; // Number of complete cycles this level
+    var powerupSpawnsThisCycle = 0; // Number of power-ups spawned in current cycle
+    var lastPowerupSpawnTime = 0; // Timestamp of last power-up spawn
+    var maxPowerupCycles = 1; // Max cycles for current level (set in advanceLevel)
+    var lastBossPowerupType = null;  // Track last boss powerup type for cycling (Mar 18, 2026)
 
     // Player blink state (when damaged)
     var playerBlinking = false;
@@ -1497,6 +1525,19 @@
     var bossBlinkTimer = 0;
     var bossVisible = true;
     var lastMinionShotTime = 0;  // Global timer for controlled minion shooting (mobile performance)
+
+    // Boss kamikaze spawning (Mar 18, 2026 - time-based triggers)
+    var lastKamikazeSpawnTime = 0;  // Timestamp of last kamikaze wave spawn
+    var kamikazeWaveCount = 0;      // Number of waves spawned (cap: Green 2, Red/Purple 3)
+    var KAMIKAZE_SPAWN_INTERVAL = 20000; // 20 seconds between waves
+
+    // Boss kamikaze conversion system (Mar 18, 2026 - Option A)
+    var lastKamikazeConversionTime = 0;  // Timestamp of last conversion
+    var KAMIKAZE_CONVERSION_INTERVAL = 15000; // 15 seconds between conversions
+    var KAMIKAZE_CONVERSION_COUNT_MIN = 2;    // Min enemies to convert
+    var KAMIKAZE_CONVERSION_COUNT_MAX = 3;    // Max enemies to convert
+    var KAMIKAZE_CONVERSION_Y_THRESHOLD = 200; // Y position trigger (desktop)
+    var KAMIKAZE_CONVERSION_SPEED = 6;        // Dive speed (faster than regular 4-6)
 
     // Screen shake state
     var screenShakeActive = false;
@@ -1791,7 +1832,7 @@
      */
     function collectPowerup(powerup) {
       playSound('powerUp');
-      score += 5;
+      score += Math.floor(5 * scoreMultiplier); // Apply elite tier multiplier
       updateUI();
       if (powerup.type === POWERUP_TYPES.HEALTH) {
         health = Math.min(health + CONFIG.healthPowerupAmount, CONFIG.maxHealth);
@@ -1807,13 +1848,15 @@
             showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
           } else {
             // Already at max power in purple phase
-            score += 50;
+            var bonusPoints = Math.floor(50 * scoreMultiplier);
+            score += bonusPoints;
             updateUI();
             showAnnouncement("powerupDisplay", "MAX POWER +50", 1500);
           }
         } else if (hasDoubleLaser && !purplePhase) {
           // Green/red phase already has double laser — bonus score instead
-          score += 50;
+          var bonusPoints = Math.floor(50 * scoreMultiplier);
+          score += bonusPoints;
           updateUI();
           showAnnouncement("powerupDisplay", "MAX POWER +50", 1500);
         } else {
@@ -1845,82 +1888,86 @@
     }
 
     /**
-     * Attempts to spawn a power-up based on random chance, respecting cooldown
-     * and per-level limits. Creates strategic scarcity by limiting each power-up
-     * type to one spawn per level.
+     * Timer-based power-up spawning system (Mar 18, 2026)
      *
-     * Spawn system:
-     * - Base chance: 0.3% per frame (CONFIG.powerupSpawnChance = 0.003)
-     * - Cooldown: 5 seconds minimum between drops (powerupSpawnCooldown = 5000ms)
-     * - Limit: Maximum 1 of each power-up type per level
-     * - Reset: powerupsSpawnedThisLevel cleared on level progression
+     * Phase-based spawn system with 5-second initial delay and 5-second intervals:
+     * - Green (1-4): 5s delay, then 5s intervals, starts at Shield (0)
+     * - Red (5-8): 5s delay, then 5s intervals, starts at Laser (1)
+     * - Purple (9-12): 5s delay, then 5s intervals, starts at Health (2)
      *
-     * Priority ladder (checked in order):
-     * 1. Health (40% chance) — if not spawned this level and rand < 0.4
-     * 2. Double Laser (70% chance) — if not spawned this level and rand < 0.7
-     * 3. Shield (100% chance) — if not spawned this level, level >= 3, and rand >= 0.7
-     * 4. Health (fallback) — if shield/laser already spawned but health not
+     * Cycle order: Shield (0) → Laser (1) → Health (2) → (repeat)
      *
-     * Level requirements:
-     * - Health: Available all levels
-     * - Double Laser: Available all levels
-     * - Shield: Only available level 3+ (mid-game onward)
+     * Cycle limits:
+     * - Levels 1-8: 1 cycle (3 power-ups max)
+     * - Levels 9-12: 2 cycles (6 power-ups max)
+     * - Boss fights: 2 cycles (6 power-ups max)
+     *
+     * Performance benefit: Eliminates 60 random checks per second,
+     * replaces with 1 timer check every 5 seconds.
      *
      * Power-up effects:
-     * - Health: +10 HP (up to maxHealth = 250)
-     * - Double Laser: Enables dual-shot (laserLevel = 2)
      * - Shield: 5-hit absorption, reduces damage to 5 HP
+     * - Double Laser: Enables dual-shot (laserLevel = 2)
+     * - Health: +10 HP (up to maxHealth = 250)
      *
-     * Called every frame from draw() during normal gameplay (not boss fights).
+     * Called every frame from draw() during normal gameplay and boss fights.
      */
     function trySpawnPowerup() {
-      // ── Cooldown Check ─────────────────────────────────────────────────────────
-      // Enforce minimum 5-second gap between power-up spawns to prevent spam
       var now = Date.now();
-      if (now - lastPowerupSpawnTime < powerupSpawnCooldown) return;
 
-      // ── Base Spawn Chance ──────────────────────────────────────────────────────
-      // 0.3% per frame (~18% per second at 60 FPS)
-      if (Math.random() > CONFIG.powerupSpawnChance) return;
+      // Don't spawn power-ups until delay timer has been set (lastPowerupSpawnTime > 0)
+      // This prevents spawning when timer hasn't been initialized
+      if (lastPowerupSpawnTime === 0) return;
 
-      // ── Power-Up Selection (Priority Ladder) ──────────────────────────────────
-      // Randomly choose which power-up to try spawning.
-      // Only mark as spawned if createPowerup succeeds (x-bounds check).
-      var rand = Math.random();
-      var spawned = false;
-
-      // Priority 1: Health (40% chance, most common)
-      if (!powerupsSpawnedThisLevel.health && rand < 0.4) {
-        if (createPowerup(POWERUP_TYPES.HEALTH)) {
-          powerupsSpawnedThisLevel.health = true;
-          spawned = true;
-        }
-      }
-      // Priority 2: Double Laser (70% chance, medium rarity)
-      else if (!powerupsSpawnedThisLevel.doubleLaser && rand < 0.7) {
-        if (createPowerup(POWERUP_TYPES.DOUBLE_LASER)) {
-          powerupsSpawnedThisLevel.doubleLaser = true;
-          spawned = true;
-        }
-      }
-      // Priority 3: Shield (100% chance, rare, level 3+)
-      else if (!powerupsSpawnedThisLevel.shield && level >= 3) {
-        if (createPowerup(POWERUP_TYPES.SHIELD)) {
-          powerupsSpawnedThisLevel.shield = true;
-          spawned = true;
-        }
-      }
-      // Priority 4: Health (fallback if other types already spawned)
-      else if (!powerupsSpawnedThisLevel.health) {
-        if (createPowerup(POWERUP_TYPES.HEALTH)) {
-          powerupsSpawnedThisLevel.health = true;
-          spawned = true;
-        }
+      // Don't spawn power-ups until formation has landed or boss entrance has completed
+      if (bossActive) {
+        if (!boss || boss.entering) return; // Wait for boss to finish entering
+      } else {
+        if (!formationEntered) return; // Wait for formation to land
       }
 
-      // Update cooldown timer if a power-up was successfully spawned
-      if (spawned) {
+      // Determine spawn interval based on current level/phase
+      var spawnInterval;
+      if (bossActive) {
+        // Boss fights inherit their phase interval
+        // All bosses: 5s intervals
+        spawnInterval = (currentBoss === 1) ? POWERUP_INTERVAL_GREEN : POWERUP_INTERVAL_RED_PURPLE;
+      } else {
+        // Regular levels: All levels: 5s intervals
+        spawnInterval = (level <= 4) ? POWERUP_INTERVAL_GREEN : POWERUP_INTERVAL_RED_PURPLE;
+      }
+
+      // Check if interval has passed since last spawn
+      if (now - lastPowerupSpawnTime < spawnInterval) return;
+
+      // Check if we've completed max cycles for this level
+      if (powerupCyclesCompleted >= maxPowerupCycles) return;
+
+      // Determine which power-up to spawn based on cycle index
+      var powerupType;
+      switch (powerupCycleIndex) {
+        case 0: powerupType = POWERUP_TYPES.SHIELD; break;
+        case 1: powerupType = POWERUP_TYPES.DOUBLE_LASER; break;
+        case 2: powerupType = POWERUP_TYPES.HEALTH; break;
+        default: powerupType = POWERUP_TYPES.SHIELD; // Safety fallback
+      }
+
+      // Try to spawn the power-up
+      if (createPowerup(powerupType)) {
         lastPowerupSpawnTime = now;
+        powerupCycleIndex++;
+        powerupSpawnsThisCycle++;
+
+        // Wrap index if needed
+        if (powerupCycleIndex >= 3) {
+          powerupCycleIndex = 0; // Reset to shield for next cycle
+        }
+
+        // Check if cycle completed (3 actual spawns)
+        if (powerupSpawnsThisCycle >= 3) {
+          powerupCyclesCompleted++;
+          powerupSpawnsThisCycle = 0; // Reset spawn counter for next cycle
+        }
       }
     }
 
@@ -2555,7 +2602,8 @@
         'level_number': level,
         'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
         'score': score,
-        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        'score_multiplier': scoreMultiplier
       });
 
       // Reset formation and barrier tracking
@@ -2916,6 +2964,40 @@
           }
         }
       }
+    }
+
+    /**
+     * Converts an existing enemy (filler/minion) into a kamikaze during boss fights.
+     * Used by Option A timed conversion system (Mar 18, 2026).
+     *
+     * Conversion process:
+     * 1. Mark enemy as kamikaze
+     * 2. Calculate velocity vector toward player
+     * 3. Set dive speed (6 px/frame - faster than regular kamikazes)
+     * 4. Add flash effect for visual feedback
+     *
+     * @param {Object} enemy - Enemy object from enemies array or bossMinions array
+     */
+    function convertToKamikaze(enemy) {
+      enemy.kamikaze = true;
+      enemy.kamikazeEntering = false; // Skip entry animation
+      enemy.convertedKamikaze = true; // Mark as converted (for visual effect)
+      enemy.conversionFlashFrames = 3; // Flash white for 3 frames
+
+      // Calculate velocity toward player
+      var speed = KAMIKAZE_CONVERSION_SPEED; // 6 px/frame
+      var dx = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
+      var dy = player.y + player.height / 2 - (enemy.y + enemy.height / 2);
+      var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      enemy.kamikazeVelX = (dx / dist) * speed;
+      enemy.kamikazeVelY = (dy / dist) * speed;
+      enemy.kamikazeSpeed = speed;
+
+      // Clear movement flags
+      enemy.zigzag = false;
+      enemy.sideToSide = false;
+      enemy.sideEntry = false;
+      enemy.formation = false;
     }
 
     // Track formation for simple dance
@@ -3574,8 +3656,23 @@
 
       level = nextLevel;
       currentWave = 0;
-      powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
-      lastPowerupSpawnTime = 0; // Reset power-up cooldown for new level
+
+      // Reset power-up cycle for new level (Mar 18, 2026 - Phase-based System)
+      // Starting position based on phase:
+      // Green (1-4): Shield (0), Red (5-8): Laser (1), Purple (9-12): Health (2)
+      if (level <= 4) {
+        powerupCycleIndex = 0; // Green: Start with Shield
+      } else if (level <= 8) {
+        powerupCycleIndex = 1; // Red: Start with Laser
+      } else {
+        powerupCycleIndex = 2; // Purple: Start with Health
+      }
+      powerupCyclesCompleted = 0;
+      powerupSpawnsThisCycle = 0;
+      lastPowerupSpawnTime = 0; // Will be set when formation lands
+      // Set max cycles: 1 for levels 1-8, 2 for levels 9-12 (purple phase)
+      maxPowerupCycles = (level >= 9) ? 2 : 1;
+
       updateUI();
       showAnnouncement("levelDisplay", "Level " + level, 2000);
 
@@ -3877,7 +3974,7 @@
     var orbitersInitialized = false;
 
     // Smart filler management
-    var maxBossFillers = 6;
+    var maxBossFillers = 4; // Reduced from 6 (Mar 18, 2026 - boss optimization)
     var lastBossFillerBeat = 0;
     var bossFillerBeatInterval = 4; // Spawn every 4 beats
 
@@ -3895,16 +3992,33 @@
       showAnnouncement("levelDisplay", "BOSS!", 2000);
       startBossMusic();
 
+      // Reset power-up cycle for boss fight (Mar 18, 2026 - Phase-based System)
+      // Boss fights get 2 cycles (6 power-ups max)
+      // Starting position based on boss: Green (1): Shield (0), Red (2): Laser (1), Purple (3): Health (2)
+      // Intervals: Green: 10s, Red/Purple: 15s
+      if (currentBoss === 1) {
+        powerupCycleIndex = 0; // Green boss: Start with Shield
+      } else if (currentBoss === 2) {
+        powerupCycleIndex = 1; // Red boss: Start with Laser
+      } else {
+        powerupCycleIndex = 2; // Purple boss: Start with Health
+      }
+      powerupCyclesCompleted = 0;
+      powerupSpawnsThisCycle = 0;
+      lastPowerupSpawnTime = 0; // Will be set when boss entrance completes
+      maxPowerupCycles = 2; // Boss fights always get 2 cycles
+      lastBossPowerupType = null;
+
       var isRedBoss = (currentBoss === 2);
       var isPurpleBoss = (currentBoss === 3);
 
-      // Boss-specific health scaling (Mar 14, 2026 difficulty update)
-      // Green: 50 HP, Red: 75 HP (+50%), Purple: 100 HP (+100%)
+      // Boss-specific health scaling (Mar 18, 2026 difficulty update)
+      // Green: 50 HP, Red: 150 HP (+200%), Purple: 225 HP (+350%)
       var bossHealth = CONFIG.bossHealth; // 50 HP base (green boss)
       if (isRedBoss) {
-        bossHealth = 75; // Red boss: +50% health
+        bossHealth = 150; // Red boss: +200% health (aggressive difficulty)
       } else if (isPurpleBoss) {
-        bossHealth = 100; // Purple boss: +100% health (finale boss)
+        bossHealth = 225; // Purple boss: +350% health (finale challenge)
       }
 
       // Boss-specific shield cycle timing (Mar 14, 2026 difficulty update)
@@ -3945,8 +4059,9 @@
           Math.random() * (isPurpleBoss ? 500 : (isRedBoss ? 1000 : 1000)),
         stateShotCount: 0,
         lastStateShotTime: 0,
-        rapidBurstCount: isPurpleBoss ? 7 : (isRedBoss ? 5 : 3),
+        rapidBurstCount: isPurpleBoss ? 4 : (isRedBoss ? 3 : 2), // PERF: Reduced for mobile (Mar 18, 2026)
         burstInterval: isPurpleBoss ? 150 : (isRedBoss ? 180 : 200),
+        quickAimedCount: isPurpleBoss ? 2 : (isRedBoss ? 2 : 1), // Quick aimed shots (Mar 18, 2026)
         spreadBurstCount: isPurpleBoss ? 3 : (isRedBoss ? 3 : 2),
         bulletsPerSpread: isPurpleBoss ? 4 : (isRedBoss ? 3 : 2),
         aimedShotCount: isPurpleBoss ? 3 : (isRedBoss ? 2 : 1),
@@ -4096,7 +4211,7 @@
             spawnExplosion(orbiterCenterX, orbiterCenterY, false);
             spawnParticles(orbiterCenterX, orbiterCenterY, 10); // 10 particles for orbiter
             bossOrbiters.splice(i, 1);
-            score += 15; // Slightly more than regular enemies
+            score += Math.floor(15 * scoreMultiplier); // Slightly more than regular enemies
             updateUI();
             playSound('enemyDead');
             lastOrbiterDeathTime = time;
@@ -4161,11 +4276,28 @@
 
       // Spawn from sides to avoid boss orbit zone
       var fromSide = Math.random() < 0.5;
-      var enemyType = boss.isPurpleBoss ?
-        (Math.random() < 0.5 ? 'enemy2_purple' : 'enemy3_purple') :
-        (boss.isRedBoss ?
-          (Math.random() < 0.5 ? 'enemy2_red' : 'enemy3_red') :
-          (Math.random() < 0.5 ? 'enemy2' : 'enemy3'));
+
+      // Shooting filler system (Mar 18, 2026 - Performance optimized)
+      // Maximum 1 shooting filler at a time, shoots every 2 seconds
+      var activeShooters = enemies.filter(function(e) { return e.shootingFiller; }).length;
+      var isShootingFiller = fromSide && activeShooters === 0;
+
+      var enemyType;
+      if (fromSide) {
+        // Side-entry: Use enemy3 for shooters, enemy2 for non-shooters
+        if (isShootingFiller) {
+          enemyType = boss.isPurpleBoss ? 'enemy3_purple' : (boss.isRedBoss ? 'enemy3_red' : 'enemy3');
+        } else {
+          enemyType = boss.isPurpleBoss ? 'enemy2_purple' : (boss.isRedBoss ? 'enemy2_red' : 'enemy2');
+        }
+      } else {
+        // Top-entry: Random between enemy2 and enemy3 (never shooters)
+        enemyType = boss.isPurpleBoss ?
+          (Math.random() < 0.5 ? 'enemy2_purple' : 'enemy3_purple') :
+          (boss.isRedBoss ?
+            (Math.random() < 0.5 ? 'enemy2_red' : 'enemy3_red') :
+            (Math.random() < 0.5 ? 'enemy2' : 'enemy3'));
+      }
 
       var width = (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') ? 29 : 50;
       var height = (enemyType === 'enemy2_red' || enemyType === 'enemy2_purple') ? 29 : 50;
@@ -4187,6 +4319,8 @@
           type: enemyType,
           formation: false,
           sideEntry: true,
+          shootingFiller: isShootingFiller, // Shooting filler flag
+          lastFillerShotTime: 0, // Last time this filler fired a bullet
           breathPhase: Math.random()
         };
       } else {
@@ -4283,7 +4417,7 @@
             spawnExplosion(minionCenterX, minionCenterY, false);
             spawnParticles(minionCenterX, minionCenterY, 8); // 8 particles for minion
             bossMinions.splice(i, 1);
-            score += 10;
+            score += Math.floor(10 * scoreMultiplier);
             updateUI();
             playSound('enemyDead');
             // Minion kill chips boss for 1 HP
@@ -4366,6 +4500,7 @@
 
       // ── Shield Cycle Management ───────────────────────────────────────────────
       // Different shield behavior per boss tier.
+      // Shared timestamp for all time-based logic in this function
       var now = Date.now();
       var timeSinceShieldStart = now - boss.shieldStartTime;
 
@@ -4395,7 +4530,12 @@
           boss.entering = false;
           // Reset shield timer once boss is fully on screen —
           // prevents the shield expiring during the entrance slide
-          boss.shieldStartTime = Date.now();
+          boss.shieldStartTime = now; // Reuse timestamp
+
+          // Set power-up spawn timer for 5-second delay after boss entrance completes
+          // Boss inherits phase interval: All bosses: 5s
+          var bossPowerupInterval = (currentBoss === 1) ? POWERUP_INTERVAL_GREEN : POWERUP_INTERVAL_RED_PURPLE;
+          lastPowerupSpawnTime = now - (bossPowerupInterval - POWERUP_INITIAL_DELAY);
         }
       } else {
         // ── Movement: Horizontal Drift ─────────────────────────────────────────
@@ -4421,16 +4561,14 @@
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // ═══════════════════════════════════════════════════════════════════════
         // BOSS ATTACK STATE SYSTEM (Mar 14, 2026 - Unpredictable Attack Patterns)
         // ═══════════════════════════════════════════════════════════════════════
         // 4 attack states that cycle randomly every 2-3 seconds:
         // State 0 (RANDOM): Random chance single shot (unpredictable)
         // State 1 (RAPID): N consecutive rapid shots (green:3, red:5, purple:7)
-        // State 2 (SPREAD): N spread volleys (green:2×2bullets, red:3×3bullets, purple:3×4bullets)
-        // State 3 (AIMED): N shots aimed at player (green:1, red:2, purple:3)
-
-        var now = Date.now();
+        // State 2 (QUICK_AIMED): Fast aimed shots (green:1, red:2, purple:2) at 1.15x speed
+        // State 3 (AIMED): N shots aimed at player (green:1, red:2, purple:3) at 0.8x speed
+        // Old State 2 (SPREAD) removed for performance - diagonal aimed shots provide better gameplay
         var bossBulletSpeed = CONFIG.enemyBulletSpeed + 1;
         if (boss.isRedBoss) {
           bossBulletSpeed = CONFIG.enemyBulletSpeed + 3;
@@ -4443,7 +4581,8 @@
 
         // Check if should switch to new random attack state
         if (now - boss.stateStartTime >= boss.stateDuration) {
-          boss.currentAttackState = Math.floor(Math.random() * 4); // Pick state 0-3 randomly
+          var validStates = [0, 1, 2, 3]; // All 4 states active (Mar 18, 2026)
+          boss.currentAttackState = validStates[Math.floor(Math.random() * validStates.length)];
           boss.stateStartTime = now;
           boss.stateShotCount = 0;
           boss.lastStateShotTime = 0;
@@ -4484,30 +4623,28 @@
             }
             break;
 
-          case 2: // SPREAD_VOLLEY - Multiple spread shots
-            if (boss.stateShotCount < boss.spreadBurstCount) {
-              if (now - boss.lastStateShotTime >= 300) { // 300ms between spreads
-                // Fire spread shot
-                var spreadAngle = boss.isPurpleBoss ? 60 : (boss.isRedBoss ? 40 : 30);
-                var angleStep = boss.bulletsPerSpread > 1 ?
-                  spreadAngle / (boss.bulletsPerSpread - 1) : 0;
-                var startAngle = -spreadAngle / 2;
+          case 2: // QUICK_AIMED - Fast aimed shots (Mar 18, 2026)
+            if (boss.stateShotCount < boss.quickAimedCount) {
+              if (now - boss.lastStateShotTime >= boss.burstInterval) {
+                // Calculate angle to player
+                var playerCenterX = player.x + player.width / 2;
+                var playerCenterY = player.y + player.height / 2;
+                var angleToPlayer = Math.atan2(playerCenterY - centerY, playerCenterX - centerX);
 
-                for (var i = 0; i < boss.bulletsPerSpread; i++) {
-                  var angle = (startAngle + angleStep * i) * Math.PI / 180;
-                  var dx = Math.sin(angle) * 2;
-                  var dy = Math.cos(angle) * bossBulletSpeed;
+                // Fire quick aimed bullet (1.15x speed)
+                var quickAimedSpeed = bossBulletSpeed * 1.15;
+                var dx = Math.cos(angleToPlayer) * quickAimedSpeed;
+                var dy = Math.sin(angleToPlayer) * quickAimedSpeed;
 
-                  enemyBullets.push({
-                    x: centerX - 4 + dx,
-                    y: centerY,
-                    width: 8,
-                    height: 15,
-                    speed: dy,
-                    dx: dx,
-                    isBossBullet: true
-                  });
-                }
+                enemyBullets.push({
+                  x: centerX - 4,
+                  y: centerY,
+                  width: 8,
+                  height: 15,
+                  speed: dy,
+                  dx: dx,
+                  isBossBullet: true
+                });
                 boss.stateShotCount++;
                 boss.lastStateShotTime = now;
               }
@@ -4754,6 +4891,7 @@
         bossOrbiters = [];
         orbitersInitialized = false;
         enemies = [];
+        enemyBullets = []; // Clear boss bullets to prevent persistence into next level
         stopBossMusic();
 
         if (currentBoss === 1) {
@@ -4768,7 +4906,8 @@
             'level_reached': level,
             'score': score,
             'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+            'score_multiplier': scoreMultiplier
           });
 
           // Calculate bonus and set score to 800 (only if player is under threshold)
@@ -4796,8 +4935,15 @@
             currentWave = 0;
             waveInProgress = false;
             waveCooldown = false;
-            powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+
+            // Reset power-up cycle for new level (Mar 18, 2026 - Phase-based System)
+            // Level 5 = Red phase: Start at position 1 (Laser)
+            powerupCycleIndex = 1;
+            powerupCyclesCompleted = 0;
+            powerupSpawnsThisCycle = 0;
             lastPowerupSpawnTime = 0;
+            maxPowerupCycles = 1; // Level 5 = red phase, still 1 cycle
+
             updateUI();
             showAnnouncement("levelDisplay", "Level 5", 2000);
           }, 3000);
@@ -4813,7 +4959,8 @@
             'level_reached': level,
             'score': score,
             'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+            'score_multiplier': scoreMultiplier
           });
 
           // Calculate bonus and set score to 2000 (only if player is under threshold)
@@ -4839,8 +4986,15 @@
             currentWave = 0;
             waveInProgress = false;
             waveCooldown = false;
-            powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+
+            // Reset power-up cycle for new level (Mar 18, 2026 - Phase-based System)
+            // Level 9 = Purple phase: Start at position 2 (Health)
+            powerupCycleIndex = 2;
+            powerupCyclesCompleted = 0;
+            powerupSpawnsThisCycle = 0;
             lastPowerupSpawnTime = 0;
+            maxPowerupCycles = 2; // Level 9 = purple phase, 2 cycles
+
             updateUI();
             showAnnouncement("levelDisplay", "Level 9", 2000);
           }, 3000);
@@ -4857,9 +5011,10 @@
             'level_reached': level,
             'score': score,
             'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+            'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+            'score_multiplier': scoreMultiplier
           });
-          score += 100;
+          score += Math.floor(100 * scoreMultiplier);
           updateUI();
           showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
           setTimeout(function () {
@@ -4910,7 +5065,8 @@
         'platform': 'desktop',
         'score': score,
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+        'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+        'score_multiplier': scoreMultiplier
       });
 
       // game_complete fires on every session ending regardless of outcome.
@@ -5665,25 +5821,32 @@
 
       var targetEnemies = selectRandomEnemies(enemyCount, shootableEnemies);
 
+      // Aimed shot probability (red: 15%, purple: 25%)
+      var aimedChance = purplePhase ? 0.25 : (redPhase ? 0.15 : 0);
+
       // Execute attack pattern
       switch(attackType) {
         case 'single':
-          shootEnemyBullet(targetEnemies[0]);
+          var useAimed = Math.random() < aimedChance;
+          shootEnemyBullet(targetEnemies[0], useAimed);
           break;
 
         case 'sync':
-          // All enemies fire simultaneously
+          // All enemies fire simultaneously (some may be aimed)
           for (var i = 0; i < targetEnemies.length; i++) {
-            shootEnemyBullet(targetEnemies[i]);
+            var useAimed = Math.random() < aimedChance;
+            shootEnemyBullet(targetEnemies[i], useAimed);
           }
           break;
 
         case 'rain':
-          // Enemies fire with stagger (cascading effect)
+          // Enemies fire with stagger (cascading effect, some may be aimed)
           for (var i = 0; i < targetEnemies.length; i++) {
+            var useAimed = Math.random() < aimedChance;
             bulletQueue.push({
               enemy: targetEnemies[i],
-              fireTime: now + (i * config.rainStagger)
+              fireTime: now + (i * config.rainStagger),
+              useAimed: useAimed
             });
           }
           break;
@@ -5707,7 +5870,7 @@
       // Process queued bullets (for rain effect)
       bulletQueue = bulletQueue.filter(function(item) {
         if (now >= item.fireTime) {
-          shootEnemyBullet(item.enemy);
+          shootEnemyBullet(item.enemy, item.useAimed);
           return false;  // Remove from queue
         }
         return true;  // Keep in queue
@@ -5717,22 +5880,48 @@
     /**
      * Fires one bullet downward from the bottom-centre of the given enemy.
      * Bullet speed scales with the current game phase (red: +40%, purple: +65%).
+     * If useAimed is true, bullet is aimed at player position (diagonal shot).
      * @param {Object} enemy - The firing enemy object.
+     * @param {boolean} [useAimed=false] - If true, aim bullet toward player (Mar 18, 2026)
      */
-    function shootEnemyBullet(enemy) {
+    function shootEnemyBullet(enemy, useAimed) {
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       if (purplePhase) {
         bulletSpeed *= 1.65; // 65% faster in purple phase
       } else if (redPhase) {
         bulletSpeed *= 1.4; // 40% faster in red phase
       }
-      enemyBullets.push({
-        x: Math.floor(enemy.x + enemy.width / 2 - 2),
-        y: Math.floor(enemy.y + enemy.height),
-        width: 5,
-        height: 10,
-        speed: bulletSpeed
-      });
+
+      // Aimed shot logic (diagonal bullets toward player)
+      if (useAimed && (redPhase || purplePhase)) {
+        var enemyCenterX = enemy.x + enemy.width / 2;
+        var enemyCenterY = enemy.y + enemy.height / 2;
+        var playerCenterX = player.x + player.width / 2;
+        var playerCenterY = player.y + player.height / 2;
+
+        var angleToPlayer = Math.atan2(playerCenterY - enemyCenterY, playerCenterX - enemyCenterX);
+        var aimedSpeed = bulletSpeed * 0.85; // Slightly slower aimed shots (easier to dodge)
+        var dx = Math.cos(angleToPlayer) * aimedSpeed;
+        var dy = Math.sin(angleToPlayer) * aimedSpeed;
+
+        enemyBullets.push({
+          x: Math.floor(enemyCenterX - 2),
+          y: Math.floor(enemyCenterY),
+          width: 5,
+          height: 10,
+          speed: dy,
+          dx: dx  // Horizontal velocity for diagonal movement
+        });
+      } else {
+        // Standard straight-down bullet
+        enemyBullets.push({
+          x: Math.floor(enemy.x + enemy.width / 2 - 2),
+          y: Math.floor(enemy.y + enemy.height),
+          width: 5,
+          height: 10,
+          speed: bulletSpeed
+        });
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -5977,7 +6166,8 @@
           'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
           'score': score,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null
+          'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+          'score_multiplier': scoreMultiplier
         });
 
         fireEvent('game_complete', {
@@ -6245,9 +6435,21 @@
       else if (e.key === " ") {
         e.preventDefault();
         spacebarPressed = true;
+        // Burst-fire system (Mar 18, 2026 - 6 bullets + 600ms cooldown)
         var now = Date.now();
-        if (now - lastShotTime >= FIRE_COOLDOWN) {
+        var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 650ms
+        var totalCycle = burstDuration + BURST_COOLDOWN; // 1250ms
+
+        if (burstCycleStart === 0 || now - burstCycleStart >= totalCycle) {
+          // Start new burst cycle
+          burstCycleStart = now;
+          burstShotCount = 0;
+        }
+
+        // Fire bullets during burst window
+        if (burstShotCount < BURST_BULLET_COUNT && now - lastShotTime >= BURST_FIRE_INTERVAL) {
           shootBullet();
+          burstShotCount++;
           lastShotTime = now;
         }
       }
@@ -6278,7 +6480,14 @@
           boss2Defeated = jumpLevel >= 9;
           health = CONFIG.maxHealth;
           score = jumpLevel >= 9 ? 2000 : (jumpLevel >= 5 ? 800 : 0);
-          powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+
+          // Reset power-up cycle for dev jump (Mar 18, 2026 - Timer System)
+          powerupCycleIndex = 0;
+          powerupCyclesCompleted = 0;
+          powerupSpawnsThisCycle = 0;
+          lastPowerupSpawnTime = 0;
+          maxPowerupCycles = (jumpLevel >= 9) ? 2 : 1;
+
           updateUI();
           showAnnouncement("levelDisplay", "DEV: Level " + jumpLevel, 2000);
           console.log('%c[DEV MODE] Jumped to level ' + jumpLevel, 'color:#00FFFF;font-weight:bold;');
@@ -6456,9 +6665,21 @@
 
         // Mouse shooting (hold left button)
         if (mouseDown) {
+          // Burst-fire system (Mar 18, 2026 - 6 bullets + 600ms cooldown)
           var now = Date.now();
-          if (now - lastShotTime >= FIRE_COOLDOWN) {
+          var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 650ms
+          var totalCycle = burstDuration + BURST_COOLDOWN; // 1250ms
+
+          if (burstCycleStart === 0 || now - burstCycleStart >= totalCycle) {
+            // Start new burst cycle
+            burstCycleStart = now;
+            burstShotCount = 0;
+          }
+
+          // Fire bullets during burst window
+          if (burstShotCount < BURST_BULLET_COUNT && now - lastShotTime >= BURST_FIRE_INTERVAL) {
             shootBullet();
+            burstShotCount++;
             lastShotTime = now;
           }
         }
@@ -6604,19 +6825,10 @@
         // Smart filler spawning (beat-synced, capped)
         spawnBossFiller();
 
-        // Random powerup spawn during boss fight
-        if (!powerupsSpawnedThisLevel.health && !powerupsSpawnedThisLevel.doubleLaser) {
-          if (Math.random() < 0.0008) {
-            var powerupType = Math.random() < 0.6 ? POWERUP_TYPES.HEALTH : POWERUP_TYPES.DOUBLE_LASER;
-            if (createPowerup(powerupType)) {
-              if (powerupType === POWERUP_TYPES.HEALTH) {
-                powerupsSpawnedThisLevel.health = true;
-              } else {
-                powerupsSpawnedThisLevel.doubleLaser = true;
-              }
-            }
-          }
-        }
+        // Timer-based powerup spawn during boss fight (Mar 18, 2026)
+        // 2 cycles max (6 power-ups) at 15-second intervals
+        // Order: Shield → Laser → Health → (repeat)
+        trySpawnPowerup();
 
         // Update filler enemies during boss fight
         for (var i = enemies.length - 1; i >= 0; i--) {
@@ -6692,7 +6904,7 @@
               spawnParticles(centerX, centerY, 8); // 8 particles for regular enemy
               playerBullets.splice(j, 1);
               enemies.splice(i, 1);
-              score += 10;
+              score += Math.floor(10 * scoreMultiplier);
               updateUI();
               playSound('enemyDead');
               break;
@@ -6728,6 +6940,15 @@
               if (formationEnteredTime === 0) {
                 formationEnteredTime = Date.now();
               }
+
+              // ═══════════════════════════════════════════════════════════════════════
+              // POWER-UP INITIAL DELAY (Mar 18, 2026)
+              // ═══════════════════════════════════════════════════════════════════════
+              // Set timer so first power-up spawns 5 seconds after formation lands
+              // Formula: Set lastPowerupSpawnTime so that (now - lastPowerupSpawnTime) will
+              // equal (interval - 5s), causing spawn check to succeed after 5 more seconds
+              var spawnInterval = (level <= 4) ? POWERUP_INTERVAL_GREEN : POWERUP_INTERVAL_RED_PURPLE;
+              lastPowerupSpawnTime = Date.now() - (spawnInterval - POWERUP_INITIAL_DELAY);
 
               // ═══════════════════════════════════════════════════════════════════════
               // BARRIER SPAWN — PACING FIX (Mar 2026)
@@ -6857,6 +7078,23 @@
             else if (enemy.sideEntry) {
               enemy.x += enemy.horizontalSpeed * enemy.horizontalDirection;
               enemy.y += 0.3; // Slight downward drift
+
+              // Shooting filler logic (Mar 18, 2026 - Performance optimized)
+              // Max 1 active shooter, fires every 2 seconds
+              if (enemy.shootingFiller) {
+                var now = Date.now();
+                if (now - enemy.lastFillerShotTime >= 2000) {
+                  // Fire bullet straight down from filler's position
+                  enemyBullets.push({
+                    x: Math.floor(enemy.x + enemy.width / 2 - 2),
+                    y: Math.floor(enemy.y + enemy.height),
+                    width: 5,
+                    height: 10,
+                    speed: CONFIG.enemyBulletSpeed // Standard enemy bullet speed
+                  });
+                  enemy.lastFillerShotTime = now;
+                }
+              }
 
               // Remove if crossed screen
               if ((enemy.horizontalDirection > 0 && enemy.x > canvas.width) ||
@@ -7068,8 +7306,14 @@
         laserLevel = 1;
         hasShield = false;
         shieldHitsRemaining = 0;
-        powerupsSpawnedThisLevel = { health: false, doubleLaser: false, shield: false };
+
+        // Reset power-up cycle for new game (Mar 18, 2026 - Timer System)
+        powerupCycleIndex = 0;
+        powerupCyclesCompleted = 0;
+        powerupSpawnsThisCycle = 0;
         lastPowerupSpawnTime = 0;
+        maxPowerupCycles = 1; // Start at level 1 = 1 cycle
+
         playerBlinking = false;
         playerVisible = true;
         bossActive = false;
@@ -7152,7 +7396,7 @@
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'is_replay': isReplay,
           'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1,
-          'analytics_version': '3.0'
+          'score_multiplier': scoreMultiplier
         });
 
         // Reset replay flag — next start from this session will be a replay
@@ -7169,6 +7413,12 @@
         setTimeout(function () {
           showAnnouncement("bonusDisplay", replayBonusLabel, 2200);
         }, 600);
+        // Show elite mode indicator if horizontal-only movement
+        if (scoreMultiplier > 1.0) {
+          setTimeout(function () {
+            showAnnouncement("powerupDisplay", "ELITE MODE: +25% Score", 3000);
+          }, 2800);
+        }
         startBackgroundMusic();
         draw();
       } else {

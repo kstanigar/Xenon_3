@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 17, 2026 (analytics v4.0 - coordinated attack system)_
+_Last updated: March 18, 2026 (power-up cycle fix)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -166,6 +166,44 @@ This is the single source of truth for the NON-X project. It is shared with ever
   - Faster shield cycling (less vulnerable time)
   - Reduce shield vulnerability window
 - Analytics impact: Boss kill rates should drop; track via `boss_defeated` / `boss_attempt` ratio
+
+**6. Review Mobile Shield Degradation (Performance Optimization)**
+- **Status:** Pending review (Mar 18, 2026)
+- **Current behavior:** Mobile shield visual feedback includes 4 effects:
+  1. Flash effect (alpha boost for 3 frames)
+  2. Wobble effect (size pulse with decay)
+  3. Faster pulse rate as damage increases
+  4. **Opacity degradation** - shield fades as damage increases (1.0 → 0.5 alpha)
+- **Desktop behavior:** Desktop has 3 effects (flash, wobble, color degradation yellow→red)
+- **User concern:** Opacity degradation may not be needed and could impact mobile performance
+- **Rationale for removal:**
+  - Flash + wobble already provide immediate visual feedback when hit
+  - Faster pulse rate already shows shield is weakening
+  - Opacity fade is subtle and may not be worth the performance cost
+  - Desktop uses color degradation instead (changes stroke color, not opacity)
+- **Performance impact:** Opacity calculations run every frame for every shielded enemy
+- **Files affected:** game_mobile.html only (lines ~4076-4165 for enemies, ~4734-4810 for boss)
+- **Implementation:** Remove opacity degradation logic, keep flash + wobble + faster pulse
+- **Testing needed:** Verify mobile performance improvement with 16+ shielded enemies on screen
+- **Analytics impact:** None (visual feedback change only)
+
+**7. Power-Up Cleanup Optimization (Performance)**
+- **Status:** Pending review (Mar 18, 2026)
+- **Current behavior:** Power-ups are checked/updated every frame (60 times per second)
+- **Proposed optimization:** Reduce power-up cleanup/bounds checking to every 15 seconds
+- **Rationale:**
+  - Power-ups fall slowly and don't need frame-by-frame validation
+  - Off-screen power-ups can persist for several seconds without issue
+  - Reducing check frequency saves CPU cycles on mobile
+- **Current power-up system:** Timer-based spawning (5 second intervals)
+- **Implementation options:**
+  1. **Off-screen cleanup timer:** Check if power-ups are off-screen every 15 seconds and remove them
+  2. **Validation throttle:** Only validate power-up bounds/state every 15 seconds instead of every frame
+  3. **TTL (Time To Live):** Set power-up lifespan to 15 seconds, auto-remove after expiry
+- **Performance impact:** Reduces power-up iteration overhead on mobile
+- **Files affected:** Both game.html and game_mobile.html
+- **Testing needed:** Verify power-ups still feel responsive and don't linger too long off-screen
+- **Analytics impact:** None (internal optimization only)
 
 ### P2 — Medium Priority (Future Sprint)
 
@@ -359,7 +397,10 @@ print('draw function:', 'function draw(' in c)
 **Added Mar 2026 session 5:**
 `generateUUID`, `getPlayerId`, `PLAYER_ID`, `updateMorphingFormation`, `spawnMorphingFormation`, `formationEnteredTime`, `spawnBarrier`, `updateBarriers`, `shieldFlashFrames`, `shieldWobble`
 
-**Total checks:** 27 required functions + 10 new checks = 37 checks per file
+**Added Mar 2026 (Mar 18):**
+`powerupSpawnsThisCycle`, `trySpawnPowerup`
+
+**Total checks:** 27 required functions + 10 new checks (Mar 14) + 2 new checks (Mar 18) = 39 checks per file
 
 **Banned patterns (both files):** `buildSurveyHTML`, `'phase'.*'standard'`
 
@@ -901,6 +942,32 @@ User reported enemies off-screen in levels 1, 6, 9 (screenshots). Claude initial
 ### Purple Replay Button Bug (Mar 13, 2026)
 Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through purple phase and was checked before `purplePhase` in the if/else chain. HP application was actually correct all along (used `deathPhase` string). Display-only bug. Fixed by switching all button logic to use `deathPhase`. Combined with replay incentive simplification.
 
+### Power-Up Cycle Completion Bug (Mar 18, 2026) — Both Files
+**Problem:** Red levels (5-8) and purple levels (9-12) were not spawning all three power-ups per cycle. Red levels only spawned Laser and Health (missing Shield). Purple levels only spawned Health (missing Shield and Laser).
+
+**Root cause:** The cycle completion logic incremented `powerupCyclesCompleted` when the index wrapped from 2→0 (when `powerupCycleIndex >= 3`), but red levels start at index 1 (Laser) and purple levels start at index 2 (Health):
+- **Red levels:** Spawn 1 at index 1 (Laser) → Spawn 2 at index 2 (Health) → Index wraps to 0, cycle marked complete → Shield at index 0 never spawns
+- **Purple levels:** Spawn 1 at index 2 (Health) → Index wraps to 0, cycle marked complete → Shield and Laser never spawn
+
+**Fix:** Added `powerupSpawnsThisCycle` counter to track actual spawns instead of relying on index wrapping:
+- **New variable:** `var powerupSpawnsThisCycle = 0;` added to power-up state (both files)
+- **Separated logic:** Index wrapping (`if (powerupCycleIndex >= 3) { powerupCycleIndex = 0; }`) now separate from cycle completion
+- **Cycle completion:** Only increments `powerupCyclesCompleted` when `powerupSpawnsThisCycle >= 3` (3 actual spawns)
+- **Reset counter:** `powerupSpawnsThisCycle = 0;` reset in all power-up system resets (advanceLevel, spawnBoss, boss defeats, dev jumps, playAgain)
+
+**Result:** All phases now spawn all 3 power-ups correctly:
+- Green (L1-4): Shield → Laser → Health ✅
+- Red (L5-8): Laser → Health → Shield ✅
+- Purple (L9-12): Health → Shield → Laser ✅
+
+**Code locations:**
+- game_mobile.html: Lines 1711 (variable), 2242-2253 (trySpawnPowerup logic), 3959/4707/5578/5628/7037/8182 (resets)
+- game.html: Lines 1509 (variable), 1957-1971 (trySpawnPowerup logic), 3671/4006/4941/4991/6483/7308 (resets)
+
+**To revert:** Remove `powerupSpawnsThisCycle` variable and all references. Merge cycle completion check back into index wrap conditional.
+
+**Analytics impact:** None — power-ups were already configured correctly, this just fixed the spawn logic.
+
 ### Version History
 - v2.0 → v3.0: Boss spawn fix, hitbox inset, mobile minion fix, movement as player preference
 - v3.0 full instrumentation: Mar 10 2026 — `analytics_version` injected on all events via wrapper
@@ -913,6 +980,8 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 14 2026 (session 5) — added barriers to levels 3, 5, 7: horizontalLine (L3, 5 count), circle (L5, 6 count), orbitingShield (L7, 7 count) — all 12 levels now have barriers (both files)
 - Mar 14 2026 (session 5) — updated CI integrity checks: added 10 new function checks (Player ID system, formation morphing, barriers, shield feedback) — total 37 checks per file
 - Mar 14 2026 (session 5) — wrapped all debug console.log in dev mode conditionals: zero performance impact in production, enable with Shift+D (both files)
+- Mar 18 2026 — power-up cycle completion fix: added `powerupSpawnsThisCycle` counter to track actual spawns instead of relying on index wrapping. Fixed red/purple levels missing shield power-up (both files)
+- Mar 18 2026 — updated CI integrity checks: added 2 new checks (power-up cycle system) — total 39 checks per file
 
 ### Debug Logging Performance Fix (Mar 14, 2026 session 5) — Both Files
 **Problem:** Debug console.log statements (3 groups per file) running every 1-3 seconds added ~0.5-1ms overhead per second on mobile devices, even with dev tools closed. Over 5-minute sessions, this meant 300-600 unnecessary function calls.
@@ -939,7 +1008,9 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 
 ---
 
-### CI/CD Integrity Check Update (Mar 14, 2026 session 5)
+### CI/CD Integrity Check Updates
+
+#### Mar 14, 2026 (session 5)
 **Purpose:** Ensure critical new functions added in recent sessions are validated in CI pipeline.
 
 **New checks added (10 total):**
@@ -948,9 +1019,17 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 - **Barrier System:** `spawnBarrier`, `updateBarriers` (all 12 levels use barriers)
 - **Shield Visual Feedback:** `shieldFlashFrames`, `shieldWobble` (player feedback)
 
+**Result:** CI now validates 37 required functions per file (was 27).
+
+#### Mar 18, 2026
+**Purpose:** Validate power-up cycle system added to fix red/purple level spawn bug.
+
+**New checks added (2 total):**
+- **Power-Up Cycle System:** `powerupSpawnsThisCycle`, `trySpawnPowerup` (timer-based spawning)
+
 **File:** `.github/workflows/integrity-check.yml`
 
-**Result:** CI now validates 37 required functions per file (was 27), ensuring recent features are tested on every PR.
+**Result:** CI now validates 39 required functions per file (was 37), ensuring power-up cycle logic is tested on every PR.
 
 ---
 
@@ -1044,6 +1123,8 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
 | 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
 | 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 16 below |
+| 🔴 P1 | **Review Mobile Shield Degradation** — Remove opacity fade for performance gain | Mar 18, 2026 — See section 1b item 6 |
+| 🔴 P1 | **Power-Up Cleanup Optimization** — Reduce validation frequency to every 15 seconds | Mar 18, 2026 — See section 1b item 7 |
 | 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
 | 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
 | 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
