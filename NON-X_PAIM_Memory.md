@@ -1109,6 +1109,7 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 
 | Priority | Action | Owner |
 |---|---|---|
+| 🔴 **SETUP** | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 18, 2026 — Current token expires in 21 hours |
 | ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
 | ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
 | ✅ Done | Wave drop-off: ALL / MOBILE / DESKTOP platform toggle | Mar 12 |
@@ -1122,7 +1123,7 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
 | ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
 | 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
-| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 16 below |
+| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
 | 🔴 P1 | **Review Mobile Shield Degradation** — Remove opacity fade for performance gain | Mar 18, 2026 — See section 1b item 6 |
 | 🔴 P1 | **Power-Up Cleanup Optimization** — Reduce validation frequency to every 15 seconds | Mar 18, 2026 — See section 1b item 7 |
 | 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
@@ -1135,11 +1136,61 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
 | 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
 | 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
-| 🟢 P3 | **Leaderboard expansion: Top 25 with dropdown** | See section 17 below |
+| 🟢 P3 | **Leaderboard expansion: Top 25 with dropdown** | See section 18 below |
 
 ---
 
-## 16. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
+## 16. GITHUB TOKEN ROTATION (Next Session - Mar 19, 2026)
+
+### Task: Create new Classic Personal Access Token with 365-day expiration
+
+**Current Status:**
+- Existing token created: March 12, 2026
+- Expiration: 7 days (expires ~March 19, 2026)
+- Account: kstanigar
+- Stored in: macOS Keychain (osxkeychain)
+
+**Steps to Complete:**
+
+1. **Create new token on GitHub:**
+   - Go to: https://github.com/settings/tokens
+   - Click "Generate new token" → "Generate new token (classic)"
+   - Note: "Xenon 3 Development - 365 day"
+   - Expiration: **Custom** → Set to **365 days**
+   - Scopes: Check **`repo`** (full control of private repositories)
+   - Click "Generate token"
+   - **Copy the token immediately** (you won't see it again)
+
+2. **Update macOS Keychain:**
+   ```bash
+   # Delete old token from keychain:
+   git credential-osxkeychain erase
+   # Then paste and press Enter twice:
+   protocol=https
+   host=github.com
+   ```
+
+3. **Test with git push:**
+   - Next git operation will prompt for username and password
+   - Username: `kstanigar`
+   - Password: **Paste the new 365-day token**
+   - Keychain will save it automatically
+
+4. **Set reminder:**
+   - Calendar reminder for **March 14, 2027** (1 week before expiration)
+   - Title: "Rotate GitHub Token for Xenon 3"
+
+**Alternative (Manual Keychain Update):**
+- Open Keychain Access app (Cmd+Space → "Keychain Access")
+- Search "github.com"
+- Double-click entry for "kstanigar"
+- Click "Show password" → enter Mac password
+- Replace old token with new 365-day token
+- Click "Save changes"
+
+---
+
+## 17. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
 
 ### Problem
 **Performance:** Mobile devices experience stuttering when many enemies and bullets are on-screen simultaneously (especially levels 9-12 with 16-22 enemies).
@@ -1270,7 +1321,7 @@ After testing, green levels felt too easy due to cascading making bullets more p
 
 ---
 
-## 17. LEADERBOARD EXPANSION: TOP 25 WITH DROPDOWN (Feature Request - Mar 14, 2026)
+## 18. LEADERBOARD EXPANSION: TOP 25 WITH DROPDOWN (Feature Request - Mar 14, 2026)
 
 ### Current Behavior
 - Leaderboard displays top 10 players only
