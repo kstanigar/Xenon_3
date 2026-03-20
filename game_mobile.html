@@ -7323,9 +7323,9 @@
       var targetCenterX = touchTargetX;
       var playerCenterX = player.x + player.width / 2;
       var diff = targetCenterX - playerCenterX;
-      // Move up to 10px/frame, but snap if very close
-      if (Math.abs(diff) > 10) {
-        player.x += (diff / Math.abs(diff)) * Math.min(Math.abs(diff), 10);
+      // Move up to 20px/frame, but snap if very close (OPTION 1 - Mar 19, 2026)
+      if (Math.abs(diff) > 20) {
+        player.x += (diff / Math.abs(diff)) * Math.min(Math.abs(diff), 20);
       } else {
         player.x += diff;
       }
