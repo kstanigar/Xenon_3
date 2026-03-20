@@ -1713,6 +1713,10 @@
     var maxPowerupCycles = 1; // Max cycles for current level (set in advanceLevel)
     var lastBossPowerupType = null;  // Track last boss powerup type for cycling (Mar 18, 2026)
 
+    // Power-up cleanup optimization (Mar 19, 2026)
+    var powerupCleanupTimer = 0; // Time since last cleanup
+    var POWERUP_CLEANUP_INTERVAL = 15000; // Clean up off-screen power-ups every 15 seconds
+
     // Player blink state (when damaged)
     var playerBlinking = false;
     var playerBlinkTimer = 0;
@@ -2252,6 +2256,23 @@
         if (powerupSpawnsThisCycle >= 3) {
           powerupCyclesCompleted++;
           powerupSpawnsThisCycle = 0; // Reset spawn counter for next cycle
+        }
+      }
+    }
+
+    /**
+     * Power-up cleanup optimization (Mar 19, 2026)
+     * Removes off-screen power-ups in batches every 15 seconds instead of every frame.
+     * This reduces validation overhead from 60 checks/second to 1 check/15 seconds.
+     * Power-ups still update position every frame for smooth falling animation.
+     * Called by main game loop when cleanup timer expires.
+     */
+    function cleanupOffScreenPowerups() {
+      for (var i = powerups.length - 1; i >= 0; i--) {
+        var p = powerups[i];
+        // Remove power-ups that have fallen off the bottom of the screen
+        if (p.y > canvas.height + 50) {
+          powerups.splice(i, 1);
         }
       }
     }
@@ -3958,6 +3979,7 @@
       powerupCyclesCompleted = 0;
       powerupSpawnsThisCycle = 0;
       lastPowerupSpawnTime = 0; // Will be set when formation lands
+      powerupCleanupTimer = 0; // Reset cleanup timer for new level
       // Set max cycles: 1 for levels 1-8, 2 for levels 9-12 (purple phase)
       maxPowerupCycles = (level >= 9) ? 2 : 1;
 
@@ -4701,6 +4723,7 @@
       powerupCyclesCompleted = 0;
       powerupSpawnsThisCycle = 0;
       lastPowerupSpawnTime = 0; // Will be set when boss entrance completes
+      powerupCleanupTimer = 0; // Reset cleanup timer for boss fight
       maxPowerupCycles = 2; // Boss fights always get 2 cycles
       lastBossPowerupType = null;
 
@@ -5566,6 +5589,7 @@
             powerupCyclesCompleted = 0;
             powerupSpawnsThisCycle = 0;
             lastPowerupSpawnTime = 0;
+            powerupCleanupTimer = 0; // Reset cleanup timer for new phase
             maxPowerupCycles = 1; // Level 5 = red phase, still 1 cycle
 
             updateUI();
@@ -5617,6 +5641,7 @@
             powerupCyclesCompleted = 0;
             powerupSpawnsThisCycle = 0;
             lastPowerupSpawnTime = 0;
+            powerupCleanupTimer = 0; // Reset cleanup timer for new phase
             maxPowerupCycles = 2; // Level 9 = purple phase, 2 cycles
 
             updateUI();
@@ -7027,6 +7052,7 @@
           powerupCyclesCompleted = 0;
           powerupSpawnsThisCycle = 0;
           lastPowerupSpawnTime = 0;
+          powerupCleanupTimer = 0; // Reset cleanup timer for dev jump
           maxPowerupCycles = (jumpLevel >= 9) ? 2 : 1;
 
           updateUI();
@@ -7592,22 +7618,27 @@
         }
       }
 
-      // Update power-ups
+      // Update power-ups (position update runs every frame for smooth movement)
       for (var i = powerups.length - 1; i >= 0; i--) {
         var powerup = powerups[i];
 
         drawPowerup(powerup);
         powerup.y += powerup.speed;
 
-        if (powerup.y > canvas.height) {
-          powerups.splice(i, 1);
-          continue;
-        }
+        // Bounds check removed - now handled by cleanupOffScreenPowerups() every 15s
+        // Collision detection still runs every frame for responsive gameplay
 
         if (isCollidingPlayer(powerup)) {
           collectPowerup(powerup);
           powerups.splice(i, 1);
         }
+      }
+
+      // Power-up cleanup optimization - batch remove off-screen power-ups every 15 seconds
+      powerupCleanupTimer += 16.67; // ~16.67ms per frame at 60fps
+      if (powerupCleanupTimer >= POWERUP_CLEANUP_INTERVAL) {
+        cleanupOffScreenPowerups();
+        powerupCleanupTimer = 0;
       }
 
       // Boss mode
@@ -8173,6 +8204,7 @@
         powerupCyclesCompleted = 0;
         powerupSpawnsThisCycle = 0;
         lastPowerupSpawnTime = 0;
+        powerupCleanupTimer = 0; // Reset cleanup timer for new game
         maxPowerupCycles = 1; // Start at level 1 = 1 cycle
 
         playerBlinking = false;
