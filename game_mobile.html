@@ -4655,7 +4655,7 @@
      * Boss encounters (same as desktop):
      * - Boss 1 (Level 4): Green boss, one-time shield, 4 orbiters
      * - Boss 2 (Level 8): Red boss, cycling shields (5s on/5s off), 7 orbiters
-     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 10 orbiters
+     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 8 orbiters
      *
      * Mobile positioning:
      * - Spawn position: x = canvas.width/2 - 75 (centered), y = -150 (off-screen above)
@@ -4782,9 +4782,9 @@
       if (orbitersInitialized) return;
       orbitersInitialized = true;
 
-      // Orbiter count scaling (Mar 14, 2026 difficulty update)
-      // Green: 4, Red: 7 (+3), Purple: 10 (+6)
-      var orbiterCount = boss.isPurpleBoss ? 10 : (boss.isRedBoss ? 7 : 4);
+      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 19)
+      // Green: 4, Red: 7 (+3), Purple: 8 (+4 from green, +1 from red)
+      var orbiterCount = boss.isPurpleBoss ? 8 : (boss.isRedBoss ? 7 : 4);
       maxOrbiters = orbiterCount;
 
       for (var i = 0; i < orbiterCount; i++) {
