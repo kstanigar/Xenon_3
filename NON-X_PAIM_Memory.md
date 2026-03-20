@@ -1051,6 +1051,7 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 19 2026 — power-up cleanup optimization: reduced validation frequency from 60fps to every 15 seconds (900x reduction in cleanup iterations) for mobile performance gain (both files)
 - Mar 19 2026 — Top 25 leaderboard modal: expanded leaderboard from 10 to 25 entries, with entries 11-25 shown via modal overlay. Modal includes 2-button footer (index: "Start Game", game files: "Play Again" + "Leave Game") for improved UX (all 3 files)
 - Mar 19 2026 — platform selector in modal: added segmented control to index.html Top 25 modal allowing users to choose desktop/mobile before launching game. Placed below leaderboard grid, above Start Game button for natural user flow (index.html only)
+- Mar 19 2026 — updated CI integrity checks: added 4 new checks (Top 25 leaderboard modal functions) — total 43 checks per file
 
 ### Debug Logging Performance Fix (Mar 14, 2026 session 5) — Both Files
 **Problem:** Debug console.log statements (3 groups per file) running every 1-3 seconds added ~0.5-1ms overhead per second on mobile devices, even with dev tools closed. Over 5-minute sessions, this meant 300-600 unnecessary function calls.
@@ -1099,6 +1100,16 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 **File:** `.github/workflows/integrity-check.yml`
 
 **Result:** CI now validates 39 required functions per file (was 37), ensuring power-up cycle logic is tested on every PR.
+
+#### Mar 19, 2026
+**Purpose:** Validate Top 25 leaderboard modal functions added for enhanced UX.
+
+**New checks added (4 total):**
+- **Top 25 Leaderboard Modal:** `showFullLeaderboard`, `closeFullLeaderboard`, `playAgainFromModal`, `leaveGameFromModal` (modal navigation)
+
+**File:** `.github/workflows/integrity-check.yml`
+
+**Result:** CI now validates 43 required functions per file (was 39), ensuring leaderboard modal UI/UX functions are present on every PR.
 
 ---
 
