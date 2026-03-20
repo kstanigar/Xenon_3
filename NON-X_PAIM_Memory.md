@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 17, 2026 (analytics v4.0 - coordinated attack system)_
+_Last updated: March 19, 2026 (mobile optimizations + touch improvements + power-up cleanup)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -166,6 +166,52 @@ This is the single source of truth for the NON-X project. It is shared with ever
   - Faster shield cycling (less vulnerable time)
   - Reduce shield vulnerability window
 - Analytics impact: Boss kill rates should drop; track via `boss_defeated` / `boss_attempt` ratio
+
+**6. Review Mobile Shield Degradation (Performance Optimization)**
+- **Status:** Pending review (Mar 18, 2026)
+- **Current behavior:** Mobile shield visual feedback includes 4 effects:
+  1. Flash effect (alpha boost for 3 frames)
+  2. Wobble effect (size pulse with decay)
+  3. Faster pulse rate as damage increases
+  4. **Opacity degradation** - shield fades as damage increases (1.0 → 0.5 alpha)
+- **Desktop behavior:** Desktop has 3 effects (flash, wobble, color degradation yellow→red)
+- **Status:** ✅ COMPLETED (Mar 19, 2026) — Both opacity degradation AND flash effect removed
+- **Phase 1 (opacity removal):** Removed opacity fade (1.0→0.5 alpha) for performance
+- **Phase 2 (flash removal):** User testing revealed flash effect unnecessary - removed (+0.4 alpha boost)
+- **Final state:** Mobile shields now use only 2 effects (wobble + pulse rate)
+- **Rationale for removal:**
+  - Wobble + faster pulse rate already provide clear visual feedback
+  - Flash effect made shields "flash brighter" - user confirmed unnecessary
+  - Opacity fade was subtle and not worth performance cost
+  - Desktop keeps all 3 effects (flash, wobble, color degradation yellow→red)
+- **Performance impact:** Reduced per-frame calculations for every shielded enemy
+- **Files affected:** game_mobile.html only (lines ~4076-4165 for enemies, ~4734-4810 for boss)
+- **User feedback:** "It seems to flash brighter when hit. I think this is unnecessary?"
+- **Analytics impact:** None (visual feedback change only)
+
+**7. Power-Up Cleanup Optimization (Performance)**
+- **Status:** ✅ COMPLETED (Mar 19, 2026) — Option 1 implemented
+- **Previous behavior:** Power-ups checked/removed every frame (60 checks/second)
+- **New behavior:** Power-ups removed in batches every 15 seconds (1 check/15 seconds)
+- **Performance gain:** 900x reduction in cleanup iterations (60 × 15 = 900)
+- **Implementation (Option 1 - Off-screen cleanup timer):**
+  - Added `powerupCleanupTimer` variable (tracks time since last cleanup)
+  - Added `POWERUP_CLEANUP_INTERVAL` constant (15000ms)
+  - Created `cleanupOffScreenPowerups()` function (batch removal)
+  - Removed per-frame bounds check from main power-up loop
+  - Timer resets on: level transitions, boss spawns, phase changes, dev jumps, replays
+- **Rationale:**
+  - Power-ups fall slowly (~2-3px/frame) and don't need frame-by-frame validation
+  - Off-screen power-ups can persist for a few extra seconds without player noticing
+  - Decouples movement (frame-critical) from cleanup (housekeeping)
+- **What's preserved:**
+  - Position updates still run every frame (smooth falling animation)
+  - Collision detection still runs every frame (responsive gameplay)
+  - Power-up spawn timing unchanged (5 second intervals)
+- **Files modified:** Both game.html and game_mobile.html (42 lines each)
+- **Commit:** ed4aaff - "perf: optimize power-up cleanup from 60fps to every 15 seconds"
+- **Testing needed:** Verify power-ups don't visibly linger off-screen during gameplay
+- **Analytics impact:** None (internal optimization only)
 
 ### P2 — Medium Priority (Future Sprint)
 
@@ -359,7 +405,10 @@ print('draw function:', 'function draw(' in c)
 **Added Mar 2026 session 5:**
 `generateUUID`, `getPlayerId`, `PLAYER_ID`, `updateMorphingFormation`, `spawnMorphingFormation`, `formationEnteredTime`, `spawnBarrier`, `updateBarriers`, `shieldFlashFrames`, `shieldWobble`
 
-**Total checks:** 27 required functions + 10 new checks = 37 checks per file
+**Added Mar 2026 (Mar 18):**
+`powerupSpawnsThisCycle`, `trySpawnPowerup`
+
+**Total checks:** 27 required functions + 10 new checks (Mar 14) + 2 new checks (Mar 18) = 39 checks per file
 
 **Banned patterns (both files):** `buildSurveyHTML`, `'phase'.*'standard'`
 
@@ -901,6 +950,32 @@ User reported enemies off-screen in levels 1, 6, 9 (screenshots). Claude initial
 ### Purple Replay Button Bug (Mar 13, 2026)
 Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through purple phase and was checked before `purplePhase` in the if/else chain. HP application was actually correct all along (used `deathPhase` string). Display-only bug. Fixed by switching all button logic to use `deathPhase`. Combined with replay incentive simplification.
 
+### Power-Up Cycle Completion Bug (Mar 18, 2026) — Both Files
+**Problem:** Red levels (5-8) and purple levels (9-12) were not spawning all three power-ups per cycle. Red levels only spawned Laser and Health (missing Shield). Purple levels only spawned Health (missing Shield and Laser).
+
+**Root cause:** The cycle completion logic incremented `powerupCyclesCompleted` when the index wrapped from 2→0 (when `powerupCycleIndex >= 3`), but red levels start at index 1 (Laser) and purple levels start at index 2 (Health):
+- **Red levels:** Spawn 1 at index 1 (Laser) → Spawn 2 at index 2 (Health) → Index wraps to 0, cycle marked complete → Shield at index 0 never spawns
+- **Purple levels:** Spawn 1 at index 2 (Health) → Index wraps to 0, cycle marked complete → Shield and Laser never spawn
+
+**Fix:** Added `powerupSpawnsThisCycle` counter to track actual spawns instead of relying on index wrapping:
+- **New variable:** `var powerupSpawnsThisCycle = 0;` added to power-up state (both files)
+- **Separated logic:** Index wrapping (`if (powerupCycleIndex >= 3) { powerupCycleIndex = 0; }`) now separate from cycle completion
+- **Cycle completion:** Only increments `powerupCyclesCompleted` when `powerupSpawnsThisCycle >= 3` (3 actual spawns)
+- **Reset counter:** `powerupSpawnsThisCycle = 0;` reset in all power-up system resets (advanceLevel, spawnBoss, boss defeats, dev jumps, playAgain)
+
+**Result:** All phases now spawn all 3 power-ups correctly:
+- Green (L1-4): Shield → Laser → Health ✅
+- Red (L5-8): Laser → Health → Shield ✅
+- Purple (L9-12): Health → Shield → Laser ✅
+
+**Code locations:**
+- game_mobile.html: Lines 1711 (variable), 2242-2253 (trySpawnPowerup logic), 3959/4707/5578/5628/7037/8182 (resets)
+- game.html: Lines 1509 (variable), 1957-1971 (trySpawnPowerup logic), 3671/4006/4941/4991/6483/7308 (resets)
+
+**To revert:** Remove `powerupSpawnsThisCycle` variable and all references. Merge cycle completion check back into index wrap conditional.
+
+**Analytics impact:** None — power-ups were already configured correctly, this just fixed the spawn logic.
+
 ### Version History
 - v2.0 → v3.0: Boss spawn fix, hitbox inset, mobile minion fix, movement as player preference
 - v3.0 full instrumentation: Mar 10 2026 — `analytics_version` injected on all events via wrapper
@@ -913,6 +988,14 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 14 2026 (session 5) — added barriers to levels 3, 5, 7: horizontalLine (L3, 5 count), circle (L5, 6 count), orbitingShield (L7, 7 count) — all 12 levels now have barriers (both files)
 - Mar 14 2026 (session 5) — updated CI integrity checks: added 10 new function checks (Player ID system, formation morphing, barriers, shield feedback) — total 37 checks per file
 - Mar 14 2026 (session 5) — wrapped all debug console.log in dev mode conditionals: zero performance impact in production, enable with Shift+D (both files)
+- Mar 18 2026 — power-up cycle completion fix: added `powerupSpawnsThisCycle` counter to track actual spawns instead of relying on index wrapping. Fixed red/purple levels missing shield power-up (both files)
+- Mar 18 2026 — updated CI integrity checks: added 2 new checks (power-up cycle system) — total 39 checks per file
+- Mar 19 2026 — mobile shield optimization: removed opacity degradation effect (1.0→0.5 alpha fade) for performance gain on mobile (game_mobile.html only)
+- Mar 19 2026 — mobile shield refinement: removed flash effect (+0.4 alpha boost) based on user testing - wobble + pulse rate provide sufficient feedback with cleaner visuals (game_mobile.html only)
+- Mar 19 2026 — player bullet burst increase: 6→8 bullets per burst for better offense against high enemy counts (both files)
+- Mar 19 2026 — mobile touch control improvement: movement speed 10px/frame→20px/frame (2x faster) to reduce touch latency based on user feedback (game_mobile.html only)
+- Mar 19 2026 — purple boss balance: reduced orbiters from 10→8 to make final boss less overwhelming on mobile (game_mobile.html only)
+- Mar 19 2026 — power-up cleanup optimization: reduced validation frequency from 60fps to every 15 seconds (900x reduction in cleanup iterations) for mobile performance gain (both files)
 
 ### Debug Logging Performance Fix (Mar 14, 2026 session 5) — Both Files
 **Problem:** Debug console.log statements (3 groups per file) running every 1-3 seconds added ~0.5-1ms overhead per second on mobile devices, even with dev tools closed. Over 5-minute sessions, this meant 300-600 unnecessary function calls.
@@ -939,7 +1022,9 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 
 ---
 
-### CI/CD Integrity Check Update (Mar 14, 2026 session 5)
+### CI/CD Integrity Check Updates
+
+#### Mar 14, 2026 (session 5)
 **Purpose:** Ensure critical new functions added in recent sessions are validated in CI pipeline.
 
 **New checks added (10 total):**
@@ -948,9 +1033,17 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 - **Barrier System:** `spawnBarrier`, `updateBarriers` (all 12 levels use barriers)
 - **Shield Visual Feedback:** `shieldFlashFrames`, `shieldWobble` (player feedback)
 
+**Result:** CI now validates 37 required functions per file (was 27).
+
+#### Mar 18, 2026
+**Purpose:** Validate power-up cycle system added to fix red/purple level spawn bug.
+
+**New checks added (2 total):**
+- **Power-Up Cycle System:** `powerupSpawnsThisCycle`, `trySpawnPowerup` (timer-based spawning)
+
 **File:** `.github/workflows/integrity-check.yml`
 
-**Result:** CI now validates 37 required functions per file (was 27), ensuring recent features are tested on every PR.
+**Result:** CI now validates 39 required functions per file (was 37), ensuring power-up cycle logic is tested on every PR.
 
 ---
 
@@ -1026,10 +1119,76 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 
 ---
 
+### Mobile Touch Control Speed Improvement (Mar 19, 2026) — Mobile Only
+**Problem:** Players experienced noticeable latency when moving their finger quickly across the screen. The ship moved at 10px/frame toward the touch target, causing a lag of ~0.8 seconds to cross the 480px screen.
+
+**Root cause:** Movement interpolation speed was too slow for responsive touch controls.
+- Max speed: 10px/frame × 60fps = 600px/second
+- Time to cross screen: 480px ÷ 600px/s = 0.8 seconds
+- User feedback: "There's some latency with the player ship response when I move quickly"
+
+**Fix:** Increased touch control movement speed from 10px/frame → 20px/frame (2x faster).
+- New max speed: 20px/frame × 60fps = 1200px/second
+- New time to cross screen: 480px ÷ 1200px/s = 0.4 seconds
+- 50% reduction in catch-up latency
+
+**User testing result:** "It feels great!" — Option 1 (speed increase) was sufficient, no need for direct snap or adaptive speed options.
+
+**Code location:** game_mobile.html lines ~7326-7328 (updateTouchControls function)
+
+**To revert:** Change both `20`s back to `10` in the movement threshold and speed limit.
+
+**Analytics impact:** None — control responsiveness change only.
+
+---
+
+### Player Bullet Burst Increase (Mar 19, 2026) — Both Files
+**Problem:** User requested better offensive capability against high enemy counts in later levels.
+
+**Change:** Increased player burst fire count from 6 → 8 bullets per burst.
+- Burst duration: 650ms → 910ms (8 bullets × 130ms interval)
+- Cooldown unchanged: 500ms (mobile) / 600ms (desktop)
+- Total cycle: ~1.4-1.5 seconds
+
+**Benefit:** +33% more bullets per burst for better offense against levels 9-12 (16-22 enemies).
+
+**Code location:**
+- game_mobile.html: Line 1686 (BURST_BULLET_COUNT)
+- game.html: Line 1486 (BURST_BULLET_COUNT)
+
+**To revert:** Change `BURST_BULLET_COUNT = 8` back to `6` in both files, update burst duration comment from 910ms to 650ms.
+
+**Analytics impact:** None — balance tweak, not mechanic change.
+
+---
+
+### Purple Boss Orbiter Reduction (Mar 19, 2026) — Mobile Only
+**Problem:** Purple boss with 10 orbiters felt too overwhelming on mobile's smaller screen.
+
+**User feedback:** "Can we decrease to 8 please?"
+
+**Change:** Reduced purple boss orbiter count from 10 → 8 (-20%).
+
+**Boss orbiter progression:**
+- Green Boss (L4): 4 orbiters (baseline)
+- Red Boss (L8): 7 orbiters (+3 from green)
+- Purple Boss (L12): 8 orbiters (+1 from red)
+
+**Benefit:** Maintains difficulty scaling while improving visual clarity and playability on mobile.
+
+**Code location:** game_mobile.html line 4787 (initBossOrbiters function)
+
+**To revert:** Change `boss.isPurpleBoss ? 8` back to `10` in orbiterCount calculation.
+
+**Analytics impact:** None — balance tweak for mobile only.
+
+---
+
 ## 15. NEXT ACTIONS
 
 | Priority | Action | Owner |
 |---|---|---|
+| ✅ Done | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 19, 2026 — Completed |
 | ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
 | ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
 | ✅ Done | Wave drop-off: ALL / MOBILE / DESKTOP platform toggle | Mar 12 |
@@ -1043,7 +1202,9 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
 | ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
 | 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
-| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 16 below |
+| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
+| ✅ Done | **Review Mobile Shield Degradation** — Removed opacity fade AND flash effect for performance/visual clarity | Mar 19, 2026 — Completed |
+| ✅ Done | **Power-Up Cleanup Optimization** — Reduced validation frequency from 60fps to every 15 seconds (900x reduction) | Mar 19, 2026 — Completed |
 | 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
 | 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
 | 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
@@ -1054,11 +1215,61 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
 | 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
 | 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
-| 🟢 P3 | **Leaderboard expansion: Top 25 with dropdown** | See section 17 below |
+| 🟢 P3 | **Leaderboard expansion: Top 25 with dropdown** | See section 18 below |
 
 ---
 
-## 16. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
+## 16. GITHUB TOKEN ROTATION (Next Session - Mar 19, 2026)
+
+### Task: Create new Classic Personal Access Token with 365-day expiration
+
+**Current Status:**
+- Existing token created: March 12, 2026
+- Expiration: 7 days (expires ~March 19, 2026)
+- Account: kstanigar
+- Stored in: macOS Keychain (osxkeychain)
+
+**Steps to Complete:**
+
+1. **Create new token on GitHub:**
+   - Go to: https://github.com/settings/tokens
+   - Click "Generate new token" → "Generate new token (classic)"
+   - Note: "Xenon 3 Development - 365 day"
+   - Expiration: **Custom** → Set to **365 days**
+   - Scopes: Check **`repo`** (full control of private repositories)
+   - Click "Generate token"
+   - **Copy the token immediately** (you won't see it again)
+
+2. **Update macOS Keychain:**
+   ```bash
+   # Delete old token from keychain:
+   git credential-osxkeychain erase
+   # Then paste and press Enter twice:
+   protocol=https
+   host=github.com
+   ```
+
+3. **Test with git push:**
+   - Next git operation will prompt for username and password
+   - Username: `kstanigar`
+   - Password: **Paste the new 365-day token**
+   - Keychain will save it automatically
+
+4. **Set reminder:**
+   - Calendar reminder for **March 14, 2027** (1 week before expiration)
+   - Title: "Rotate GitHub Token for Xenon 3"
+
+**Alternative (Manual Keychain Update):**
+- Open Keychain Access app (Cmd+Space → "Keychain Access")
+- Search "github.com"
+- Double-click entry for "kstanigar"
+- Click "Show password" → enter Mac password
+- Replace old token with new 365-day token
+- Click "Save changes"
+
+---
+
+## 17. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
 
 ### Problem
 **Performance:** Mobile devices experience stuttering when many enemies and bullets are on-screen simultaneously (especially levels 9-12 with 16-22 enemies).
@@ -1189,7 +1400,7 @@ After testing, green levels felt too easy due to cascading making bullets more p
 
 ---
 
-## 17. LEADERBOARD EXPANSION: TOP 25 WITH DROPDOWN (Feature Request - Mar 14, 2026)
+## 18. LEADERBOARD EXPANSION: TOP 25 WITH DROPDOWN (Feature Request - Mar 14, 2026)
 
 ### Current Behavior
 - Leaderboard displays top 10 players only

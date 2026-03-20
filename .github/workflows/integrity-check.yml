@@ -63,6 +63,10 @@ jobs:
           check "shieldFlashFrames"
           check "shieldWobble"
 
+          # Power-Up Cycle System (timer-based spawning - Mar 2026)
+          check "var powerupSpawnsThisCycle"
+          check "function trySpawnPowerup"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -136,6 +140,10 @@ jobs:
           # Shield Visual Feedback (player feedback - Mar 2026)
           check "shieldFlashFrames"
           check "shieldWobble"
+
+          # Power-Up Cycle System (timer-based spawning - Mar 2026)
+          check "var powerupSpawnsThisCycle"
+          check "function trySpawnPowerup"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
