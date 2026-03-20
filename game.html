@@ -561,9 +561,10 @@
      *
      * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>} Top 10 leaderboard entries
      */
-    window.firebaseGetTopScores = async function () {
+    window.firebaseGetTopScores = async function (limitCount) {
       try {
-        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
+        limitCount = limitCount || 10; // Default to 10 if not specified
+        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(limitCount));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
@@ -1351,9 +1352,140 @@
         html += "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;'>";
         html += "<div style='min-width:160px;'>" + cols[0] + "</div>";
         html += "<div style='min-width:160px;'>" + cols[1] + "</div>";
+        html += "</div>";
+        // View Full Leaderboard button (Top 25 modal)
+        html += "<div style='margin-top:12px;'>";
+        html += "<button onclick='showFullLeaderboard()' style='background:rgba(0,255,255,0.1);border:1px solid rgba(0,255,255,0.4);";
+        html += "border-radius:6px;color:#00FFFF;padding:8px 16px;font-size:12px;cursor:pointer;";
+        html += "transition:all 0.2s;font-weight:500;' ";
+        html += "onmouseover=\"this.style.background='rgba(0,255,255,0.2)';this.style.borderColor='#00FFFF'\" ";
+        html += "onmouseout=\"this.style.background='rgba(0,255,255,0.1)';this.style.borderColor='rgba(0,255,255,0.4)'\">";
+        html += "View Full Leaderboard (Top 25)</button>";
         html += "</div></div>";
         display.innerHTML = html;
       });
+    }
+
+    /**
+     * Opens the full leaderboard modal showing top 25 entries.
+     * Fetches top 25 from Firebase and populates modal grid with 2-column layout.
+     * Same rendering logic as showLeaderboard() but for 25 entries instead of 10.
+     *
+     * Modal features:
+     * - Semi-transparent backdrop (click to close)
+     * - Scrollable content area (max-height: 80vh)
+     * - Close button (X) in header
+     * - Maintains 2-column grid layout on all screen sizes
+     *
+     * Rationale:
+     * - Keeps buttons visible on game over/victory screen (doesn't push them off-screen)
+     * - On-demand loading (only fetches 25 when user requests full leaderboard)
+     * - Firebase cost: +15 reads per view (25 vs 10)
+     */
+    function showFullLeaderboard() {
+      var modal = document.getElementById('leaderboardModal');
+      var content = document.getElementById('fullLeaderboardContent');
+
+      if (!modal || !content) return;
+
+      // Show modal with flex display for centering
+      modal.style.display = 'flex';
+
+      // Fetch top 25 from Firebase
+      if (typeof window.firebaseGetTopScores !== 'function') {
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+        return;
+      }
+
+      window.firebaseGetTopScores(25).then(function (top25) {
+        if (!top25 || top25.length === 0) {
+          content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
+          return;
+        }
+
+        // Same two-column rendering logic as showLeaderboard()
+        var half = Math.ceil(top25.length / 2);
+        var cols = ['', ''];
+
+        for (var i = 0; i < top25.length; i++) {
+          var entry = top25[i];
+          var playerName = entry.instagram && entry.instagram !== 'Anonymous'
+            ? entry.instagram : 'Anonymous';
+
+          var isCurrentScore = entry.score === score;
+          var rowStyle = isCurrentScore ? "color:#00FFFF;font-weight:bold;" : "color:#fff;";
+          var nameColor = isCurrentScore ? "#00FFFF" : "#aaa";
+
+          var col = i < half ? 0 : 1;
+
+          cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
+          cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "</div>";
+        }
+
+        // Two-column layout (same as main leaderboard)
+        var html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;padding:4px 0;'>";
+        html += "<div style='min-width:160px;'>" + cols[0] + "</div>";
+        html += "<div style='min-width:160px;'>" + cols[1] + "</div>";
+        html += "</div>";
+
+        // Modal action buttons (Option A: 2-button design)
+        html += "<div style='margin-top:24px;text-align:center;'>";
+        // Primary action - Play Again (prominent)
+        html += "<div style='margin-bottom:12px;'>";
+        html += "<button onclick='playAgainFromModal()' style='padding:14px 40px;font-size:16px;";
+        html += "background:#00FFFF;color:#000;border:none;border-radius:8px;cursor:pointer;";
+        html += "font-weight:bold;transition:all 0.2s;box-shadow:0 4px 12px rgba(0,255,255,0.3);' ";
+        html += "onmouseover=\"this.style.background='#00CCCC'\" onmouseout=\"this.style.background='#00FFFF'\">";
+        html += "▶ PLAY AGAIN</button>";
+        html += "</div>";
+        // Secondary action - Leave Game (subdued)
+        html += "<button onclick='leaveGameFromModal()' style='padding:8px 24px;font-size:14px;";
+        html += "background:rgba(255,255,255,0.08);color:#aaa;border:1px solid rgba(255,255,255,0.2);";
+        html += "border-radius:6px;cursor:pointer;transition:all 0.2s;' ";
+        html += "onmouseover=\"this.style.background='rgba(255,255,255,0.15)';this.style.borderColor='rgba(255,255,255,0.4)'\" ";
+        html += "onmouseout=\"this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='rgba(255,255,255,0.2)'\">";
+        html += "Leave Game</button>";
+        html += "</div>";
+
+        content.innerHTML = html;
+      });
+    }
+
+    /**
+     * Closes the full leaderboard modal.
+     * Hides the modal overlay and backdrop.
+     */
+    function closeLeaderboardModal() {
+      var modal = document.getElementById('leaderboardModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    /**
+     * Restarts the game from the leaderboard modal.
+     * Closes modal and calls existing playAgain() function.
+     * Used by "Play Again" button in Top 25 modal on game over screens.
+     */
+    function playAgainFromModal() {
+      closeLeaderboardModal();
+      playAgain();
+    }
+
+    /**
+     * Exits to main menu from the leaderboard modal.
+     * Closes modal and calls existing leaveGame() function.
+     * Used by "Leave Game" button in Top 25 modal on game over screens.
+     * Passes 'victory' or 'death' based on current gameOver state.
+     */
+    function leaveGameFromModal() {
+      closeLeaderboardModal();
+      // Determine outcome based on victory screen visibility
+      var victoryScreen = document.getElementById('victoryScreen');
+      var outcome = (victoryScreen && victoryScreen.style.display !== 'none') ? 'victory' : 'death';
+      leaveGame(outcome);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -7474,6 +7606,39 @@
       toggleMusic();
     });
   </script>
+
+  <!-- Full Leaderboard Modal (Top 25) -->
+  <div id="leaderboardModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+           z-index:9999;align-items:center;justify-content:center;">
+    <!-- Semi-transparent backdrop -->
+    <div onclick="closeLeaderboardModal()" style="position:absolute;top:0;left:0;width:100%;height:100%;
+             background:rgba(0,0,0,0.9);"></div>
+    <!-- Modal content box -->
+    <div style="position:relative;background:rgba(10,10,20,0.98);border:2px solid rgba(0,255,255,0.4);
+             border-radius:12px;max-width:600px;max-height:80vh;width:90%;
+             box-shadow:0 8px 32px rgba(0,255,255,0.3);z-index:1;overflow:hidden;
+             display:flex;flex-direction:column;">
+      <!-- Modal header -->
+      <div style="padding:20px;border-bottom:1px solid rgba(0,255,255,0.2);
+               display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="color:#FFD700;margin:0;font-size:24px;font-weight:bold;">
+          🏆 Top 25 Leaderboard
+        </h2>
+        <button onclick="closeLeaderboardModal()" style="background:none;border:none;color:#fff;
+                 font-size:32px;cursor:pointer;padding:0;width:32px;height:32px;line-height:1;
+                 transition:color 0.2s;"
+          onmouseover="this.style.color='#00FFFF'"
+          onmouseout="this.style.color='#fff'">&times;</button>
+      </div>
+      <!-- Modal body (scrollable) -->
+      <div style="padding:20px;overflow-y:auto;flex:1;">
+        <div id="fullLeaderboardContent" style="text-align:center;color:#aaa;font-size:13px;">
+          Loading...
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 
 </html>

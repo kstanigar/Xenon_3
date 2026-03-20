@@ -67,6 +67,12 @@ jobs:
           check "var powerupSpawnsThisCycle"
           check "function trySpawnPowerup"
 
+          # Top 25 Leaderboard Modal (UI/UX - Mar 2026)
+          check "function showFullLeaderboard"
+          check "function closeLeaderboardModal"
+          check "function playAgainFromModal"
+          check "function leaveGameFromModal"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -144,6 +150,12 @@ jobs:
           # Power-Up Cycle System (timer-based spawning - Mar 2026)
           check "var powerupSpawnsThisCycle"
           check "function trySpawnPowerup"
+
+          # Top 25 Leaderboard Modal (UI/UX - Mar 2026)
+          check "function showFullLeaderboard"
+          check "function closeLeaderboardModal"
+          check "function playAgainFromModal"
+          check "function leaveGameFromModal"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 

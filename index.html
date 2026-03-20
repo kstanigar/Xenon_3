@@ -404,22 +404,25 @@
     const db = getFirestore(app);
 
     /**
-     * Queries the Firestore "leaderboard" collection for the top 10 scores,
+     * Queries the Firestore "leaderboard" collection for the top N scores,
      * ordered by score descending. Returns an empty array on error.
      *
      * Shared function signature with game.html and game_mobile.html:
-     * - index.html uses it to populate the main menu leaderboard dropdown
+     * - index.html uses it to populate the main menu leaderboard dropdown (top 10)
+     *   and full leaderboard modal (top 25)
      * - game files use it to display leaderboard on victory/game-over screens
      *
      * Error handling:
      * - Returns [] on network errors, permission errors, or collection not found
      * - Logs error to console for debugging
      *
-     * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>} Top 10 leaderboard entries
+     * @param {number} [limitCount=10] - Number of entries to fetch (default: 10, modal: 25)
+     * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>} Top N leaderboard entries
      */
-    window.firebaseGetTopScores = async function () {
+    window.firebaseGetTopScores = async function (limitCount) {
       try {
-        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
+        limitCount = limitCount || 10; // Default to 10 if not specified
+        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(limitCount));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
@@ -459,6 +462,48 @@
                max-height:480px;transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1);">
         <div id="leaderboardContent" style="padding:14px 20px 18px;text-align:center;color:#aaa;font-size:13px;">
           Loading...
+        </div>
+        <!-- View Full Leaderboard button (Top 25 modal) -->
+        <div style="padding:0 20px 16px;text-align:center;">
+          <button onclick="showFullLeaderboard()" style="background:rgba(0,255,255,0.08);border:1px solid rgba(0,255,255,0.3);
+                   border-radius:6px;color:#00FFFF;padding:8px 16px;font-size:12px;cursor:pointer;
+                   transition:all 0.2s;font-weight:500;letter-spacing:0.3px;"
+            onmouseover="this.style.background='rgba(0,255,255,0.15)';this.style.borderColor='#00FFFF'"
+            onmouseout="this.style.background='rgba(0,255,255,0.08)';this.style.borderColor='rgba(0,255,255,0.3)'">
+            View Full Leaderboard (Top 25)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Leaderboard Modal (Top 25) -->
+    <div id="leaderboardModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+             z-index:9999;align-items:center;justify-content:center;">
+      <!-- Semi-transparent backdrop -->
+      <div onclick="closeLeaderboardModal()" style="position:absolute;top:0;left:0;width:100%;height:100%;
+               background:rgba(0,0,0,0.85);"></div>
+      <!-- Modal content box -->
+      <div style="position:relative;background:rgba(10,21,21,0.98);border:2px solid rgba(0,255,255,0.4);
+               border-radius:12px;max-width:600px;max-height:80vh;width:90%;
+               box-shadow:0 8px 32px rgba(0,255,255,0.2);z-index:1;overflow:hidden;
+               display:flex;flex-direction:column;">
+        <!-- Modal header -->
+        <div style="padding:20px;border-bottom:1px solid rgba(0,255,255,0.2);
+                 display:flex;justify-content:space-between;align-items:center;">
+          <h2 style="color:#00FFFF;margin:0;font-size:24px;font-weight:bold;letter-spacing:0.5px;">
+            🏆 Top 25 Leaderboard
+          </h2>
+          <button onclick="closeLeaderboardModal()" style="background:none;border:none;color:#fff;
+                   font-size:32px;cursor:pointer;padding:0;width:32px;height:32px;line-height:1;
+                   transition:color 0.2s;"
+            onmouseover="this.style.color='#00FFFF'"
+            onmouseout="this.style.color='#fff'">&times;</button>
+        </div>
+        <!-- Modal body (scrollable) -->
+        <div style="padding:20px;overflow-y:auto;flex:1;">
+          <div id="fullLeaderboardContent" style="text-align:center;color:#aaa;font-size:13px;">
+            Loading...
+          </div>
         </div>
       </div>
     </div>
@@ -801,6 +846,188 @@
           }, 1200);
         }
       }
+    }
+
+    /**
+     * Opens the full leaderboard modal showing top 25 entries.
+     * Fetches top 25 from Firebase and populates modal grid with 2-column layout.
+     * Same rendering logic as renderLeaderboard() but for 25 entries instead of 10.
+     *
+     * Modal features:
+     * - Semi-transparent backdrop (click to close)
+     * - Scrollable content area (max-height: 80vh)
+     * - Close button (X) in header
+     * - Maintains 2-column grid layout on all screen sizes
+     *
+     * Rationale:
+     * - Keeps Play button visible on main menu (doesn't push it off-screen)
+     * - On-demand loading (only fetches 25 when user requests full leaderboard)
+     * - Firebase cost: +15 reads per view (25 vs 10)
+     */
+    function showFullLeaderboard() {
+      var modal = document.getElementById('leaderboardModal');
+      var content = document.getElementById('fullLeaderboardContent');
+
+      if (!modal || !content) return;
+
+      // Show modal with flex display for centering
+      modal.style.display = 'flex';
+
+      // Fetch top 25 from Firebase
+      if (typeof window.firebaseGetTopScores === 'function') {
+        window.firebaseGetTopScores(25).then(function(top25) {
+          if (!top25 || top25.length === 0) {
+            content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
+            return;
+          }
+
+          // Same two-column rendering logic as renderLeaderboard()
+          var localBest = parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
+          var half = Math.ceil(top25.length / 2);
+          var cols = ['', ''];
+
+          for (var i = 0; i < top25.length; i++) {
+            var entry = top25[i];
+            var playerName = entry.instagram && entry.instagram !== 'Anonymous'
+              ? entry.instagram : 'Anonymous';
+
+            var isYours = localBest > 0 && entry.score === localBest;
+            var rowStyle = isYours ? "color:#00FFFF;font-weight:bold;" : "color:#ddd;";
+            var nameColor = isYours ? "#00FFFF" : "#888";
+
+            var col = i < half ? 0 : 1;
+
+            cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
+            cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
+            cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + playerName + "</span>";
+            cols[col] += "</div>";
+          }
+
+          // Two-column layout (same as main leaderboard)
+          var html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;padding:4px 0;'>";
+          html += "<div style='min-width:140px;'>" + cols[0] + "</div>";
+          html += "<div style='min-width:140px;'>" + cols[1] + "</div>";
+          html += "</div>";
+
+          // Platform selector (index.html modal only)
+          var currentPlatform = localStorage.getItem('nonx_platform') || 'desktop';
+          html += "<div style='margin-top:32px;text-align:center;'>";
+          // "Play on:" label
+          html += "<div style='color:#888;font-size:13px;margin-bottom:10px;letter-spacing:0.5px;'>Play on:</div>";
+          // Platform toggle buttons (segmented control)
+          html += "<div style='display:inline-flex;gap:0;border:1px solid rgba(0,255,255,0.3);border-radius:8px;overflow:hidden;margin-bottom:20px;'>";
+
+          // Desktop button
+          var desktopSelected = currentPlatform === 'desktop';
+          html += "<button onclick='selectPlatformInModal(\"desktop\")' id='modalPlatformDesktop' ";
+          html += "style='padding:10px 28px;font-size:14px;border:none;cursor:pointer;transition:all 0.2s;border-right:1px solid rgba(0,255,255,0.3);";
+          html += "background:" + (desktopSelected ? "#00FFFF" : "rgba(0,255,255,0.05)") + ";";
+          html += "color:" + (desktopSelected ? "#000" : "#888") + ";";
+          html += "font-weight:" + (desktopSelected ? "bold" : "normal") + ";' ";
+          html += "onmouseover=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.15)'\" ";
+          html += "onmouseout=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.05)'\">";
+          html += "Computer</button>";
+
+          // Mobile button
+          var mobileSelected = currentPlatform === 'mobile';
+          html += "<button onclick='selectPlatformInModal(\"mobile\")' id='modalPlatformMobile' ";
+          html += "style='padding:10px 28px;font-size:14px;border:none;cursor:pointer;transition:all 0.2s;";
+          html += "background:" + (mobileSelected ? "#00FFFF" : "rgba(0,255,255,0.05)") + ";";
+          html += "color:" + (mobileSelected ? "#000" : "#888") + ";";
+          html += "font-weight:" + (mobileSelected ? "bold" : "normal") + ";' ";
+          html += "onmouseover=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.15)'\" ";
+          html += "onmouseout=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.05)'\">";
+          html += "Mobile</button>";
+
+          html += "</div>";
+
+          // Start Game button
+          html += "<div>";
+          html += "<button onclick='startGameFromModal()' style='padding:14px 40px;font-size:16px;";
+          html += "background:#00FFFF;color:#000;border:none;border-radius:8px;cursor:pointer;";
+          html += "font-weight:bold;transition:all 0.2s;box-shadow:0 4px 12px rgba(0,255,255,0.3);' ";
+          html += "onmouseover=\"this.style.background='#00CCCC'\" onmouseout=\"this.style.background='#00FFFF'\">";
+          html += "🎮 START GAME</button>";
+          html += "</div>";
+
+          html += "</div>";
+
+          content.innerHTML = html;
+        });
+      } else {
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+      }
+    }
+
+    /**
+     * Closes the full leaderboard modal.
+     * Hides the modal overlay and backdrop.
+     */
+    function closeLeaderboardModal() {
+      var modal = document.getElementById('leaderboardModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    /**
+     * Launches the game from the leaderboard modal.
+     * Closes modal and calls existing launchGame() function.
+     * Used by "Start Game" button in Top 25 modal on main menu.
+     * Respects current platform selection (desktop/mobile).
+     */
+    function startGameFromModal() {
+      closeLeaderboardModal();
+      launchGame();
+    }
+
+    /**
+     * Updates platform selection within the leaderboard modal.
+     * Syncs with main menu platform buttons and updates localStorage.
+     * Provides visual feedback by highlighting the selected platform button.
+     *
+     * @param {string} platform - Platform identifier: 'desktop' or 'mobile'
+     *
+     * Visual updates:
+     * - Selected button: Cyan background, black text, bold
+     * - Unselected button: Transparent background, gray text, normal weight
+     * - Also updates main menu platform buttons via selectPlatform()
+     */
+    function selectPlatformInModal(platform) {
+      // Update localStorage
+      localStorage.setItem('nonx_platform', platform);
+
+      // Get modal buttons
+      var desktopBtn = document.getElementById('modalPlatformDesktop');
+      var mobileBtn = document.getElementById('modalPlatformMobile');
+
+      if (!desktopBtn || !mobileBtn) return;
+
+      // Update visual state based on selection
+      if (platform === 'desktop') {
+        // Desktop selected
+        desktopBtn.style.background = '#00FFFF';
+        desktopBtn.style.color = '#000';
+        desktopBtn.style.fontWeight = 'bold';
+
+        // Mobile unselected
+        mobileBtn.style.background = 'rgba(0,255,255,0.05)';
+        mobileBtn.style.color = '#888';
+        mobileBtn.style.fontWeight = 'normal';
+      } else {
+        // Mobile selected
+        mobileBtn.style.background = '#00FFFF';
+        mobileBtn.style.color = '#000';
+        mobileBtn.style.fontWeight = 'bold';
+
+        // Desktop unselected
+        desktopBtn.style.background = 'rgba(0,255,255,0.05)';
+        desktopBtn.style.color = '#888';
+        desktopBtn.style.fontWeight = 'normal';
+      }
+
+      // Sync with main menu platform selector
+      selectPlatform(platform);
     }
 
     /**
