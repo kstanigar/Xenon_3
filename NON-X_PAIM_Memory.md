@@ -1049,6 +1049,8 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 19 2026 — mobile touch control improvement: movement speed 10px/frame→20px/frame (2x faster) to reduce touch latency based on user feedback (game_mobile.html only)
 - Mar 19 2026 — purple boss balance: reduced orbiters from 10→8 to make final boss less overwhelming on mobile (game_mobile.html only)
 - Mar 19 2026 — power-up cleanup optimization: reduced validation frequency from 60fps to every 15 seconds (900x reduction in cleanup iterations) for mobile performance gain (both files)
+- Mar 19 2026 — Top 25 leaderboard modal: expanded leaderboard from 10 to 25 entries, with entries 11-25 shown via modal overlay. Modal includes 2-button footer (index: "Start Game", game files: "Play Again" + "Leave Game") for improved UX (all 3 files)
+- Mar 19 2026 — platform selector in modal: added segmented control to index.html Top 25 modal allowing users to choose desktop/mobile before launching game. Placed below leaderboard grid, above Start Game button for natural user flow (index.html only)
 
 ### Debug Logging Performance Fix (Mar 14, 2026 session 5) — Both Files
 **Problem:** Debug console.log statements (3 groups per file) running every 1-3 seconds added ~0.5-1ms overhead per second on mobile devices, even with dev tools closed. Over 5-minute sessions, this meant 300-600 unnecessary function calls.
@@ -1268,7 +1270,7 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
 | 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
 | 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
-| 🟢 P3 | **Leaderboard expansion: Top 25 with dropdown** | See section 18 below |
+| ✅ Done | **Leaderboard expansion: Top 25 with modal** — Implemented modal overlay instead of dropdown. Includes platform selector (index.html), 2-button footer (game files) | Mar 19, 2026 — Completed (branch: feature/top25_leaderboard_modal) |
 
 ---
 
@@ -1453,130 +1455,264 @@ After testing, green levels felt too easy due to cascading making bullets more p
 
 ---
 
-## 18. LEADERBOARD EXPANSION: TOP 25 WITH DROPDOWN (Feature Request - Mar 14, 2026)
+## 18. LEADERBOARD EXPANSION: TOP 25 WITH MODAL (Implemented - Mar 19, 2026)
 
-### Current Behavior
-- Leaderboard displays top 10 players only
-- Shown on: index.html (main menu), game.html (game over), game_mobile.html (game over)
-- 2-column grid layout (5 rows × 2 columns)
-- Fits perfectly on mobile without scrolling
+### Implementation Overview
+**Expanded leaderboard from top 10 to top 25, with entries 11-25 shown via modal overlay instead of dropdown.**
 
-### Proposed Enhancement
-**Expand to top 25, with ranks #11-25 hidden in collapsible dropdown**
+**Decision:** Modal chosen over dropdown to prevent pushing "Play Game" button off-screen on mobile.
 
-**UI Design:**
+### Files Modified
+- ✅ `index.html` — Main menu leaderboard (lines 420-1038)
+- ✅ `game.html` — Desktop game over leaderboard (lines 564-573, modal HTML before `</body>`)
+- ✅ `game_mobile.html` — Mobile game over leaderboard (lines 526-535, modal HTML before `</body>`)
+
+### UI Design
+
+**Main Leaderboard (All files):**
 ```
 ┌─────────────────────────────────┐
-│  🏆 TOP PLAYERS                 │
+│  🏆 TOP PLAYERS (Showing 10/25) │
 ├─────────────────────────────────┤
 │  1. PlayerName    12,500        │
 │  2. PlayerName    11,200        │
 │  ...                            │
 │  10. PlayerName    8,400        │
 ├─────────────────────────────────┤
-│  ▼ Show more (11-25)            │  ← Collapsed by default
+│  [View Top 25]  ← Click opens modal
 └─────────────────────────────────┘
+```
 
-(When clicked ▼ becomes ▲ and expands)
+**Top 25 Modal (index.html only):**
+```
+┌────────────────────────────────────┐
+│  🏆 TOP 25 PLAYERS          [X]    │
+├────────────────────────────────────┤
+│  1. PlayerName    12,500           │
+│  ...                               │
+│  25. PlayerName   5,200            │
+│  (2-column grid: 13 rows × 2 cols) │
+├────────────────────────────────────┤
+│  Play on: [Desktop] [Mobile]       │  ← Platform selector
+│  🎮 START GAME                     │
+└────────────────────────────────────┘
+```
 
-┌─────────────────────────────────┐
-│  ▲ Show less                    │
-├─────────────────────────────────┤
-│  11. PlayerName    8,100        │
-│  12. PlayerName    7,900        │
-│  ...                            │
-│  25. PlayerName    5,200        │
-└─────────────────────────────────┘
+**Top 25 Modal (game.html / game_mobile.html):**
+```
+┌────────────────────────────────────┐
+│  🏆 TOP 25 PLAYERS          [X]    │
+├────────────────────────────────────┤
+│  1. PlayerName    12,500           │
+│  ...                               │
+│  25. PlayerName   5,200            │
+│  (2-column grid: 13 rows × 2 cols) │
+├────────────────────────────────────┤
+│  🔄 PLAY AGAIN    🏠 LEAVE GAME    │
+└────────────────────────────────────┘
 ```
 
 ### Implementation Details
 
-**Files to modify:**
-- `index.html` — Main menu leaderboard
-- `game.html` — Desktop game over leaderboard
-- `game_mobile.html` — Mobile game over leaderboard
+#### 1. Firebase Query Updates
 
-**Changes needed:**
+**game.html (line 564-573):**
+```javascript
+window.firebaseGetTopScores = async function (limitCount) {
+  try {
+    limitCount = limitCount || 10; // Default to 10 if not specified
+    const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(limitCount));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(function (doc) { return doc.data(); });
+  } catch (e) {
+    console.error("Firebase fetch error:", e);
+    return [];
+  }
+};
+```
 
-1. **Firebase query** — Change limit from 10 to 25:
-   ```javascript
-   // Current:
-   .orderBy('score', 'desc').limit(10)
+**game_mobile.html (line 526-535):** Identical implementation
 
-   // New:
-   .orderBy('score', 'desc').limit(25)
-   ```
+**index.html (line 420-429):** Already had `limitCount` parameter, no changes needed
 
-2. **HTML structure** — Split into two sections:
-   ```javascript
-   // Ranks 1-10 (always visible)
-   var topTenHTML = '';
-   for (var i = 0; i < Math.min(10, scores.length); i++) {
-     topTenHTML += buildLeaderboardRow(scores[i], i + 1);
-   }
+#### 2. Main Leaderboard Display
 
-   // Ranks 11-25 (hidden by default)
-   var expandedHTML = '';
-   if (scores.length > 10) {
-     expandedHTML = '<div id="leaderboard-expanded" style="display:none;">';
-     for (var i = 10; i < scores.length; i++) {
-       expandedHTML += buildLeaderboardRow(scores[i], i + 1);
-     }
-     expandedHTML += '</div>';
-   }
+**All files:** Updated inline leaderboard to show "Showing 10/25" and "View Top 25" button:
+```javascript
+// Show first 10 entries in 2-column grid
+for (var i = 0; i < Math.min(10, scores.length); i++) {
+  html += buildLeaderboardRow(scores[i], i + 1);
+}
 
-   // Toggle button (only show if >10 entries)
-   var toggleButton = scores.length > 10
-     ? '<button onclick="toggleLeaderboardExpansion()">▼ Show more (11-25)</button>'
-     : '';
-   ```
+// Add "View Top 25" button if more than 10 entries
+if (scores.length > 10) {
+  html += '<button onclick="showFullLeaderboard()">View Top 25</button>';
+}
+```
 
-3. **Toggle function:**
-   ```javascript
-   function toggleLeaderboardExpansion() {
-     var expanded = document.getElementById('leaderboard-expanded');
-     var button = document.getElementById('leaderboard-toggle-btn');
+#### 3. Modal Implementation
 
-     if (expanded.style.display === 'none') {
-       expanded.style.display = 'grid';
-       button.textContent = '▲ Show less';
-     } else {
-       expanded.style.display = 'none';
-       button.textContent = '▼ Show more (11-25)';
-     }
-   }
-   ```
+**Modal HTML structure (all files):**
+- Full-screen semi-transparent backdrop (`rgba(0,0,0,0.85)`)
+- Centered modal container with cyan glow border
+- Close button (X) in top-right corner
+- All 25 entries in 2-column grid (13 rows × 2 columns)
+- Context-specific footer buttons
 
-4. **CSS adjustments:**
-   - Same 2-column grid for expanded section
-   - Smooth transition animation (optional)
-   - Button styling to match existing UI
+**Modal function signatures:**
+```javascript
+// All files
+function showFullLeaderboard() {
+  // Fetches top 25 from Firebase
+  // Renders modal with all entries
+  // Shows context-specific footer
+}
+
+function closeFullLeaderboard() {
+  // Hides modal overlay
+  document.getElementById('fullLeaderboardModal').style.display = 'none';
+}
+
+// Game files only
+function playAgainFromModal() {
+  closeFullLeaderboard();
+  playAgain(); // Restart game
+}
+
+function leaveGameFromModal() {
+  closeFullLeaderboard();
+  returnToHomeScreen(); // Redirect to index.html
+}
+
+// Index.html only
+function selectPlatformInModal(platform) {
+  // Updates platform selection in modal
+  // Syncs with main menu platform selector
+  // Stores in localStorage.nonx_platform
+}
+
+function startGameFromModal() {
+  closeFullLeaderboard();
+  launchGame(); // Launch game with selected platform
+}
+```
+
+### Platform Selector (index.html only)
+
+**Design:** Segmented control placed BELOW leaderboard grid, ABOVE Start Game button
+
+**Visual states:**
+- Selected: `background: #00FFFF`, `color: #000`, `font-weight: bold`
+- Unselected: `background: rgba(0,255,255,0.05)`, `color: #888`
+
+**Behavior:**
+- Clicking Desktop/Mobile updates visual state
+- Syncs selection with main menu platform selector
+- Persists choice to `localStorage.nonx_platform`
+- Start Game button launches selected platform
+
+**Implementation (lines 906-1038):**
+```javascript
+// Read current platform selection
+var currentPlatform = localStorage.getItem('nonx_platform') || 'desktop';
+
+// Segmented control (2 buttons)
+html += "<div style='display:inline-flex;gap:0;border:1px solid rgba(0,255,255,0.3);'>";
+html += "<button onclick='selectPlatformInModal(\"desktop\")' id='modalPlatformDesktop'...";
+html += "<button onclick='selectPlatformInModal(\"mobile\")' id='modalPlatformMobile'...";
+html += "</div>";
+
+// Start Game button below platform selector
+html += "<button onclick='startGameFromModal()'...>🎮 START GAME</button>";
+```
+
+**selectPlatformInModal() function:**
+- Updates visual state of both buttons (selected/unselected styling)
+- Calls `selectPlatform(platform)` to sync with main menu
+- Persists to localStorage
+
+### User Flow
+
+**From index.html (main menu):**
+1. User views top 10 leaderboard
+2. Clicks "View Top 25" button
+3. Modal opens showing all 25 entries
+4. User selects Desktop or Mobile via toggle
+5. Clicks "START GAME" → launches game with selected platform
+6. OR clicks X or backdrop → modal closes, returns to main menu
+
+**From game.html / game_mobile.html (game over):**
+1. User views top 10 leaderboard on game over screen
+2. Clicks "View Top 25" button
+3. Modal opens showing all 25 entries
+4. User clicks "PLAY AGAIN" → closes modal, restarts game
+5. OR clicks "LEAVE GAME" → closes modal, returns to index.html
+6. OR clicks X or backdrop → modal closes, returns to game over screen
 
 ### Benefits
 - ✅ More players see their name on leaderboard (motivates ranks 11-25)
-- ✅ No UI clutter — top 10 still primary focus
-- ✅ No scrolling required — dropdown keeps content compact
-- ✅ Works on mobile — same 2-column grid maintains consistency
+- ✅ No UI clutter — top 10 still primary focus on main screens
+- ✅ No scrolling issues — modal prevents pushing buttons off-screen
+- ✅ Works perfectly on mobile — 2-column grid maintains consistency
+- ✅ Platform selection integrated seamlessly (index.html only)
+- ✅ Clear action paths from modal (context-aware buttons)
 
-### Design Considerations
-- **Default state:** Collapsed (▼ Show more)
-- **Persistence:** Toggle state resets on page reload (no localStorage)
-- **Empty state:** If <10 scores exist, no toggle button shown
-- **Firebase cost:** Fetching 25 instead of 10 is negligible (single query)
-- **Performance:** No impact (same rendering, just conditional display)
+### Design Rationale
+
+**Why modal instead of dropdown?**
+- Dropdown would push "Play Game" button off-screen on mobile (480px height)
+- Modal keeps all UI elements accessible
+- Modal provides dedicated focus for leaderboard viewing
+- Backdrop click-to-close is intuitive UX pattern
+
+**Why 2-button footer in game files?**
+- "View Stats" would be redundant (just closes modal like X button)
+- "Play Again" + "Leave Game" provide clear, distinct actions
+- Matches user expectations from game over context
+
+**Why platform selector in modal (index.html)?**
+- Natural user flow: View scores → Choose platform → Launch
+- Eliminates need to close modal, select platform, then open game
+- Keeps modal as single decision point before launch
+- Visual hierarchy: Content (leaderboard) → Choice (platform) → Action (start)
+
+### Technical Notes
+
+**Firebase costs:**
+- Fetching 25 instead of 10 is negligible (single query, ~2.5x data)
+- All files now support dynamic `limitCount` parameter for flexibility
+
+**Performance:**
+- No impact on load time (modal content rendered on-demand)
+- No additional network requests (single Firebase query)
+- Modal HTML is static (added to DOM at page load, hidden by default)
+
+**Accessibility:**
+- Backdrop click closes modal (standard pattern)
+- X button provides explicit close action
+- Escape key support could be added in future
 
 ### Analytics Impact
 - No version bump needed (UI enhancement, not gameplay mechanic)
-- Consider tracking: `leaderboard_expanded` event when dropdown opened
+- Consider tracking: `leaderboard_expanded` event when modal opened
+- Consider tracking: `platform_changed_in_modal` for UX insights
 
-### Priority
-**P3** — Nice-to-have feature, implement after core gameplay is stable.
+### Status
+✅ **IMPLEMENTED** — Deployed on branch `feature/top25_leaderboard_modal` (awaiting PR to main)
 
-**Dependencies:**
-- None (independent feature)
+**Branch commits:**
+- b08be13 — Initial Top 25 modal implementation (all 3 files)
+- a65a0b7 — Added "Start Game" and "Leave Game" buttons to modals
+- 36d33c1 — Added platform selector to index.html modal
 
-**Estimated effort:**
-- 30-45 minutes per file (3 files total)
-- ~2 hours including testing on both platforms
-
-**Status:** Feature request documented, awaiting implementation scheduling.
+**Testing checklist:**
+- ✅ Firebase queries fetch 25 entries
+- ✅ Main leaderboard shows first 10 with "Showing 10/25"
+- ✅ "View Top 25" button opens modal
+- ✅ Modal shows all 25 entries in 2-column grid
+- ✅ X button and backdrop click close modal
+- ✅ Platform selector updates localStorage (index.html)
+- ✅ Start Game button launches correct platform (index.html)
+- ✅ Play Again button restarts game (game files)
+- ✅ Leave Game button returns to index.html (game files)
+- ⏳ Test on deployed GitHub Pages (pending PR merge)
