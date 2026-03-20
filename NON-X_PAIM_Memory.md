@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 19, 2026 (mobile optimizations + touch improvements)_
+_Last updated: March 19, 2026 (mobile optimizations + touch improvements + power-up cleanup)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -190,21 +190,27 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - **Analytics impact:** None (visual feedback change only)
 
 **7. Power-Up Cleanup Optimization (Performance)**
-- **Status:** Pending review (Mar 18, 2026)
-- **Current behavior:** Power-ups are checked/updated every frame (60 times per second)
-- **Proposed optimization:** Reduce power-up cleanup/bounds checking to every 15 seconds
+- **Status:** ✅ COMPLETED (Mar 19, 2026) — Option 1 implemented
+- **Previous behavior:** Power-ups checked/removed every frame (60 checks/second)
+- **New behavior:** Power-ups removed in batches every 15 seconds (1 check/15 seconds)
+- **Performance gain:** 900x reduction in cleanup iterations (60 × 15 = 900)
+- **Implementation (Option 1 - Off-screen cleanup timer):**
+  - Added `powerupCleanupTimer` variable (tracks time since last cleanup)
+  - Added `POWERUP_CLEANUP_INTERVAL` constant (15000ms)
+  - Created `cleanupOffScreenPowerups()` function (batch removal)
+  - Removed per-frame bounds check from main power-up loop
+  - Timer resets on: level transitions, boss spawns, phase changes, dev jumps, replays
 - **Rationale:**
-  - Power-ups fall slowly and don't need frame-by-frame validation
-  - Off-screen power-ups can persist for several seconds without issue
-  - Reducing check frequency saves CPU cycles on mobile
-- **Current power-up system:** Timer-based spawning (5 second intervals)
-- **Implementation options:**
-  1. **Off-screen cleanup timer:** Check if power-ups are off-screen every 15 seconds and remove them
-  2. **Validation throttle:** Only validate power-up bounds/state every 15 seconds instead of every frame
-  3. **TTL (Time To Live):** Set power-up lifespan to 15 seconds, auto-remove after expiry
-- **Performance impact:** Reduces power-up iteration overhead on mobile
-- **Files affected:** Both game.html and game_mobile.html
-- **Testing needed:** Verify power-ups still feel responsive and don't linger too long off-screen
+  - Power-ups fall slowly (~2-3px/frame) and don't need frame-by-frame validation
+  - Off-screen power-ups can persist for a few extra seconds without player noticing
+  - Decouples movement (frame-critical) from cleanup (housekeeping)
+- **What's preserved:**
+  - Position updates still run every frame (smooth falling animation)
+  - Collision detection still runs every frame (responsive gameplay)
+  - Power-up spawn timing unchanged (5 second intervals)
+- **Files modified:** Both game.html and game_mobile.html (42 lines each)
+- **Commit:** ed4aaff - "perf: optimize power-up cleanup from 60fps to every 15 seconds"
+- **Testing needed:** Verify power-ups don't visibly linger off-screen during gameplay
 - **Analytics impact:** None (internal optimization only)
 
 ### P2 — Medium Priority (Future Sprint)
@@ -989,6 +995,7 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 19 2026 — player bullet burst increase: 6→8 bullets per burst for better offense against high enemy counts (both files)
 - Mar 19 2026 — mobile touch control improvement: movement speed 10px/frame→20px/frame (2x faster) to reduce touch latency based on user feedback (game_mobile.html only)
 - Mar 19 2026 — purple boss balance: reduced orbiters from 10→8 to make final boss less overwhelming on mobile (game_mobile.html only)
+- Mar 19 2026 — power-up cleanup optimization: reduced validation frequency from 60fps to every 15 seconds (900x reduction in cleanup iterations) for mobile performance gain (both files)
 
 ### Debug Logging Performance Fix (Mar 14, 2026 session 5) — Both Files
 **Problem:** Debug console.log statements (3 groups per file) running every 1-3 seconds added ~0.5-1ms overhead per second on mobile devices, even with dev tools closed. Over 5-minute sessions, this meant 300-600 unnecessary function calls.
@@ -1197,7 +1204,7 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 | 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
 | 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
 | ✅ Done | **Review Mobile Shield Degradation** — Removed opacity fade AND flash effect for performance/visual clarity | Mar 19, 2026 — Completed |
-| 🔴 P1 | **Power-Up Cleanup Optimization** — Reduce validation frequency to every 15 seconds | Mar 18, 2026 — See section 1b item 7 |
+| ✅ Done | **Power-Up Cleanup Optimization** — Reduced validation frequency from 60fps to every 15 seconds (900x reduction) | Mar 19, 2026 — Completed |
 | 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
 | 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
 | 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
