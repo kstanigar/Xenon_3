@@ -4472,14 +4472,14 @@
       // SHIELD VISUAL FEEDBACK SYSTEM (Mobile) - Performance Optimized (Mar 19, 2026)
       // ═══════════════════════════════════════════════════════════════════════════
       // Provides visual indicators when shielded enemies are hit:
-      // 1. Flash Effect - Shield brightens briefly when hit (3 frames, +0.4 alpha boost)
-      // 2. Wobble Effect - Shield pulses in size when hit (oscillates, exponential decay)
-      // 3. Faster Pulse Rate - Shield ripple animates faster as damage increases (1.0x → 1.5x)
+      // 1. Wobble Effect - Shield pulses in size when hit (oscillates, exponential decay)
+      // 2. Faster Pulse Rate - Shield ripple animates faster as damage increases (1.0x → 1.5x)
       //
-      // REMOVED (Mar 19, 2026 - Performance):
+      // REMOVED (Mar 19, 2026 - Performance + Visual Clarity):
       // - Opacity Degradation - Was fading shield 1.0 → 0.5 alpha as damage increased
-      // - Rationale: Flash + wobble + faster pulse already provide sufficient feedback
-      // - Performance gain: Eliminates opacity calculations every frame for every shielded enemy
+      // - Flash Effect - Was brightening shield +0.4 alpha for 3 frames on hit
+      // - Rationale: Wobble + faster pulse provide sufficient feedback without visual clutter
+      // - Performance gain: Eliminates alpha calculations and reduces screen flashing
       //
       // Implementation differences from desktop:
       // - Uses pre-rendered ripple canvases (cannot change color mid-animation)
@@ -4550,11 +4550,6 @@
             var wobbleOffset = 0;
 
             if (isShielded) {
-              // Flash Effect: Shield brightens briefly when hit (+0.4 alpha for 3 frames)
-              if (enemy.shieldFlashFrames > 0) {
-                finalAlpha = Math.min(1.0, finalAlpha + 0.4); // Boost alpha for flash
-              }
-
               // Shield wobble effect - pulse size when hit (abs ensures it only expands)
               if (enemy.shieldWobble > 0) {
                 wobbleOffset = Math.abs(Math.sin(Date.now() * 0.3)) * enemy.shieldWobble;
@@ -4659,8 +4654,8 @@
      *
      * Boss encounters (same as desktop):
      * - Boss 1 (Level 4): Green boss, one-time shield, 4 orbiters
-     * - Boss 2 (Level 8): Red boss, cycling shields (5s on/5s off), 6 orbiters
-     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 8 orbiters
+     * - Boss 2 (Level 8): Red boss, cycling shields (5s on/5s off), 7 orbiters
+     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 10 orbiters
      *
      * Mobile positioning:
      * - Spawn position: x = canvas.width/2 - 75 (centered), y = -150 (off-screen above)
@@ -5361,13 +5356,13 @@
       // ═══════════════════════════════════════════════════════════════════════════
       // BOSS SHIELD VISUAL FEEDBACK (Mobile) - Performance Optimized (Mar 19, 2026)
       // ═══════════════════════════════════════════════════════════════════════════
-      // Same three effects as enemy shields, but tied to boss health % instead of hits:
-      // 1. Flash Effect - Shield brightens when hit
-      // 2. Wobble Effect - Shield pulses in size when hit
-      // 3. Faster Pulse Rate - Ripple animates faster as boss health decreases
+      // Same two effects as enemy shields, but tied to boss health % instead of hits:
+      // 1. Wobble Effect - Shield pulses in size when hit
+      // 2. Faster Pulse Rate - Ripple animates faster as boss health decreases
       //
-      // REMOVED (Mar 19, 2026 - Performance):
+      // REMOVED (Mar 19, 2026 - Performance + Visual Clarity):
       // - Opacity Degradation - No longer fades shield as boss health decreases
+      // - Flash Effect - No longer brightens shield on hit
       //
       // Trigger: Set boss.shieldFlashFrames=3 and boss.shieldWobble=3 in damageBoss()
       // when boss.shielded is true (~line 4806).
@@ -5428,11 +5423,6 @@
             var finalAlpha = rippleAlpha * 0.7;
 
             var wobbleOffset = 0;
-
-            // Flash Effect: Shield brightens briefly when hit (+0.4 alpha for 3 frames)
-            if (boss.shieldFlashFrames > 0) {
-              finalAlpha = Math.min(1.0, finalAlpha + 0.4); // Boost alpha for flash
-            }
 
             // Shield wobble effect - pulse size when hit (abs ensures it only expands)
             if (boss.shieldWobble > 0) {
