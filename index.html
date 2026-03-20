@@ -909,13 +909,47 @@
           html += "<div style='min-width:140px;'>" + cols[1] + "</div>";
           html += "</div>";
 
-          // Start Game button (index.html only)
-          html += "<div style='margin-top:24px;text-align:center;'>";
+          // Platform selector (index.html modal only)
+          var currentPlatform = localStorage.getItem('nonx_platform') || 'desktop';
+          html += "<div style='margin-top:32px;text-align:center;'>";
+          // "Play on:" label
+          html += "<div style='color:#888;font-size:13px;margin-bottom:10px;letter-spacing:0.5px;'>Play on:</div>";
+          // Platform toggle buttons (segmented control)
+          html += "<div style='display:inline-flex;gap:0;border:1px solid rgba(0,255,255,0.3);border-radius:8px;overflow:hidden;margin-bottom:20px;'>";
+
+          // Desktop button
+          var desktopSelected = currentPlatform === 'desktop';
+          html += "<button onclick='selectPlatformInModal(\"desktop\")' id='modalPlatformDesktop' ";
+          html += "style='padding:10px 28px;font-size:14px;border:none;cursor:pointer;transition:all 0.2s;border-right:1px solid rgba(0,255,255,0.3);";
+          html += "background:" + (desktopSelected ? "#00FFFF" : "rgba(0,255,255,0.05)") + ";";
+          html += "color:" + (desktopSelected ? "#000" : "#888") + ";";
+          html += "font-weight:" + (desktopSelected ? "bold" : "normal") + ";' ";
+          html += "onmouseover=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.15)'\" ";
+          html += "onmouseout=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.05)'\">";
+          html += "Computer</button>";
+
+          // Mobile button
+          var mobileSelected = currentPlatform === 'mobile';
+          html += "<button onclick='selectPlatformInModal(\"mobile\")' id='modalPlatformMobile' ";
+          html += "style='padding:10px 28px;font-size:14px;border:none;cursor:pointer;transition:all 0.2s;";
+          html += "background:" + (mobileSelected ? "#00FFFF" : "rgba(0,255,255,0.05)") + ";";
+          html += "color:" + (mobileSelected ? "#000" : "#888") + ";";
+          html += "font-weight:" + (mobileSelected ? "bold" : "normal") + ";' ";
+          html += "onmouseover=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.15)'\" ";
+          html += "onmouseout=\"if(this.style.background!=='rgb(0, 255, 255)')this.style.background='rgba(0,255,255,0.05)'\">";
+          html += "Mobile</button>";
+
+          html += "</div>";
+
+          // Start Game button
+          html += "<div>";
           html += "<button onclick='startGameFromModal()' style='padding:14px 40px;font-size:16px;";
           html += "background:#00FFFF;color:#000;border:none;border-radius:8px;cursor:pointer;";
           html += "font-weight:bold;transition:all 0.2s;box-shadow:0 4px 12px rgba(0,255,255,0.3);' ";
           html += "onmouseover=\"this.style.background='#00CCCC'\" onmouseout=\"this.style.background='#00FFFF'\">";
           html += "🎮 START GAME</button>";
+          html += "</div>";
+
           html += "</div>";
 
           content.innerHTML = html;
@@ -945,6 +979,55 @@
     function startGameFromModal() {
       closeLeaderboardModal();
       launchGame();
+    }
+
+    /**
+     * Updates platform selection within the leaderboard modal.
+     * Syncs with main menu platform buttons and updates localStorage.
+     * Provides visual feedback by highlighting the selected platform button.
+     *
+     * @param {string} platform - Platform identifier: 'desktop' or 'mobile'
+     *
+     * Visual updates:
+     * - Selected button: Cyan background, black text, bold
+     * - Unselected button: Transparent background, gray text, normal weight
+     * - Also updates main menu platform buttons via selectPlatform()
+     */
+    function selectPlatformInModal(platform) {
+      // Update localStorage
+      localStorage.setItem('nonx_platform', platform);
+
+      // Get modal buttons
+      var desktopBtn = document.getElementById('modalPlatformDesktop');
+      var mobileBtn = document.getElementById('modalPlatformMobile');
+
+      if (!desktopBtn || !mobileBtn) return;
+
+      // Update visual state based on selection
+      if (platform === 'desktop') {
+        // Desktop selected
+        desktopBtn.style.background = '#00FFFF';
+        desktopBtn.style.color = '#000';
+        desktopBtn.style.fontWeight = 'bold';
+
+        // Mobile unselected
+        mobileBtn.style.background = 'rgba(0,255,255,0.05)';
+        mobileBtn.style.color = '#888';
+        mobileBtn.style.fontWeight = 'normal';
+      } else {
+        // Mobile selected
+        mobileBtn.style.background = '#00FFFF';
+        mobileBtn.style.color = '#000';
+        mobileBtn.style.fontWeight = 'bold';
+
+        // Desktop unselected
+        desktopBtn.style.background = 'rgba(0,255,255,0.05)';
+        desktopBtn.style.color = '#888';
+        desktopBtn.style.fontWeight = 'normal';
+      }
+
+      // Sync with main menu platform selector
+      selectPlatform(platform);
     }
 
     /**
