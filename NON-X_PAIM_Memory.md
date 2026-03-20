@@ -16,6 +16,7 @@ This is the single source of truth for the NON-X project. It is shared with ever
 5. **Pre-launch data (Feb 10 – Mar 9, 2026) is QA/self-testing** — do not draw product conclusions or calibrate benchmarks from it.
 6. **Real player baseline starts: ~Mar 10, 2026.**
 7. **Investigate and report before making any changes** — always trace root cause first, confirm findings, then implement with comments and revert instructions.
+8. **Git workflow: NEVER push directly to `main`** — always create a feature branch, push to remote, then create a PR. Main branch is protected and requires pull request review.
 
 ---
 
@@ -29,6 +30,58 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | Local path | /Users/keithstanigar/Documents/Projects/Xenon_3/ |
 | GA4 Property | NON-X (Account: NON-X Game) — ID: G-9ECFZ9JBE5 |
 | Files | `index.html` (menu), `game.html` (desktop), `game_mobile.html` (mobile) |
+
+### Git Workflow (Protected Main Branch)
+
+**CRITICAL: Never push directly to `main` branch. Always use feature branches + pull requests.**
+
+**Correct workflow:**
+```bash
+# 1. Create feature branch from main
+git checkout main
+git pull origin main
+git checkout -b feature/your-feature-name
+
+# 2. Make changes, commit
+git add <files>
+git commit -m "feat: your feature description"
+
+# 3. Push feature branch to remote
+git push -u origin feature/your-feature-name
+
+# 4. Create pull request on GitHub
+# Visit: https://github.com/kstanigar/Xenon_3/pulls
+# Click "New pull request"
+# Select: base: main <- compare: feature/your-feature-name
+
+# 5. After PR is merged, delete local feature branch
+git checkout main
+git pull origin main
+git branch -d feature/your-feature-name
+```
+
+**If you accidentally commit to main:**
+```bash
+# 1. Create feature branch from current HEAD (includes your commit)
+git branch feature/your-feature-name
+
+# 2. Switch to feature branch
+git checkout feature/your-feature-name
+
+# 3. Reset main back to origin/main
+git checkout main
+git reset --hard origin/main
+
+# 4. Switch back and push feature branch
+git checkout feature/your-feature-name
+git push -u origin feature/your-feature-name
+```
+
+**Branch naming conventions:**
+- `feature/` - New features (e.g., `feature/top25_leaderboard_modal`)
+- `fix/` - Bug fixes (e.g., `fix/powerup_spawn_bug`)
+- `perf/` - Performance optimizations (e.g., `perf/powerup_cleanup`)
+- `docs/` - Documentation updates (e.g., `docs/update_paim`)
 
 ### Game Structure
 - 12 levels, 3 phases: **Green** (L1–4) → **Red** (L5–8) → **Purple** (L9–12)
