@@ -1105,7 +1105,7 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 **Purpose:** Validate Top 25 leaderboard modal functions added for enhanced UX.
 
 **New checks added (4 total):**
-- **Top 25 Leaderboard Modal:** `showFullLeaderboard`, `closeFullLeaderboard`, `playAgainFromModal`, `leaveGameFromModal` (modal navigation)
+- **Top 25 Leaderboard Modal:** `showFullLeaderboard`, `closeLeaderboardModal`, `playAgainFromModal`, `leaveGameFromModal` (modal navigation)
 
 **File:** `.github/workflows/integrity-check.yml`
 
@@ -1579,19 +1579,19 @@ function showFullLeaderboard() {
   // Shows context-specific footer
 }
 
-function closeFullLeaderboard() {
+function closeLeaderboardModal() {
   // Hides modal overlay
-  document.getElementById('fullLeaderboardModal').style.display = 'none';
+  document.getElementById('leaderboardModal').style.display = 'none';
 }
 
 // Game files only
 function playAgainFromModal() {
-  closeFullLeaderboard();
+  closeLeaderboardModal();
   playAgain(); // Restart game
 }
 
 function leaveGameFromModal() {
-  closeFullLeaderboard();
+  closeLeaderboardModal();
   returnToHomeScreen(); // Redirect to index.html
 }
 
@@ -1603,7 +1603,7 @@ function selectPlatformInModal(platform) {
 }
 
 function startGameFromModal() {
-  closeFullLeaderboard();
+  closeLeaderboardModal();
   launchGame(); // Launch game with selected platform
 }
 ```
