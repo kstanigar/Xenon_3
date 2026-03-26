@@ -1815,9 +1815,12 @@
     var touchShootCycleStart = 0;
 
     // Burst-fire timing constants (Mar 18, 2026 - performance optimization)
+    // Burst-fire system (BPM-synced - Mar 25, 2026)
+    // 123 BPM = 487.8ms per beat
+    // Quarter-beat rhythm: 487.8ms ÷ 4 = 121.95ms ≈ 122ms
     var BURST_BULLET_COUNT = 8;       // 8 bullets per burst
-    var BURST_FIRE_INTERVAL = 130;    // 130ms between bullets in burst (910ms total)
-    var BURST_COOLDOWN = 500;         // 500ms cooldown after burst (1150ms cycle)
+    var BURST_FIRE_INTERVAL = 122;    // 122ms between bullets (1/4 beat, 976ms total = 2 beats)
+    var BURST_COOLDOWN = 488;         // 488ms cooldown after burst (1 beat, 1464ms cycle = 3 beats)
     var burstShotCount = 0;           // Bullets fired in current burst
 
     // Timestamp of last bullet fired (milliseconds from Date.now())
@@ -7457,11 +7460,11 @@
 
     /**
      * Called every game frame. Moves the player toward the touch x position at
-     * up to 10 px/frame (snaps when within 10 px), then manages the burst-fire cycle:
-     *   Burst: 6 bullets fired at 130ms intervals (650ms total)
-     *   Cooldown: 500ms between bursts
-     *   Total cycle: 1150ms (~1.15 second rhythm)
-     * Mar 18, 2026: Changed from continuous auto-fire to burst system for performance.
+     * up to 20 px/frame (snaps when within 20 px), then manages the burst-fire cycle:
+     *   Burst: 8 bullets fired at 122ms intervals (854ms total, 2 BPM beats)
+     *   Cooldown: 488ms between bursts (1 BPM beat)
+     *   Total cycle: 1342ms (3-beat rhythm @ 123 BPM)
+     * Mar 25, 2026: BPM-synced for musical rhythm (was 1150ms cycle).
      */
     function updateTouchControls() {
       if (!touchActive) return;
@@ -7486,11 +7489,11 @@
         touchTargetY = 0; // consume delta — reset until next touchmove
       }
 
-      // Burst-fire cycle (Mar 18, 2026 - performance optimization)
-      // 6 bullets per burst, 500ms cooldown between bursts
+      // Burst-fire cycle (BPM-synced - Mar 25, 2026)
+      // 8 bullets per burst, 488ms cooldown (1 beat @ 123 BPM)
       var elapsed = now - touchShootCycleStart;
-      var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 650ms for 6 bullets
-      var totalCycle = burstDuration + BURST_COOLDOWN; // 650ms + 500ms = 1150ms
+      var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 854ms (7 gaps between 8 bullets)
+      var totalCycle = burstDuration + BURST_COOLDOWN; // 854ms + 488ms = 1342ms (3-beat rhythm)
 
       if (elapsed >= totalCycle) {
         // Start new burst cycle
