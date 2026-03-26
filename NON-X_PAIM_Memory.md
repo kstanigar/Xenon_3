@@ -439,6 +439,165 @@ EOF
 - Always end with `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
 - Use heredoc format for multi-line messages (ensures proper formatting)
 
+### Complete Feature Branch Workflow (ALWAYS FOLLOW THIS)
+
+**🚨 CRITICAL:** Never commit directly to `main`. Always use feature branches + PRs.
+
+#### Step 1: Create Feature Branch
+```bash
+# Ensure you're on main and up to date
+git checkout main
+git pull origin main
+
+# Create feature branch (use descriptive name)
+git checkout -b feature/your-feature-name
+
+# Examples:
+# feature/bpm_synced_shooting
+# fix/mobile_touch_latency
+# perf/powerup_cleanup
+# docs/update_paim_workflow
+```
+
+#### Step 2: Make Changes & Test Locally
+```bash
+# Make your code changes in the files
+
+# Test locally (start server for mobile testing)
+python3 -m http.server 8080
+
+# Mobile URL: http://[YOUR_LOCAL_IP]:8080/game_mobile.html
+# Desktop URL: http://localhost:8080/game.html
+```
+
+#### Step 3: Run Pre-Commit Checks
+```bash
+# Syntax check (both files)
+python3 -c "
+c = open('game.html').read()
+print('game.html:')
+print('  Lines:', len(c.splitlines()))
+print('  Brace diff:', c[c.find('<script>'):].count('{') - c[c.find('<script>'):].count('}'))
+print('  draw function:', 'function draw(' in c)
+print()
+c = open('game_mobile.html').read()
+print('game_mobile.html:')
+print('  Lines:', len(c.splitlines()))
+print('  Brace diff:', c[c.find('<script>'):].count('{') - c[c.find('<script>'):].count('}'))
+print('  draw function:', 'function draw(' in c)
+"
+
+# Expected output:
+# game.html: brace diff 0, draw function True
+# game_mobile.html: brace diff 0, draw function True
+```
+
+#### Step 4: Document Changes in PAIM
+```bash
+# Update NON-X_PAIM_Memory.md BEFORE committing
+# Add to Version History section (line ~1055)
+# Add detailed section if needed (see existing entries)
+
+# Example entry:
+# - Mar 25 2026 — BPM-synced player shooting: description here (both files)
+```
+
+#### Step 5: Stage and Commit
+```bash
+# Stage files (be specific, don't use "git add .")
+git add game.html game_mobile.html NON-X_PAIM_Memory.md
+
+# Check what's staged
+git status
+
+# Commit with proper format and Co-Authored-By
+git commit -m "$(cat <<'EOF'
+feat(gameplay): sync player shooting to 123 BPM quarter-beat
+
+- Burst interval: 130ms → 122ms (1/4 beat)
+- Cooldown: 600ms/500ms → 488ms unified (1 beat)
+- Total cycle: 1464ms (3 beats exactly)
+- Unifies desktop and mobile configurations
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+#### Step 6: Push Feature Branch
+```bash
+# Push to remote (first time, use -u)
+git push -u origin feature/your-feature-name
+
+# Subsequent pushes (if you make more commits)
+git push
+```
+
+#### Step 7: Create Pull Request
+```bash
+# Option A: Via GitHub CLI (if installed)
+gh pr create --title "feat: BPM-sync player shooting" --body "Description here"
+
+# Option B: Via GitHub Web UI
+# 1. Go to: https://github.com/kstanigar/Xenon_3/pulls
+# 2. Click "New pull request"
+# 3. Select: base: main ← compare: feature/your-feature-name
+# 4. Fill in title and description
+# 5. Click "Create pull request"
+```
+
+#### Step 8: After PR is Merged
+```bash
+# Switch back to main
+git checkout main
+
+# Pull the merged changes
+git pull origin main
+
+# Delete local feature branch (clean up)
+git branch -d feature/your-feature-name
+
+# Verify deploy on GitHub Pages (~2-3 min after merge)
+# https://kstanigar.github.io/Xenon_3/
+```
+
+---
+
+### If You Accidentally Commit to Main
+
+**Scenario:** You committed to main instead of a feature branch.
+
+**Fix:**
+```bash
+# 1. Create feature branch from current HEAD (keeps your commit)
+git branch feature/your-feature-name
+
+# 2. Switch to feature branch
+git checkout feature/your-feature-name
+
+# 3. Reset main back to origin/main (removes commit from main)
+git checkout main
+git reset --hard origin/main
+
+# 4. Switch back to feature branch and push
+git checkout feature/your-feature-name
+git push -u origin feature/your-feature-name
+
+# Now create PR as normal
+```
+
+**Verify:**
+```bash
+# Check branch structure
+git log --all --decorate --oneline --graph -5
+
+# Should show:
+# * abc1234 (feature/your-feature-name) Your commit
+# * xyz5678 (HEAD -> main, origin/main) Previous commit
+```
+
+---
+
 ### Pre-commit check (always run)
 ```bash
 python3 -c "
@@ -1052,6 +1211,71 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 19 2026 — Top 25 leaderboard modal: expanded leaderboard from 10 to 25 entries, with entries 11-25 shown via modal overlay. Modal includes 2-button footer (index: "Start Game", game files: "Play Again" + "Leave Game") for improved UX (all 3 files)
 - Mar 19 2026 — platform selector in modal: added segmented control to index.html Top 25 modal allowing users to choose desktop/mobile before launching game. Placed below leaderboard grid, above Start Game button for natural user flow (index.html only)
 - Mar 19 2026 — updated CI integrity checks: added 4 new checks (Top 25 leaderboard modal functions) — total 43 checks per file
+- Mar 25 2026 — BPM-synced player shooting: unified desktop/mobile shooting rhythm, synced to 123 BPM quarter-beat (122ms interval, 488ms cooldown, 1342ms total cycle = 3 beats). Desktop cooldown reduced 600ms→488ms, mobile cooldown reduced 500ms→488ms, both now perfectly synced to song tempo (both files)
+
+### BPM-Synced Player Shooting (Mar 25, 2026) — Both Files
+**Purpose:** Unify desktop and mobile shooting configurations and sync player bullet rhythm to the 123 BPM song tempo for musical coherence.
+
+**Problem:**
+- Desktop and mobile had different cooldowns (600ms vs 500ms)
+- Shooting cycle not synced to music BPM (1640ms desktop, 1540ms mobile)
+- User reported enemy attacks "feel a little late" - desired tighter rhythm
+
+**Solution:** Quarter-beat firing rhythm synced to 123 BPM
+- **1 beat @ 123 BPM** = 487.8ms
+- **1/4 beat** = 121.95ms ≈ 122ms
+
+**Changes made:**
+```javascript
+// Both game.html and game_mobile.html
+var BURST_FIRE_INTERVAL = 122;  // Was 130ms (desktop/mobile)
+var BURST_COOLDOWN = 488;        // Was 600ms (desktop), 500ms (mobile)
+```
+
+**New rhythm breakdown:**
+- Burst interval: **122ms** (1/4 beat)
+- Burst count: **8 bullets** (unchanged)
+- Burst duration: 8 bullets × 122ms = **976ms** (2 beats exactly!)
+- Cooldown: **488ms** (1 beat)
+- Total cycle: **1464ms** (3 beats exactly!)
+
+**Desktop changes:**
+- Burst interval: 130ms → 122ms (-8ms, -6%)
+- Cooldown: 600ms → 488ms (-112ms, -19%)
+- Total cycle: 1640ms → 1342ms (-298ms, -18% faster)
+
+**Mobile changes:**
+- Burst interval: 130ms → 122ms (-8ms, -6%)
+- Cooldown: 500ms → 488ms (-12ms, -2%)
+- Total cycle: 1540ms → 1342ms (-198ms, -13% faster)
+
+**Benefits:**
+- ✅ Perfect 3-beat rhythm synced to 123 BPM
+- ✅ Desktop and mobile now identical (unified configuration)
+- ✅ Faster fire rate (18% desktop, 13% mobile)
+- ✅ Musical coherence with formation morphing (6-beat cycle)
+- ✅ More responsive gameplay feel
+
+**Files modified:**
+- game.html: Lines 1617-1620 (constants), 6597-6600 (spacebar), 6828-6831 (mouse)
+- game_mobile.html: Lines 1818-1823 (constants), 7463-7468 (JSDoc), 7492-7496 (cycle)
+
+**To revert:**
+```javascript
+// Desktop (game.html)
+var BURST_FIRE_INTERVAL = 130;
+var BURST_COOLDOWN = 600;
+
+// Mobile (game_mobile.html)
+var BURST_FIRE_INTERVAL = 130;
+var BURST_COOLDOWN = 500;
+```
+
+**Analytics impact:** None — rhythm change only, no gameplay mechanics affected.
+
+**Branch:** feature/bpm_synced_player_shooting (not yet committed/pushed)
+
+---
 
 ### Debug Logging Performance Fix (Mar 14, 2026 session 5) — Both Files
 **Problem:** Debug console.log statements (3 groups per file) running every 1-3 seconds added ~0.5-1ms overhead per second on mobile devices, even with dev tools closed. Over 5-minute sessions, this meant 300-600 unnecessary function calls.

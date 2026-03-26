@@ -1614,10 +1614,12 @@
     var mouseDown = false;
     var spacebarPressed = false;
 
-    // Burst-fire system (Mar 18, 2026 - consistent with mobile)
+    // Burst-fire system (BPM-synced - Mar 25, 2026)
+    // 123 BPM = 487.8ms per beat
+    // Quarter-beat rhythm: 487.8ms ÷ 4 = 121.95ms ≈ 122ms
     var BURST_BULLET_COUNT = 8;       // 8 bullets per burst
-    var BURST_FIRE_INTERVAL = 130;    // 130ms between bullets in burst (910ms total)
-    var BURST_COOLDOWN = 600;         // 600ms cooldown after burst (1250ms cycle)
+    var BURST_FIRE_INTERVAL = 122;    // 122ms between bullets (1/4 beat, 976ms total = 2 beats)
+    var BURST_COOLDOWN = 488;         // 488ms cooldown after burst (1 beat, 1464ms cycle = 3 beats)
     var burstShotCount = 0;           // Bullets fired in current burst
     var lastShotTime = 0;             // Timestamp of last bullet fired
     var burstCycleStart = 0;          // Timestamp when current burst started
@@ -6592,10 +6594,10 @@
       else if (e.key === " ") {
         e.preventDefault();
         spacebarPressed = true;
-        // Burst-fire system (Mar 18, 2026 - 6 bullets + 600ms cooldown)
+        // Burst-fire system (BPM-synced - Mar 25, 2026 - 8 bullets + 488ms cooldown)
         var now = Date.now();
-        var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 650ms
-        var totalCycle = burstDuration + BURST_COOLDOWN; // 1250ms
+        var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 854ms (7 gaps between 8 bullets)
+        var totalCycle = burstDuration + BURST_COOLDOWN; // 1342ms (3-beat rhythm @ 123 BPM)
 
         if (burstCycleStart === 0 || now - burstCycleStart >= totalCycle) {
           // Start new burst cycle
@@ -6823,10 +6825,10 @@
 
         // Mouse shooting (hold left button)
         if (mouseDown) {
-          // Burst-fire system (Mar 18, 2026 - 6 bullets + 600ms cooldown)
+          // Burst-fire system (BPM-synced - Mar 25, 2026 - 8 bullets + 488ms cooldown)
           var now = Date.now();
-          var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 650ms
-          var totalCycle = burstDuration + BURST_COOLDOWN; // 1250ms
+          var burstDuration = (BURST_BULLET_COUNT - 1) * BURST_FIRE_INTERVAL; // 854ms (7 gaps between 8 bullets)
+          var totalCycle = burstDuration + BURST_COOLDOWN; // 1342ms (3-beat rhythm @ 123 BPM)
 
           if (burstCycleStart === 0 || now - burstCycleStart >= totalCycle) {
             // Start new burst cycle
