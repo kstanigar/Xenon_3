@@ -269,37 +269,20 @@ git push -u origin feature/your-feature-name
 ### P2 — Medium Priority (Future Sprint)
 
 **5. Adaptive Difficulty Control System**
-- Purpose: AI-controlled difficulty adjustment based on player performance
-- Status: Design phase — needs architecture discussion
-- Implementation approach (3 options):
-
-  **Option A: Per-Level Difficulty Multipliers**
-  ```javascript
-  var DIFFICULTY_CONFIG = {
-    enemyCount: 1.0,      // Multiplier for enemy spawn count
-    bulletSpeed: 1.0,     // Multiplier for enemy bullet speed
-    shieldStrength: 1.0,  // Multiplier for enemy shield hits
-    playerDamage: 1.0,    // Multiplier for damage dealt to player
-    healthDropRate: 1.0   // Multiplier for health powerup spawn chance
-  };
-  ```
-  - AI adjusts multipliers each level based on player death rate, time to complete, health remaining
-  - Values range: 0.7 (easier) to 1.3 (harder)
-  - Stored in localStorage, persists across sessions
-
-  **Option B: Phase-Based Difficulty Scaling**
-  - Separate configs for green/red/purple phases
-  - AI adjusts entire phase difficulty based on completion rate
-  - Simpler than per-level, less granular
-
-  **Option C: Real-Time Dynamic Adjustment**
-  - AI monitors player health, deaths, time alive
-  - Adjusts difficulty mid-level (reduce enemy spawns if player struggling)
-  - Most complex, requires careful tuning to avoid feeling "fake"
-
-- Analytics impact: New events `difficulty_adjusted` with parameters: `adjustment_type`, `old_value`, `new_value`, `trigger_reason`
-- User testing phase: Manual adjustment first, observe analytics, then enable AI
-- Version bump: analytics_version 3.1 → 3.2 (major mechanic change)
+- Purpose: AI-controlled difficulty adjustment based on real-time player performance
+- Status: **Design complete** — see `ADAPTIVE_DIFFICULTY_DESIGN.md` for full specification
+- Timeline: ~10-13 hours (Stages 1-3)
+- Recommended approach: **Staged implementation**
+  - **Stage 1:** Multiplier infrastructure (2-3 hrs) - Foundation with no gameplay changes
+  - **Stage 2:** Static tiers (3-4 hrs) - Optional manual Easy/Normal/Hard/Expert selection
+  - **Stage 3:** AI agent (5-6 hrs) - Automatic per-level adjustment based on performance metrics
+  - **Stage 4:** ML-based (4-6 weeks) - Advanced personalization (future feature)
+- Implementation: 6 difficulty multipliers (enemyHealth, enemySpeed, bulletSpeed, spawnRate, playerDamage, healthDropRate)
+- AI logic: Performance score (0.0-1.0) based on deaths, health remaining, completion time
+- Adjustment thresholds: Score < 0.4 = make easier, Score > 0.8 = make harder
+- Analytics impact: New event `difficulty_adjusted`, new dimension `difficulty_tier`
+- Version bump: 4.0 → 4.2 (or 4.1 if including static tiers)
+- **Next step:** Implement Stage 1 (infrastructure) on feature branch
 
 **6. Pink Levels — Infinite Mode (Separate HTML Page)**
 - Purpose: Endless gameplay for skilled players, easter egg content
