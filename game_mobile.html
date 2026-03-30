@@ -1422,10 +1422,16 @@
      * Restarts the game from the leaderboard modal.
      * Closes modal and calls existing playAgain() function.
      * Used by "Play Again" button in Top 25 modal on game over screens.
+     *
+     * Fix (Mar 29, 2026): Added small delay to ensure modal fully closes
+     * before triggering playAgain(), preventing startButton access issues.
      */
     function playAgainFromModal() {
       closeLeaderboardModal();
-      playAgain();
+      // Small delay ensures modal closes before triggering game restart
+      setTimeout(function() {
+        playAgain();
+      }, 100);
     }
 
     /**
@@ -6585,8 +6591,12 @@
 
       // Trigger the start button reset branch (gameOver is true so it fully resets)
       var sb = document.getElementById('startButton');
-      sb.style.display = 'block';
-      sb.click();
+      if (sb) {
+        sb.style.display = 'block';
+        sb.click();
+      } else {
+        console.error('[Play Again] startButton not found');
+      }
     }
 
     /**
@@ -6994,12 +7004,29 @@
      *
      * @param {number} damage - Damage amount (10 for enemy collision, 15 for bullet)
      */
+    // Debug: Track last damage time (Mar 29, 2026 - user debugging)
+    var lastDamageTime = 0;
+
     function playerTakeDamage(damage) {
+      var now = Date.now();
+      var timeSinceLastDamage = lastDamageTime > 0 ? (now - lastDamageTime) : 0;
+
+      console.log('[DAMAGE] Hit detected | Damage:', damage, '| Time since last:', timeSinceLastDamage + 'ms', '| Invincible:', playerBlinking, '| Timer:', playerBlinkTimer);
+
       // Invincibility frames — ignore all damage while blinking from a previous hit
-      if (playerBlinking) return;
+      if (playerBlinking) {
+        console.log('[DAMAGE] ❌ BLOCKED by invincibility frames (', playerBlinkTimer, 'frames remaining)');
+        return;
+      }
 
       if (hasShield) {
         shieldHitsRemaining--;
+
+        // ALWAYS trigger 2s invincibility on shield hit (Mar 29, 2026 - user request)
+        // This applies to ALL phases and makes shields last longer by preventing rapid hits
+        playerBlinking = true;
+        playerBlinkTimer = 120; // 2 seconds at 60 FPS (same as non-shield hits)
+
         if (shieldHitsRemaining <= 0) {
           hasShield = false;
           showAnnouncement("powerupDisplay", "Shield Broken!", 1500);
@@ -7008,12 +7035,15 @@
         }
         if (purplePhase) {
           // Purple phase: shield fully blocks all damage, no health loss
+          console.log('[DAMAGE] 🛡️ SHIELD ABSORBED (purple) + 2s invincibility | No HP loss');
           return;
         }
         // Earlier phases: shield reduces damage to 5, protects health at low HP
         damage = 5;
+        console.log('[DAMAGE] 🛡️ SHIELD HIT + 2s invincibility | Damage reduced to 5 HP | Shield remaining:', shieldHitsRemaining);
         if (health <= 15) {
           showAnnouncement("powerupDisplay", "Shield absorbed damage!", 800);
+          console.log('[DAMAGE] 🛡️ LOW HEALTH PROTECTION + 2s invincibility | Shield absorbed all damage | Health:', health);
           return;
         }
       } else {
@@ -7037,9 +7067,15 @@
       health -= adjustedDamage;
       updateUI();
 
-      // Start blinking effect
-      playerBlinking = true;
-      playerBlinkTimer = 60; // Blink for 60 frames (1 second at 60 FPS)
+      // Start blinking effect (invincibility frames)
+      // Only set if not already blinking from shield hit (Mar 29, 2026 - shield fix)
+      // ALL hits use 120 frames (2s) - shield and non-shield
+      if (!playerBlinking) {
+        playerBlinking = true;
+        playerBlinkTimer = 120; // Blink for 120 frames (2 seconds at 60 FPS)
+      }
+      lastDamageTime = Date.now(); // Track damage timestamp for debugging
+      console.log('[DAMAGE] ✅ DAMAGE APPLIED | Health:', health, '| Shield:', hasShield, '| Invincibility:', playerBlinkTimer, 'frames');
 
       if (health <= 0) {
         health = 0;
@@ -7862,6 +7898,7 @@
       }
 
       // Update player bullets
+      // Performance: fillStyle set once outside loop (already optimized)
       ctx.fillStyle = "#00FF00";
       for (var i = playerBullets.length - 1; i >= 0; i--) {
         var bullet = playerBullets[i];
@@ -7936,6 +7973,7 @@
       }
 
       // Update enemy bullets
+      // Performance: fillStyle set once outside loop (already optimized)
       ctx.fillStyle = "#FF0000";
       for (var i = enemyBullets.length - 1; i >= 0; i--) {
         var bullet = enemyBullets[i];
@@ -8165,8 +8203,9 @@
               if (!barrierSpawned) {
                 var levelData = LEVEL_WAVES[level];
                 var waveData = levelData.waves[currentWave - 1];
-                if (waveData && waveData.barrier) {
-                  spawnBarrier(waveData.barrier, waveData.barrierCount || 5);
+                // Only spawn barriers if barrierCount > 0 (Mar 29, 2026 - purple rebalancing fix)
+                if (waveData && waveData.barrier && waveData.barrierCount > 0) {
+                  spawnBarrier(waveData.barrier, waveData.barrierCount);
                   barrierSpawned = true;
                 }
               }
@@ -8528,6 +8567,16 @@
 
     drawCardPowerupIcons();
 
+    // Sync music icon with localStorage on page load (Mar 29, 2026 - icon sync fix)
+    // Ensures icon reflects music state set from index.html or previous sessions
+    (function syncMusicIconOnLoad() {
+      var muteBtn = document.getElementById('muteButton');
+      if (muteBtn) {
+        var musicEnabled = localStorage.getItem('nonex_music') !== 'off';
+        muteBtn.textContent = musicEnabled ? '🔊' : '🔇';
+      }
+    })();
+
     /**
      * Initializes the game session from the intro card.
      *
@@ -8687,6 +8736,13 @@
         document.getElementById("victory").style.display = "none";
         paused = false;
 
+        // Sync music icon with localStorage state (Mar 29, 2026 - replay icon fix)
+        // Ensures icon reflects actual music state when replaying after mute
+        var muteBtn = document.getElementById('muteButton');
+        if (muteBtn) {
+          var musicEnabled = localStorage.getItem('nonex_music') !== 'off';
+          muteBtn.textContent = musicEnabled ? '🔊' : '🔇';
+        }
 
         // Change button to Pause and move to corner on mobile
         startButton.innerText = "Pause";
@@ -8736,7 +8792,11 @@
         if (paused) {
           bgMusic.pause();
         } else {
-          bgMusic.play();
+          // Only resume music if it wasn't muted (Mar 29, 2026 - bug fix)
+          var musicEnabled = localStorage.getItem('nonex_music') !== 'off';
+          if (musicEnabled) {
+            bgMusic.play();
+          }
         }
       }
     });
