@@ -1195,6 +1195,885 @@ Button showed "+25 HP" for purple deaths because `redPhase` stays `true` through
 - Mar 19 2026 — platform selector in modal: added segmented control to index.html Top 25 modal allowing users to choose desktop/mobile before launching game. Placed below leaderboard grid, above Start Game button for natural user flow (index.html only)
 - Mar 19 2026 — updated CI integrity checks: added 4 new checks (Top 25 leaderboard modal functions) — total 43 checks per file
 - Mar 25 2026 — BPM-synced player shooting: unified desktop/mobile shooting rhythm, synced to 123 BPM quarter-beat (122ms interval, 488ms cooldown, 1342ms total cycle = 3 beats). Desktop cooldown reduced 600ms→488ms, mobile cooldown reduced 500ms→488ms, both now perfectly synced to song tempo (both files)
+- Mar 26 2026 — adaptive difficulty stage 1: multiplier infrastructure with 6 config parameters (enemyHealth, enemySpeed, bulletSpeed, spawnRate, playerDamage, healthDropRate). All multipliers default to 1.0 baseline, no gameplay changes. Foundation for AI agent (Stage 3). Applied to 6 code locations in both files. (both files)
+- Mar 26 2026 — health remaining bonus: defeating purple boss (level 12) adds remaining health points to score (1:1 ratio). Incentivizes health power-up collection and skilled play. Tracked in player_won event as health_remaining_bonus parameter. (both files)
+
+### Health Remaining Bonus (Mar 26, 2026) — Both Files
+**Purpose:** Incentivize health power-up collection and reward skilled play by converting remaining HP to score points at victory.
+
+**Problem:**
+- Health power-ups only valuable for survival (reactive: "I'm low, grab health")
+- No incentive to collect health when already at high HP
+- Skilled players finishing with high HP don't get rewarded for efficient play
+- Health collection strategy: reactive (emergency) vs proactive (scoring opportunity)
+
+**Solution:** Victory health bonus
+- Defeating purple boss (level 12) adds remaining health to score (1:1 ratio)
+- 200 HP remaining = +200 score bonus
+- 50 HP remaining = +50 score bonus
+- Creates dual value: health = survival + scoring resource
+
+**Implementation:**
+```javascript
+// Boss 3 defeat section (game.html ~5235, game_mobile.html ~5860)
+// Boss defeat bonus
+score += Math.floor(100 * scoreMultiplier);
+
+// Health Remaining Bonus
+var healthBonus = Math.floor(health);
+score += healthBonus;
+
+// Show bonus announcement
+setTimeout(function() {
+  if (healthBonus > 0) {
+    showAnnouncement("powerupDisplay", "Health Bonus: +" + healthBonus + " pts!", 2500);
+  }
+}, 3200);
+```
+
+**Analytics:**
+- Added `health_remaining_bonus` parameter to `player_won` event
+- Tracks bonus amount for each victory (0-250 range)
+- Enables analysis: Do players with higher health bonuses have higher total scores?
+
+**⚠️ Analytics Setup Required:**
+Before deploying to production, complete these GA4 configuration steps:
+
+1. **Register Custom Dimension** (Google Analytics 4)
+   - Property Settings → Custom Definitions → Create Custom Dimension
+   - Dimension name: `health_remaining_bonus`
+   - Scope: Event
+   - Description: "Health points remaining when player defeats purple boss (level 12)"
+   - Event parameter: `health_remaining_bonus`
+
+2. **Update Explorations**
+   - Add `health_remaining_bonus` as secondary dimension to existing victory analysis
+   - Filter: `event_name = player_won AND health_remaining_bonus > 0`
+
+3. **Verify Data Collection** (After Deploy)
+   - Use GA4 DebugView to confirm parameter appears in `player_won` events
+   - Check value range: 0-250 (matches maxHealth = 250)
+   - Typical values: 50-150 range (players rarely finish at full HP)
+
+4. **Analysis Questions** (After 2 weeks of data)
+   - Do players with higher health bonuses achieve higher total scores?
+   - What's the median health bonus? (indicates difficulty balance)
+   - Correlation: health_remaining_bonus vs session_duration_seconds (fast vs safe play)
+   - Platform comparison: desktop vs mobile health bonus averages
+
+**Strategic depth:**
+- **Risk/reward:** Take damage to kill faster, or play safe for health bonus?
+- **Power-up priority:** Collect health even at full HP (future scoring opportunity)
+- **Skill expression:** Efficient players (fewer hits taken) get rewarded with bonus
+- **Pink mode transition:** Naturally sets up pink mode starting at 200 HP (planned feature)
+
+**Timing:**
+- Bonus announcement shows at 3.2s after victory message (200ms delay)
+- Victory screen appears at 3.5s (gives time to read both announcements)
+- Health bonus not affected by scoreMultiplier (flat 1:1 conversion)
+
+**To revert:**
+```bash
+# Remove health bonus calculation and announcement (3 lines per file)
+# Remove health_remaining_bonus from player_won event (1 line per file)
+```
+
+**Files modified:**
+- game.html: Lines ~5235-5255 (boss defeat), ~5281-5288 (analytics)
+- game_mobile.html: Lines ~5860-5880 (boss defeat), ~5930-5937 (analytics)
+
+**Next feature:** Pink Mode (endless difficulty scaling, starts at 200 HP, loops Level 13→14→15→13...)
+
+**Branch:** feature/adaptive_difficulty_stage1 (includes both Stage 1 multipliers + health bonus)
+
+### Adaptive Difficulty Stage 1: Multiplier Infrastructure (Mar 26, 2026) — Both Files
+**Purpose:** Create foundation for AI-driven difficulty adjustment without changing baseline gameplay.
+
+**Problem:**
+- Static difficulty doesn't adapt to player skill levels
+- New players struggle with early levels, quit at high death rate
+- Experienced players find game too easy after learning patterns
+- No mechanism to automatically balance challenge across skill levels
+
+**Solution:** Multiplier-based difficulty control
+- Added `DIFFICULTY_CONFIG` object with 6 multipliers (all default 1.0)
+- Applied multipliers to 6 code locations in both files
+- No gameplay changes yet (baseline = 1.0 = identical to pre-Stage 1 behavior)
+- Prepares infrastructure for Stage 3 AI agent implementation
+
+**Implementation:**
+```javascript
+var DIFFICULTY_CONFIG = {
+  enemyHealth: 1.0,      // Enemy shield durability (0.5-2.0 range)
+  enemySpeed: 1.0,       // Enemy movement speed (0.7-1.4 range)
+  bulletSpeed: 1.0,      // Enemy bullet speed (0.7-1.5 range)
+  spawnRate: 1.0,        // Enemy spawn rate, inverse (0.7-1.3 range)
+  playerDamage: 1.0,     // Damage dealt to player (0.6-1.5 range)
+  healthDropRate: 1.0    // Health power-up spawn chance (0.5-2.0 range)
+};
+```
+
+**Applied multipliers to 6 locations:**
+
+**1. Enemy Shield Hits** (game.html ~4109, 6938; game_mobile.html ~4699, 7733)
+- Before: `var shieldBreakThreshold = level >= 9 ? 25 : 15;`
+- After: `var baseHits = level >= 9 ? 25 : 15; var shieldBreakThreshold = Math.ceil(baseHits * DIFFICULTY_CONFIG.enemyHealth);`
+- Effect: Higher multiplier = enemies take more hits to destroy shields
+
+**2. Formation Descent Speed** (game.html ~7137; game_mobile.html ~7956)
+- Before (desktop): `formationCurrentCenterY += formationEntrySpeed;`
+- After (desktop): `var descentSpeed = formationEntrySpeed * DIFFICULTY_CONFIG.enemySpeed; formationCurrentCenterY += descentSpeed;`
+- Before (mobile): `formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * 0.045;`
+- After (mobile): `var lerpFactor = 0.045 * DIFFICULTY_CONFIG.enemySpeed; formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * lerpFactor;`
+- Effect: Higher multiplier = formations descend faster
+
+**3. Enemy Bullet Speed** (game.html ~6085-6090; game_mobile.html ~6833-6838)
+- Before: `bulletSpeed *= 1.65; // Purple phase`
+- After: `bulletSpeed *= 1.65; bulletSpeed *= DIFFICULTY_CONFIG.bulletSpeed;`
+- Effect: Higher multiplier = faster enemy bullets (applied after phase multiplier)
+
+**4. Boss Minion Spawn Rate** (game.html ~4658; game_mobile.html ~5358)
+- Before: `if (Math.random() < CONFIG.bossMinionSpawnChance)`
+- After: `var adjustedSpawnChance = CONFIG.bossMinionSpawnChance / DIFFICULTY_CONFIG.spawnRate; if (Math.random() < adjustedSpawnChance)`
+- Effect: Lower spawnRate multiplier = more frequent minion spawns (inverse relationship)
+
+**5. Player Damage Taken** (game.html ~6276; game_mobile.html ~6979)
+- Before: `health -= damage;`
+- After: `var adjustedDamage = Math.ceil(damage * DIFFICULTY_CONFIG.playerDamage); health -= adjustedDamage;`
+- Effect: Higher multiplier = player takes more damage per hit
+
+**6. Health Power-Up Spawn Rate** (game.html ~2121-2131; game_mobile.html ~2407-2417)
+- Before: `if (createPowerup(powerupType)) { /* spawn */ }`
+- After: Added random chance check before health power-up spawn
+```javascript
+if (powerupType === POWERUP_TYPES.HEALTH) {
+  var healthSpawnChance = DIFFICULTY_CONFIG.healthDropRate;
+  if (Math.random() > healthSpawnChance) {
+    // Skip health spawn, advance cycle
+    return;
+  }
+}
+```
+- Effect: Higher multiplier = more frequent health power-ups (1.0 = always spawn when cycle reaches health, 0.5 = 50% chance)
+
+**Files modified:**
+- game.html: 7 locations (config + 6 multiplier applications)
+- game_mobile.html: 7 locations (config + 6 multiplier applications)
+
+**To revert:**
+```bash
+git revert HEAD  # If on Stage 1 commit
+# OR manually:
+# 1. Remove DIFFICULTY_CONFIG object from both files (~line 1650 game.html, ~1850 game_mobile.html)
+# 2. Replace all 6 multiplier applications with original hardcoded values
+# 3. Remove difficultyAdjustments array
+```
+
+**Analytics impact:** None (baseline = 1.0, no gameplay changes)
+
+**Version bump:** None (no gameplay changes until Stage 3)
+
+**Testing:**
+- [x] Syntax check passed (0 brace errors, both files)
+- [x] DIFFICULTY_CONFIG object present in both files
+- [x] All 6 multipliers applied correctly
+- [ ] **REQUIRED:** Manual console testing (adjust multipliers mid-game to verify behavior)
+- [ ] **REQUIRED:** Verify game plays identically to pre-Stage 1 (all multipliers = 1.0)
+- [ ] **REQUIRED:** Test health bonus feature (defeat purple boss with varying HP amounts)
+- [ ] **REQUIRED:** Mobile device testing (both Stage 1 and health bonus)
+
+**Analytics Action Items:**
+- [ ] **REQUIRED:** Register new custom dimension in GA4: `health_remaining_bonus` (Event-scoped, number)
+- [ ] **REQUIRED:** Update GA4 explorations to include health_remaining_bonus filter
+- [ ] **OPTIONAL:** Create new exploration: "Victory Health Bonus Analysis"
+  - Tab 1: Average health bonus by player (ROWS: user_id, VALUES: avg(health_remaining_bonus))
+  - Tab 2: Health bonus distribution (ROWS: health_remaining_bonus bins [0-50, 51-100, 101-150, 151-200+])
+  - Tab 3: Correlation between health bonus and total score
+- [ ] **OPTIONAL:** Add health_remaining_bonus to Looker Studio dashboard (if exists)
+
+**Next stage:** Stage 3 - AI Agent (automatic adjustment based on performance)
+
+**Branch:** feature/adaptive_difficulty_stage1
+
+---
+
+### Dev Tools: Bullet Speed Testing & FPS Monitoring (Mar 28, 2026) — Both Files
+**Purpose:** Provide real-time performance monitoring and bullet speed testing tools for rebalancing and optimization.
+
+**Problem:**
+- No way to test different bullet speeds without code changes
+- No performance metrics to identify stuttering/frame drops
+- Purple phase reported as too difficult with mobile stuttering
+- Needed baseline metrics before implementing rebalancing
+
+**Solution:** Dev mode testing tools
+1. **Bullet Speed Testing** - Real-time multiplier adjustment with live display
+2. **FPS Counter** - Color-coded performance monitoring
+3. **Object Count** - Real-time tracking of rendered objects
+
+**Features Implemented:**
+
+**1. Bullet Speed Testing (Bottom-Right Display)**
+- Toggle display: `Shift+S` (dev mode only)
+- Adjust speed: `[` decrease by 0.05, `]` increase by 0.05
+- Reset: `Shift+R` to reset to 1.0x
+- Range: 0.5x to 1.5x (clamped)
+- Display format: `[DEV] Speed: 7.00 (1.00x)`
+- Calculates effective speed based on phase baseline:
+  - Green: 7.0 baseline
+  - Red: 8.05 baseline
+  - Purple: 9.45 baseline
+
+**2. FPS Counter (Bottom-Left Display)**
+- Always visible in dev mode
+- Color-coded performance:
+  - 🟢 Green: 55-60 FPS (smooth gameplay)
+  - 🟡 Yellow: 45-54 FPS (slight lag)
+  - 🔴 Red: <45 FPS (stuttering)
+- Rolling average over last 60 frames
+- Console warnings: `[PERF WARNING] Frame took 45ms (22 FPS)` when frame time exceeds 33ms
+- Display format: `[DEV] FPS: 58 | Objects: 45`
+
+**3. Object Count Tracking**
+- Counts: `enemies + bullets + enemyBullets + powerups`
+- Updates in real-time
+- Helps identify performance bottlenecks
+- Critical for testing purple phase optimization
+
+**Implementation Details:**
+```javascript
+// FPS tracking variables (both files, ~line 1690 desktop, ~1893 mobile)
+var fps = 60;
+var fpsFrameTimes = [];
+var fpsLastTime = Date.now();
+var showSpeedDisplay = false; // Toggled with Shift+S
+
+// FPS calculation (in draw() loop, after pause check)
+if (devMode) {
+  var currentTime = Date.now();
+  var deltaTime = currentTime - fpsLastTime;
+  fpsLastTime = currentTime;
+  fpsFrameTimes.push(deltaTime);
+  if (fpsFrameTimes.length > 60) fpsFrameTimes.shift();
+  var avgFrameTime = fpsFrameTimes.reduce(function(a, b) { return a + b; }, 0) / fpsFrameTimes.length;
+  fps = Math.round(1000 / avgFrameTime);
+  if (deltaTime > 33) {
+    console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000/deltaTime) + ' FPS)');
+  }
+}
+```
+
+**Dev Mode Shortcuts:**
+- `Shift+D` - Toggle dev mode on/off
+- `Shift+S` - Toggle bullet speed display
+- `Shift+R` - Reset bullet speed to 1.0x
+- `[` - Decrease bullet speed by 0.05
+- `]` - Increase bullet speed by 0.05
+- `Shift+V` - Skip to victory screen
+- `Shift+G` - Skip to game over screen
+- `Shift+I` - Toggle god mode (invincibility)
+- `Shift+1-9` - Jump to levels 1-9
+- `Shift+0` - Jump to level 12
+
+**URL Parameters:**
+```
+http://localhost:8080/game.html?level=11&god=true
+```
+- `level=1-12` - Start at specific level (auto-enables dev mode)
+- `god=true` - Enable invincibility
+
+**Files Modified:**
+- game.html: FPS tracking variables, calculation in draw(), 2 display renderings, keyboard shortcuts
+- game_mobile.html: Same locations as desktop
+
+**Testing Use Cases:**
+1. **Purple phase performance baseline** - Measure FPS and object count at level 11-12
+2. **Bullet speed range testing** - Find optimal min/max speeds for each phase
+3. **Rebalancing validation** - Compare before/after metrics
+4. **Mobile stuttering diagnosis** - Identify exact frame drops during powerup collection
+
+**Branch:** feature/dev_tools_fps_bullet_speed
+
+---
+
+**Bug Fixes (Mar 28, 2026):**
+
+**Issue #1: `bullets` is not defined - ReferenceError**
+- **Problem:** FPS counter used wrong variable name (`bullets` instead of `playerBullets`)
+- **Impact:** Game crashed immediately when dev mode enabled
+- **Fix:** Changed to `playerBullets.length` in object count calculation
+- **Files:** Both game.html and game_mobile.html
+
+**Issue #2: Console Warning Feedback Loop**
+- **Problem:** `console.warn` called EVERY FRAME when performance dropped, creating death spiral
+- **Impact:** Frame time: 14,527ms (game frozen), warnings spammed console
+- **Root cause:** Console.warn is slow on mobile → makes frames slower → more warnings → infinite loop
+- **Fix:** Throttled warnings to max once per second using `lastWarningTime` check
+- **Code:**
+  ```javascript
+  // Before (every frame):
+  if (deltaTime > 33) {
+    console.warn('[PERF WARNING] ...');
+  }
+
+  // After (max 1/second):
+  if (deltaTime > 33 && currentTime - lastWarningTime > 1000) {
+    console.warn('[PERF WARNING] ...');
+    lastWarningTime = currentTime;
+  }
+  ```
+- **Files:** Both game.html and game_mobile.html
+
+**Issue #3: FPS Display Not Rendering**
+- **Problem:** FPS counter never visible on mobile, even with dev mode enabled
+- **Root cause:** FPS display rendering happened AFTER `if (paused) return;` check in draw loop
+- **Impact:** FPS calculated but never drawn when paused or in menus
+- **Fix:** Moved FPS calculation AND rendering to beginning of `draw()`, BEFORE gameOver/pause checks
+- **Result:** FPS now always displays when dev mode active (menu, gameplay, paused)
+- **Code structure change:**
+  ```javascript
+  // Before:
+  function draw() {
+    if (gameOver) return;
+    if (paused) return;
+    // ... game logic ...
+    // FPS display rendering (never reached when paused)
+  }
+
+  // After:
+  function draw() {
+    // FPS calc + rendering HERE (always runs)
+    if (gameOver) return;
+    if (paused) return;
+    // ... game logic ...
+  }
+  ```
+- **Files:** Both game.html and game_mobile.html
+- **Removed:** Duplicate FPS rendering code that was unreachable
+
+**Testing Results:**
+- ✅ FPS counter now visible on mobile in all states (menu, gameplay, paused)
+- ✅ No more console warning spam
+- ✅ No more game freezing from feedback loop
+- ✅ Performance monitoring functional on both desktop and mobile
+
+---
+
+### Purple Phase Rebalancing (Implemented Mar 29, 2026)
+**Status:** ✅ COMPLETE - Ready for testing
+**Purpose:** Reduce purple phase difficulty and mobile performance issues through coordinated changes.
+
+**Problem Analysis:**
+- **Object count too high:** Purple level 12 has ~59 total objects (35 enemies + 24 bullets)
+  - Green level 1: ~34 objects (15 enemies + 19 bullets)
+  - Purple is 74% more objects than green
+- **Mobile stuttering:** Reported during powerup collection in purple levels
+- **Difficulty spike:** 81% of deaths occur on mobile, purple phase likely major contributor
+- **Compounding factors:** Fastest bullets (9.45) + most enemies (32) creates overwhelming challenge
+
+**Object Count Breakdown (Current):**
+```
+Level 12 (Purple):
+  Formation: 22 enemies
+  Barriers: 8 enemies
+  Kamikazes: 5 enemies
+  ─────────────────
+  Total Enemies: 35
+  Enemy Bullets (~30%): 10
+  Player Bullets: 12
+  Powerups: 2
+  ═════════════════
+  TOTAL OBJECTS: 59
+
+Boss 3 (Purple):
+  Boss: 1
+  Orbiters: 8
+  Minions: 5
+  ─────────────────
+  Total Enemies: 14
+  Enemy Bullets (~40%): 5
+  Player Bullets: 12
+  Powerups: 2
+  ═════════════════
+  TOTAL OBJECTS: 33
+```
+
+**Proposed Changes (Coordinated Package):**
+
+**1. Remove Purple Barriers (Levels 9-12)**
+- Current: 8-10 barriers per level
+- Proposed: 0 barriers
+- Impact: Reduces enemy count by 8-10 per level
+- Rationale: Barriers contribute to visual clutter without adding strategic depth
+
+**2. Reduce Bullet Speeds**
+- **Red Phase (Levels 5-8):**
+  - Current: 8.05 (7.0 × 1.15)
+  - Proposed: 7.5 (7.0 × 1.07)
+  - Reduction: 6.8% slower
+- **Purple Phase (Levels 9-12):**
+  - Current: 9.45 (7.0 × 1.35)
+  - Proposed: 8.0 (7.0 × 1.14)
+  - Reduction: 15.3% slower
+- Rationale: Current purple max (9.45) is at developer's skill ceiling; AI needs headroom to increase difficulty
+
+**3. Reduce Purple Boss Orbiters**
+- Current: 8 orbiters
+- Proposed: 6 orbiters
+- Impact: Reduces boss fight enemies from 14 to 12 (14% reduction)
+- Rationale: Simplifies boss fight visual complexity
+
+**4. Update AI Multiplier Range**
+- Current: 0.7-1.5 (documented but not enforced)
+- Proposed: 0.5-1.25 for levels 1-12
+- Extended: 0.5-2.5 for pink levels 13-15 (future)
+- Rationale: With lower baselines, AI can still reach 10.0 max speed (8.0 × 1.25 = 10.0)
+
+**Expected Results After Rebalancing:**
+```
+Level 12 (Purple) - AFTER:
+  Formation: 22 enemies
+  Barriers: 0 enemies (removed)
+  Kamikazes: 5 enemies
+  ─────────────────
+  Total Enemies: 27 (was 35, -23%)
+  Enemy Bullets (~30%): 8 (was 10)
+  Player Bullets: 12
+  Powerups: 2
+  ═════════════════
+  TOTAL OBJECTS: 49 (was 59, -17%)
+
+Boss 3 (Purple) - AFTER:
+  Boss: 1
+  Orbiters: 6 (was 8)
+  Minions: 5
+  ─────────────────
+  Total Enemies: 12 (was 14, -14%)
+  Enemy Bullets (~40%): 4
+  Player Bullets: 12
+  Powerups: 2
+  ═════════════════
+  TOTAL OBJECTS: 30 (was 33, -9%)
+```
+
+**Bullet Speed Math (0.5-1.25 Multiplier Range):**
+
+| Phase | Baseline | Min (0.5x) | Max (1.25x) | AI Range | Notes |
+|-------|----------|------------|-------------|----------|-------|
+| Green | 7.0 | 3.5 | 8.75 | 0.5-1.25x | Beginner-friendly |
+| Red | 7.5 | 3.75 | 9.38 | 0.5-1.25x | Moderate challenge |
+| Purple | 8.0 | 4.0 | 10.0 | 0.5-1.25x | Hard (10.0 = developer limit) |
+
+**Implementation Checklist:**
+- [x] Reduce red bullet speed multiplier (desktop: 1.4→1.07, mobile: 1.15→1.07) ✅ Mar 29, 2026
+- [x] Reduce purple bullet speed multiplier (desktop: 1.65→1.14, mobile: 1.35→1.14) ✅ Mar 29, 2026
+- [x] Set barriers to 0 for levels 9-12 in CONFIG.waves ✅ Mar 29, 2026
+- [x] Reduce purple boss orbiters from 8 to 6 in spawnBoss() ✅ Mar 28, 2026 (previous session)
+- [x] Update analytics_version from 4.0 to 4.2 (gameplay mechanics changed) ✅ Mar 29, 2026
+- [ ] Test on desktop: FPS, object count, gameplay feel (PENDING USER TESTING)
+- [ ] Test on mobile: FPS, stuttering during powerups, touch responsiveness (PENDING USER TESTING)
+- [ ] Document changes in commit message and PR description (IN PROGRESS)
+
+**Validation Metrics:**
+- Object count: Should drop from ~59 to ~49 on level 12
+- FPS on mobile: Should maintain 55-60 more consistently
+- Stuttering: Fewer console warnings during powerup collection
+- Playability: Purple phase should feel challenging but fair
+
+**To Revert:**
+```bash
+git revert <commit-hash>  # Revert all rebalancing changes
+# OR manually:
+# 1. Restore red bulletSpeed *= 1.4 (desktop), *= 1.15 (mobile)
+# 2. Restore purple bulletSpeed *= 1.65 (desktop), *= 1.35 (mobile)
+# 3. Restore barrier counts for levels 9-12 (8, 10, 8, 8)
+# 4. Restore purple boss orbiters to 8
+```
+
+**Branch:** TBD (will create feature/purple_rebalancing)
+
+---
+
+### Pink Levels Expansion (Levels 13-15) — Future Easter Egg
+**Status:** 🎨 PLANNED - Post-purple rebalancing
+**Purpose:** Secret ultra-hard levels for expert players, showcasing legacy formation patterns.
+
+**Concept:**
+- Unlock after defeating purple boss (level 12)
+- 3 additional levels (13-15) with pink phase difficulty
+- 4th boss encounter at level 15 (pink boss)
+- Uses legacy formation patterns (spiral, pincer, sine wave) for variety
+- Extreme difficulty with extended AI multiplier range (0.5-2.5x)
+
+**Design Rationale:**
+- Easter egg content for hardcore players
+- Not required to "beat" the game (level 12 victory is canonical ending)
+- Showcases full range of formation variety
+- Tests absolute limits of player skill and AI difficulty scaling
+
+**Bullet Speed Math (0.5-2.5 Multiplier Range):**
+
+| Phase | Baseline | Min (0.5x) | Max (2.5x) | AI Range | Notes |
+|-------|----------|------------|-------------|----------|-------|
+| Pink | 7.0 | 3.5 | 17.5 🔥 | 0.5-2.5x | Extreme difficulty easter egg |
+
+**Implementation Readiness:**
+✅ **Legacy formations fully coded:**
+- `spawnSpiralFormation()` - 6 enemies in circular orbit (game_mobile.html lines 3500-3566)
+- `spawnPincerFormation()` - 3+3 enemies converging from sides (lines 3612-3720)
+- `spawnSineWaveFormation()` - 8 enemies in horizontal wave (lines 3732-3804)
+- Movement update logic active in draw() loop (lines 6588-6660+)
+
+⏳ **TODO:**
+- [ ] Add levels 13-15 to CONFIG.waves
+- [ ] Define pink phase bullet speed multiplier (baseline 7.0)
+- [ ] Create Boss 4 (pink boss) with enemy4 sprite
+- [ ] Implement unlock mechanism (trigger after level 12 victory)
+- [ ] Add pink phase UI updates (level display, phase indicator)
+- [ ] Extend AI multiplier range to 0.5-2.5 for pink levels only
+- [ ] Create pink-specific power-up cycle (2 cycles like purple)
+
+**Wave Configuration (Draft):**
+```javascript
+// Level 13 - Pink Phase Start
+13: {
+  formation: { type: 'spiral', count: 6, spacing: 80 },
+  barriers: 0,
+  kamikazes: 4,
+  powerupCycles: 2
+},
+// Level 14 - Pink Phase Mid
+14: {
+  formation: { type: 'pincer', count: 6, spacing: 60 },
+  barriers: 0,
+  kamikazes: 5,
+  powerupCycles: 2
+},
+// Level 15 - Pink Phase Final (Boss 4)
+15: {
+  formation: { type: 'sineWave', count: 8, spacing: 50 },
+  barriers: 0,
+  kamikazes: 6,
+  powerupCycles: 2,
+  boss: true,
+  bossId: 4
+}
+```
+
+**Pink Boss (Boss 4) Concept:**
+- Orbiters: 10 (more than purple's 6)
+- Shield cycle: 2s on, 2s off (fastest cycling)
+- Minion spawn: 0.007/frame (more frequent than purple's 0.005)
+- Bullet speed: 17.5 max (at 2.5x multiplier)
+- Health: Same as purple (scales with AI difficulty)
+
+**Analytics Impact:**
+- New level_reached values: 13, 14, 15
+- New boss_defeated value: 4
+- New phase value: 'pink'
+- May require analytics_version bump to 4.3
+
+**Estimated Implementation Time:**
+- Wave configuration: 1 hour
+- Boss 4 definition: 2 hours
+- Unlock mechanism: 1 hour
+- UI updates: 1 hour
+- Testing (desktop + mobile): 3 hours
+- **Total: ~8 hours**
+
+**Priority:** LOW - Implement after purple rebalancing is validated and AI agent (Stage 3) is complete.
+
+**Branch:** TBD (will create feature/pink_levels_expansion)
+
+---
+
+### 5-Tap Dev Mode Toggle (Mar 28, 2026) — Mobile Only
+**Status:** ✅ IMPLEMENTED - game_mobile.html only
+**Purpose:** Mobile-friendly alternative to Shift+D keyboard shortcut for enabling dev mode.
+
+**Problem:**
+- Mobile devices have no keyboard for Shift+D shortcut
+- URL parameters (?dev=true) work but are inconvenient during testing
+- Need quick way to toggle dev mode on/off on mobile devices
+
+**Solution:** 5 consecutive taps anywhere on canvas within 2 seconds toggles dev mode
+
+**Implementation:**
+```javascript
+// Variables (game_mobile.html ~line 1905)
+var devModeTapCount = 0;
+var devModeTapTimeout = null;
+
+// Detection logic (in touchend event listener ~line 7563)
+if (e.touches.length === 0) { // Only count complete taps (all fingers lifted)
+  devModeTapCount++;
+  if (devModeTapTimeout) clearTimeout(devModeTapTimeout);
+
+  if (devModeTapCount >= 5) {
+    // Toggle dev mode
+    devMode = !devMode;
+    localStorage.setItem('nonx_dev_mode', devMode ? 'true' : 'false');
+
+    // Haptic feedback (if supported)
+    if (navigator.vibrate) {
+      navigator.vibrate(devMode ? [100, 50, 100] : 100);
+    }
+
+    console.log('[DEV MODE] ' + (devMode ? 'ENABLED 🟢 (5-tap)' : 'DISABLED 🔴 (5-tap)'));
+    devModeTapCount = 0;
+  } else {
+    // Reset counter after 2 seconds if 5 taps not reached
+    devModeTapTimeout = setTimeout(function() {
+      devModeTapCount = 0;
+    }, 2000);
+  }
+}
+```
+
+**Features:**
+- Tap anywhere on screen 5 times within 2 seconds
+- Vibration feedback when toggled (double buzz on, single buzz off)
+- Console confirmation message
+- Persists to localStorage
+- Timer resets if taps are >2 seconds apart
+
+**Files Modified:**
+- game_mobile.html: Added tap counter variables, detection logic in touchend handler
+
+**Testing:**
+1. Open game_mobile.html on real mobile device
+2. Tap screen 5 times quickly (within 2 seconds)
+3. Feel vibration and see FPS counter appear
+4. Tap 5 times again to disable
+5. Verify console logs show toggle events
+
+**Branch:** feature/adaptive_difficulty_stage1
+
+---
+
+### Bomb Power-Up Feature (Future) — Both Files
+**Status:** 🎨 PLANNED - Requires design + implementation
+**Purpose:** High-impact power-up that clears enemies and shields, incentivizes risky collection.
+
+**Concept:**
+A new power-up type that drops **once per level** and has devastating effects on enemies:
+
+**Effects by Phase:**
+
+**Green & Red Levels (1-8):**
+- **Shielded enemies:** Shield instantly deactivated (0 hits remaining)
+- **Unshielded enemies:** Instantly destroyed
+- **Score bonus:** Standard enemy points for all affected
+
+**Purple Levels (9-12):**
+- **Shielded enemies:** Shield reduced by 50% (e.g., 25 hits → 13 hits, 15 hits → 8 hits)
+- **Unshielded enemies:** Instantly destroyed
+- **Rationale:** Purple phase too easy if shields fully removed, 50% reduction maintains challenge
+
+**Boss Fights (All Phases):**
+- **On-screen minions (unshielded):** Instantly destroyed
+- **Boss with shield active:** Shield broken temporarily (e.g., 3-second break, then resumes cycle)
+- **Boss with no shield:** Direct 10% health damage
+- **Orbiters:** Not affected (too powerful otherwise)
+
+**Pink Levels (13-15):**
+- **Spawn rate:** Every 15-30 seconds (rapid cycling for extreme difficulty)
+- **Effects:** Same as purple (50% shield reduction, destroy unshielded)
+- **Timing needs testing:** 15s may be too frequent, 30s may be too slow
+
+---
+
+**Design Questions & Decisions Needed:**
+
+**1. Visual Design:**
+- **Shape:** What geometry? (Circle, diamond, star, hexagon, custom sprite?)
+- **Color:** Red? Orange? Yellow with black stripes (bomb-like)?
+- **Size:** Same as other power-ups (20×20) or larger to stand out?
+- **Animation:** Pulsing? Rotating? Flashing?
+- **Icon/symbol:** Explosion icon? Bomb emoji? Lightning bolt?
+
+**2. Spawn Mechanics:**
+- **When in level?**
+  - Option A: Replace one power-up in the cycle (e.g., after 2nd shield spawn)
+  - Option B: Spawn at fixed time (e.g., 30 seconds into level)
+  - Option C: Spawn when X enemies destroyed (e.g., after 50% cleared)
+- **Boss timing?**
+  - Spawn immediately when boss appears?
+  - Delay until boss is at half health?
+  - Random timing during fight?
+
+**3. Fall Speed:**
+- **How much faster?**
+  - Option A: 1.5× power-up speed (noticeable but catchable)
+  - Option B: 2× power-up speed (challenging, requires positioning)
+  - Option C: 2.5× power-up speed (very risky, may miss if not ready)
+- **Current power-up fall speed:** ~3 pixels/frame
+- **Recommended:** 2× (6 pixels/frame) for risk/reward balance
+
+**4. Shield Reduction Math (Purple/Pink):**
+- **"Reduce by 50%" interpretation:**
+  - Option A: Reduce remaining hits by 50% (25 hits left → 12-13 hits left)
+  - Option B: Set hits to 50% of max (25 max → set to 13, regardless of current hits)
+  - Option C: Remove flat amount (e.g., remove 12-15 hits from remaining)
+- **Recommended:** Option A (reduce remaining hits by 50%, rounds up to maintain challenge)
+
+**5. Boss Shield Break:**
+- **Duration:** How long does shield stay broken?
+  - Option A: 3 seconds (one full shield cycle)
+  - Option B: 5 seconds (longer vulnerability window)
+  - Option C: Until next cycle (based on boss shield timer)
+- **Boss damage (no shield):** Is 10% significant?
+  - Purple boss has ~100 HP (estimate) → 10% = 10 HP
+  - Is this worth the risk vs other power-ups?
+  - **Alternative:** 15% damage? 20% damage?
+
+**6. Sound Effects:**
+- **Collection sound:** Deep "thud" or explosion sound?
+- **Explosion effect sound:** Boom/blast when enemies destroyed?
+- **Distinct from:** Power-up pickup sound (currently generic)
+
+**7. Visual Feedback:**
+- **On collection:**
+  - Flash screen white for 1 frame?
+  - Shockwave expanding from player?
+  - All affected enemies flash red before destruction?
+- **Shield reduction (purple/pink):**
+  - Shield color changes to show weakened state?
+  - Visual crack/damage on shields?
+  - Number indicator showing remaining hits?
+
+**8. Power-Up Cycle Integration:**
+- **Does bomb interrupt cycle?**
+  - Option A: Yes, bomb replaces next power-up, then cycle resumes
+  - Option B: No, bomb spawns independently, cycle continues
+- **Recommended:** Option A (replace one cycle entry to prevent power-up spam)
+
+**9. Pink Level Timing:**
+- **Every 15-30 seconds is VERY frequent:**
+  - At 15s: 4-6 bombs per level (may make pink levels trivial)
+  - At 30s: 2-3 bombs per level (more balanced)
+  - At 45s: 1-2 bombs per level (rare but impactful)
+- **Question:** Is rapid bombing the point of pink levels (chaos mode) or should it remain rare and strategic?
+
+**10. Scoring:**
+- **Bonus points for bomb collection?** +10? +25? +50?
+- **Points for destroyed enemies:** Standard enemy points or bonus multiplier?
+- **Boss damage:** Does 10% HP damage grant points or only when boss defeated?
+
+---
+
+**Implementation Estimate:**
+- Visual sprite design: 2 hours
+- Spawn mechanics (cycle integration): 3 hours
+- Effect logic (shield reduction, enemy destruction): 4 hours
+- Boss interaction logic: 3 hours
+- Pink level timing system: 2 hours
+- Sound effects: 1 hour (assuming assets exist)
+- Visual feedback (flash, shockwave): 2 hours
+- Testing (all phases, bosses, pink levels): 4 hours
+- **Total: ~21 hours**
+
+**Priority:** MEDIUM - Implement after purple rebalancing and before pink levels
+
+**Branch:** TBD (will create feature/bomb_powerup)
+
+---
+
+### Pink Level Easter Egg Unlock (Future) — Both Files
+**Status:** 🎨 PLANNED - Simple unlock mechanism
+**Purpose:** Hidden shortcut to access pink levels without beating purple boss.
+
+**Concept:**
+- **Desktop:** Press "1" key 10 times in quick succession (within 3 seconds)
+- **Mobile:** Tap screen 10 times in quick succession (within 3 seconds)
+- **Effect:** Unlocks pink levels 13-15, sets flag in localStorage
+- **Visual feedback:** Screen flash? Confirmation message? Special sound?
+
+**Design Questions:**
+
+**1. Where can it be activated?**
+- Option A: Main menu only (index.html)
+- Option B: Any time during gameplay
+- Option C: Game over screen only
+- **Recommended:** Option A (main menu) - clearest place for easter eggs
+
+**2. Prerequisites:**
+- **Should player need to beat purple boss first?**
+  - Option A: Yes (easter egg just provides shortcut for replays)
+  - Option B: No (allows testing pink levels without playing 1-12)
+- **Recommended:** Option B for testing, but could be A for release
+
+**3. Persistence:**
+- **How long does unlock last?**
+  - Option A: Permanent (localStorage flag never clears)
+  - Option B: Per-session (cleared on page refresh)
+  - Option C: Until first pink level death (one attempt)
+- **Recommended:** Option A (permanent) - rewards discovery
+
+**4. Visual Feedback:**
+- **What happens when activated?**
+  - Screen flash (cyan/pink/white)?
+  - Confirmation message: "Pink Levels Unlocked!"
+  - Play special sound effect?
+  - Show pink level icons on main menu?
+- **Recommended:** All of the above for clear feedback
+
+**5. Starting Point:**
+- **When unlocked, where does "Play" button lead?**
+  - Option A: Always starts at level 1 (must play through to reach pink)
+  - Option B: Main menu gets new "Pink Levels" button (direct access)
+  - Option C: Level select menu appears (choose any level 1-15)
+- **Recommended:** Option B (dedicated button) for convenience
+
+**6. Mobile Tap Location:**
+- **Tap anywhere or specific area?**
+  - Option A: Tap anywhere on screen
+  - Option B: Tap specific UI element (e.g., logo, score display)
+  - Option C: Tap four corners in sequence
+- **Recommended:** Option A (anywhere) - easiest to discover
+
+**7. Conflict with 5-Tap Dev Mode:**
+- **Mobile has 5-tap for dev mode, 10-tap for pink unlock:**
+  - Will 10 taps trigger dev mode twice?
+  - **Solution:** Different tap windows or reset dev counter when pink unlock triggers
+- **Implementation:** Use separate counters, pink unlock takes priority if 10 reached
+
+**Implementation:**
+```javascript
+// Variables
+var pinkUnlockTapCount = 0;
+var pinkUnlockTimeout = null;
+
+// Desktop (keydown event)
+if (e.key === '1') {
+  pinkUnlockTapCount++;
+  if (pinkUnlockTimeout) clearTimeout(pinkUnlockTimeout);
+
+  if (pinkUnlockTapCount >= 10) {
+    localStorage.setItem('nonx_pink_unlocked', 'true');
+    showAnnouncement('Pink Levels Unlocked!');
+    pinkUnlockTapCount = 0;
+  } else {
+    pinkUnlockTimeout = setTimeout(() => { pinkUnlockTapCount = 0; }, 3000);
+  }
+}
+
+// Mobile (touchend event) - similar logic
+```
+
+**Implementation Estimate:**
+- Unlock detection logic: 1 hour
+- localStorage persistence: 30 min
+- Visual feedback (flash + message): 1 hour
+- Main menu UI updates (pink button): 2 hours
+- Testing (desktop + mobile): 1 hour
+- **Total: ~5.5 hours**
+
+**Priority:** LOW - Implement alongside pink levels feature
+
+**Branch:** TBD (same as pink levels - feature/pink_levels_expansion)
+
+---
 
 ### BPM-Synced Player Shooting (Mar 25, 2026) — Both Files
 **Purpose:** Unify desktop and mobile shooting configurations and sync player bullet rhythm to the 123 BPM song tempo for musical coherence.

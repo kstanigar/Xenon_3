@@ -56,7 +56,7 @@
   ============================================================
   GA4 Property : G-9ECFZ9JBE5
   Platform tag : 'mobile' (sent on all in-game events)
-  Version      : analytics_version: '4.0'
+  Version      : analytics_version: '4.2'
                  Injected automatically by fireEvent() wrapper.
                  Bump ONLY when gameplay mechanics change.
                  Do NOT bump for instrumentation-only changes.
@@ -66,7 +66,7 @@
 
   fireEvent(eventName, params)
     Central wrapper for all GA4 events in this file.
-    Automatically merges { analytics_version: '4.0' } into every
+    Automatically merges { analytics_version: '4.2' } into every
     event payload. Mirrors game.html — keep in sync.
 
   Events fired: identical to game.html (26 events).
@@ -1026,7 +1026,7 @@
         );
         return;
       }
-      gtag('event', eventName, Object.assign({ analytics_version: '4.0' }, params));
+      gtag('event', eventName, Object.assign({ analytics_version: '4.2' }, params));
     }
 
     // ── Session & User Identity Events ───────────────────────────────────────
@@ -1668,6 +1668,10 @@
     if (urlParams.get('god') === 'true') {
       godMode = true; // Enable invincibility
     }
+    if (urlParams.get('dev') === 'true') {
+      devMode = true; // Enable developer mode
+      localStorage.setItem('nonx_dev_mode', 'true');
+    }
     // Load top 10 high scores from localStorage
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
 
@@ -1851,6 +1855,56 @@
     // Power-up cleanup optimization (Mar 19, 2026)
     var powerupCleanupTimer = 0; // Time since last cleanup
     var POWERUP_CLEANUP_INTERVAL = 15000; // Clean up off-screen power-ups every 15 seconds
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ADAPTIVE DIFFICULTY SYSTEM (Mar 2026)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Multiplier-based difficulty control. All values default to 1.0 (baseline).
+    // Values > 1.0 increase difficulty, values < 1.0 decrease difficulty.
+    // Adjusted by AI agent each level based on player performance (Stage 3).
+
+    var DIFFICULTY_CONFIG = {
+      // Enemy durability (hits to destroy shielded enemies)
+      // Range: 0.5 (half hits) to 2.0 (double hits)
+      enemyHealth: 1.0,
+
+      // Enemy movement speed multiplier
+      // Range: 0.7 (30% slower) to 1.4 (40% faster)
+      enemySpeed: 1.0,
+
+      // Enemy bullet speed multiplier
+      // Range: 0.7 (30% slower) to 1.5 (50% faster)
+      bulletSpeed: 1.0,
+
+      // Enemy spawn rate (for wave intervals and boss minions)
+      // Range: 0.7 (30% faster spawns) to 1.3 (30% slower spawns)
+      // Note: Lower = more enemies, higher = fewer enemies
+      spawnRate: 1.0,
+
+      // Damage dealt to player (bullet hits, collisions, boss attacks)
+      // Range: 0.6 (40% less damage) to 1.5 (50% more damage)
+      playerDamage: 1.0,
+
+      // Health power-up spawn chance multiplier
+      // Range: 0.5 (half as frequent) to 2.0 (twice as frequent)
+      healthDropRate: 1.0
+    };
+
+    // Track difficulty adjustments for analytics
+    var difficultyAdjustments = [];
+
+    // Dev mode: bullet speed testing display (toggled with Shift+S)
+    var showSpeedDisplay = false;
+
+    // Dev mode: FPS tracking (always calculated in dev mode for performance monitoring)
+    var fps = 60;
+    var fpsFrameTimes = [];
+    var fpsLastTime = Date.now();
+    var lastWarningTime = 0; // Throttle console warnings to prevent feedback loop
+
+    // Dev mode: 5-tap toggle (mobile-friendly alternative to Shift+D)
+    var devModeTapCount = 0;
+    var devModeTapTimeout = null;
 
     // Player blink state (when damaged)
     var playerBlinking = false;
@@ -2374,6 +2428,26 @@
         case 1: powerupType = POWERUP_TYPES.DOUBLE_LASER; break;
         case 2: powerupType = POWERUP_TYPES.HEALTH; break;
         default: powerupType = POWERUP_TYPES.SHIELD; // Safety fallback
+      }
+
+      // Apply difficulty multiplier to health drop rate
+      // Higher healthDropRate = more likely to spawn health power-ups
+      if (powerupType === POWERUP_TYPES.HEALTH) {
+        var healthSpawnChance = DIFFICULTY_CONFIG.healthDropRate;
+        if (Math.random() > healthSpawnChance) {
+          // Skip this health power-up spawn (advance cycle without spawning)
+          lastPowerupSpawnTime = now;
+          powerupCycleIndex++;
+          if (powerupCycleIndex >= 3) {
+            powerupCycleIndex = 0;
+          }
+          powerupSpawnsThisCycle++;
+          if (powerupSpawnsThisCycle >= 3) {
+            powerupCyclesCompleted++;
+            powerupSpawnsThisCycle = 0;
+          }
+          return; // Exit without spawning
+        }
       }
 
       // Try to spawn the power-up
@@ -2994,25 +3068,25 @@
       9: {
         enemyType: 'enemy1_purple',
         waves: [
-          { count: 16, kamikazes: 3, shapes: ['spiralExploded', 'spiral'], barrier: 'orbitingShield', barrierCount: 8 }
+          { count: 16, kamikazes: 3, shapes: ['spiralExploded', 'spiral'], barrier: 'orbitingShield', barrierCount: 0 } // Purple rebalancing: Removed barriers (was 8)
         ]
       },
       10: {
         enemyType: 'enemy2_purple',
         waves: [
-          { count: 17, kamikazes: 4, shapes: ['hexGridExploded', 'hexGrid'], barrier: 'dualLines', barrierCount: 10 }
+          { count: 17, kamikazes: 4, shapes: ['hexGridExploded', 'hexGrid'], barrier: 'dualLines', barrierCount: 0 } // Purple rebalancing: Removed barriers (was 10)
         ]
       },
       11: {
         enemyType: 'enemy3_purple',
         waves: [
-          { count: 19, kamikazes: 4, shapes: ['twinCirclesExploded', 'twinCircles'], barrier: 'circle', barrierCount: 8 }
+          { count: 19, kamikazes: 4, shapes: ['twinCirclesExploded', 'twinCircles'], barrier: 'circle', barrierCount: 0 } // Purple rebalancing: Removed barriers (was 8)
         ]
       },
       12: {
         enemyType: 'enemy4_purple',
         waves: [
-          { count: 22, kamikazes: 5, shapes: ['arrowheadExploded', 'arrowhead'], barrier: 'arrow', barrierCount: 8 }
+          { count: 22, kamikazes: 5, shapes: ['arrowheadExploded', 'arrowhead'], barrier: 'arrow', barrierCount: 0 } // Purple rebalancing: Removed barriers (was 8)
         ]
       }
     };
@@ -4659,7 +4733,8 @@
       var shieldDamagePercent = 0;
       if (isShielded) {
         var shieldHits = enemy.shieldHits || 0;
-        var shieldBreakThreshold = level >= 9 ? 25 : 15;
+        var baseHits = level >= 9 ? 25 : 15;
+        var shieldBreakThreshold = Math.ceil(baseHits * DIFFICULTY_CONFIG.enemyHealth); // Apply difficulty multiplier
         shieldDamagePercent = Math.min(shieldHits / shieldBreakThreshold, 1); // 0=healthy, 1=almost broken
       }
 
@@ -4812,7 +4887,7 @@
      * Boss encounters (same as desktop):
      * - Boss 1 (Level 4): Green boss, one-time shield, 4 orbiters
      * - Boss 2 (Level 8): Red boss, cycling shields (5s on/5s off), 7 orbiters
-     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 8 orbiters
+     * - Boss 3 (Level 12): Purple boss, cycling shields (5s on/5s off), 6 orbiters
      *
      * Mobile positioning:
      * - Spawn position: x = canvas.width/2 - 75 (centered), y = -150 (off-screen above)
@@ -4933,16 +5008,16 @@
 
     /**
      * One-time initialisation of the orbiting escort satellites once the boss
-     * has finished its entrance animation. Orbiter count: 4 (green), 6 (red),
-     * or 8 (purple) based on boss difficulty.
+     * has finished its entrance animation. Orbiter count: 4 (green), 7 (red),
+     * or 6 (purple) based on boss difficulty.
      */
     function initBossOrbiters() {
       if (orbitersInitialized) return;
       orbitersInitialized = true;
 
-      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 19)
-      // Green: 4, Red: 7 (+3), Purple: 8 (+4 from green, +1 from red)
-      var orbiterCount = boss.isPurpleBoss ? 8 : (boss.isRedBoss ? 7 : 4);
+      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 28, 2026)
+      // Green: 4, Red: 7 (+3), Purple: 6 (+2 from green, -1 from red)
+      var orbiterCount = boss.isPurpleBoss ? 6 : (boss.isRedBoss ? 7 : 4);
       maxOrbiters = orbiterCount;
 
       for (var i = 0; i < orbiterCount; i++) {
@@ -5316,8 +5391,9 @@
         lastMinionShotTime = now;
       }
 
-      // Spawn new minions
-      if (Math.random() < CONFIG.bossMinionSpawnChance) {
+      // Spawn new minions (apply difficulty to spawn rate - lower spawnRate = more minions)
+      var adjustedSpawnChance = CONFIG.bossMinionSpawnChance / DIFFICULTY_CONFIG.spawnRate;
+      if (Math.random() < adjustedSpawnChance) {
         createBossMinion();
       }
 
@@ -5798,9 +5874,26 @@
             'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
             'score_multiplier': scoreMultiplier
           });
+
+          // Boss defeat bonus
           score += Math.floor(100 * scoreMultiplier);
+
+          // Health Remaining Bonus (Mar 26, 2026)
+          // Incentivizes health power-up collection and skilled play
+          // Remaining HP converted 1:1 to score points (not affected by scoreMultiplier)
+          var healthBonus = Math.floor(health);
+          score += healthBonus;
+
           updateUI();
           showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
+
+          // Show health bonus announcement after victory message
+          setTimeout(function() {
+            if (healthBonus > 0) {
+              showAnnouncement("powerupDisplay", "Health Bonus: +" + healthBonus + " pts!", 2500);
+            }
+          }, 3200);
+
           setTimeout(function () {
             showVictory();
           }, 3500);
@@ -5868,10 +5961,12 @@
       // player_won fires when all 3 bosses are defeated.
       // score is used (not final_score) to match naming convention across all events.
       // session_duration_seconds measures the full run length for completion-time analysis.
+      // health_remaining_bonus tracks the health bonus added at victory (Mar 26, 2026)
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
         'score': score,
+        'health_remaining_bonus': Math.floor(health),
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
         'score_multiplier': scoreMultiplier
@@ -6794,10 +6889,13 @@
     function shootEnemyBullet(enemy, useAimed) {
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       if (purplePhase) {
-        bulletSpeed *= 1.35; // Mobile: 35% increase (desktop: 65% increase)
+        bulletSpeed *= 1.14; // Purple rebalancing (Mar 29, 2026): Reduced from 1.35 to 1.14 (8.0 vs 9.45) - MATCHES DESKTOP
       } else if (redPhase) {
-        bulletSpeed *= 1.15; // Mobile: 15% increase (desktop: 40% increase)
+        bulletSpeed *= 1.07; // Red rebalancing (Mar 29, 2026): Reduced from 1.15 to 1.07 (7.5 vs 8.05) - MATCHES DESKTOP
       }
+
+      // Apply adaptive difficulty multiplier
+      bulletSpeed *= DIFFICULTY_CONFIG.bulletSpeed;
 
       // Aimed shot: calculate angle to player and create diagonal bullet
       if (useAimed && (redPhase || purplePhase)) {
@@ -6934,12 +7032,14 @@
         }
       }
 
-      health -= damage;
+      // Apply difficulty-adjusted damage
+      var adjustedDamage = Math.ceil(damage * DIFFICULTY_CONFIG.playerDamage);
+      health -= adjustedDamage;
       updateUI();
 
       // Start blinking effect
       playerBlinking = true;
-      playerBlinkTimer = 30; // Blink for 30 frames (~0.5 seconds)
+      playerBlinkTimer = 60; // Blink for 60 frames (1 second at 60 FPS)
 
       if (health <= 0) {
         health = 0;
@@ -7078,7 +7178,7 @@
           indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
             'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
             'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
-          indicator.textContent = '⚠ DEV MODE — Analytics OFF | Shift+V: Victory | Shift+G: Game Over';
+          indicator.textContent = '⚠ DEV MODE — Analytics OFF | Shift+S: Speed Display | Shift+V: Victory | Shift+G: Game Over';
           document.body.appendChild(indicator);
         }
         indicator.style.display = devMode ? 'block' : 'none';
@@ -7149,6 +7249,44 @@
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
           showLeaderboard();
+        }
+        return;
+      }
+
+      // Shift+S — toggle bullet speed display (devMode only)
+      if (e.shiftKey && (e.key === 's' || e.key === 'S')) {
+        if (devMode) {
+          showSpeedDisplay = !showSpeedDisplay;
+          console.log('%c[DEV MODE] Speed display ' + (showSpeedDisplay ? 'ENABLED 📊' : 'DISABLED'), 'color:#00FFFF;font-weight:bold;');
+        }
+        return;
+      }
+
+      // Shift+R — reset bullet speed multiplier to 1.0 (devMode only)
+      if (e.shiftKey && (e.key === 'r' || e.key === 'R')) {
+        if (devMode) {
+          DIFFICULTY_CONFIG.bulletSpeed = 1.0;
+          console.log('%c[DEV MODE] Bullet speed reset to 1.0x', 'color:#00FFFF;font-weight:bold;');
+        }
+        return;
+      }
+
+      // [ key — decrease bullet speed multiplier (devMode only)
+      if (e.key === '[') {
+        if (devMode && !gameOver) {
+          DIFFICULTY_CONFIG.bulletSpeed = Math.max(0.5, DIFFICULTY_CONFIG.bulletSpeed - 0.05);
+          DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
+          console.log('%c[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x', 'color:#00FFFF;font-weight:bold;');
+        }
+        return;
+      }
+
+      // ] key — increase bullet speed multiplier (devMode only)
+      if (e.key === ']') {
+        if (devMode && !gameOver) {
+          DIFFICULTY_CONFIG.bulletSpeed = Math.min(1.5, DIFFICULTY_CONFIG.bulletSpeed + 0.05);
+          DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
+          console.log('%c[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x', 'color:#00FFFF;font-weight:bold;');
         }
         return;
       }
@@ -7425,6 +7563,56 @@
      */
     canvas.addEventListener("touchend", function (e) {
       e.preventDefault(); // Prevent mobile click/tap delay
+
+      // Dev mode: 5-tap toggle (mobile-friendly alternative to Shift+D)
+      // Increment tap counter and reset timer on each tap
+      // If 5 taps happen within 2 seconds, toggle dev mode
+      if (e.touches.length === 0) { // Only count when all fingers lifted (complete tap)
+        devModeTapCount++;
+
+        // Clear existing timeout
+        if (devModeTapTimeout) clearTimeout(devModeTapTimeout);
+
+        // Check if we've reached 5 taps
+        if (devModeTapCount >= 5) {
+          // Toggle dev mode
+          devMode = !devMode;
+          localStorage.setItem('nonx_dev_mode', devMode ? 'true' : 'false');
+
+          // Create/toggle visual indicator (same as Shift+D)
+          var indicator = document.getElementById('devModeIndicator');
+          if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'devModeIndicator';
+            indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
+              'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
+              'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
+            indicator.textContent = '⚠ DEV MODE — Analytics OFF | Shift+S: Speed Display | Shift+V: Victory | Shift+G: Game Over';
+            document.body.appendChild(indicator);
+          }
+          indicator.style.display = devMode ? 'block' : 'none';
+
+          // Visual feedback (vibration if supported)
+          if (navigator.vibrate) {
+            navigator.vibrate(devMode ? [100, 50, 100] : 100); // Double vibrate on enable, single on disable
+          }
+
+          // Console log for confirmation
+          console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢 (5-tap)' : 'DISABLED 🔴 (5-tap)'),
+                      'color:#FF0;font-weight:bold;font-size:14px;');
+
+          // Reset counter
+          devModeTapCount = 0;
+          devModeTapTimeout = null;
+        } else {
+          // Reset counter after 2 seconds if 5 taps not reached
+          devModeTapTimeout = setTimeout(function() {
+            devModeTapCount = 0;
+            devModeTapTimeout = null;
+          }, 2000);
+        }
+      }
+
       if (e.touches.length === 0) {
         // All fingers lifted — deactivate touch controls
         touchActive = false; // Disables updateTouchControls() processing
@@ -7531,6 +7719,27 @@
      *   9. Schedules the next frame with requestAnimationFrame.
      */
     function draw() {
+      // Dev mode: Calculate and display FPS (BEFORE gameOver/pause checks so it always shows)
+      if (devMode) {
+        var currentTime = Date.now();
+        var deltaTime = currentTime - fpsLastTime;
+        fpsLastTime = currentTime;
+
+        // Track last 60 frame times for smooth average
+        fpsFrameTimes.push(deltaTime);
+        if (fpsFrameTimes.length > 60) fpsFrameTimes.shift();
+
+        // Calculate average FPS
+        var avgFrameTime = fpsFrameTimes.reduce(function(a, b) { return a + b; }, 0) / fpsFrameTimes.length;
+        fps = Math.round(1000 / avgFrameTime);
+
+        // Console warning for performance drops (throttled to once per second to prevent feedback loop)
+        if (deltaTime > 33 && currentTime - lastWarningTime > 1000) {
+          console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000/deltaTime) + ' FPS)');
+          lastWarningTime = currentTime;
+        }
+      }
+
       if (gameOver) return;
 
       // If paused, just keep the animation frame going but don't update
@@ -7692,8 +7901,9 @@
               enemy.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
               enemy.shieldWobble = 3;        // Wobble amount in pixels
 
-              // Break shield permanently - 15 hits for levels 1-8, 25 for levels 9+
-              var shieldBreakThreshold = level >= 9 ? 25 : 15;
+              // Break shield permanently - 15 hits for levels 1-8, 25 for levels 9+ (difficulty-adjusted)
+              var baseHits = level >= 9 ? 25 : 15;
+              var shieldBreakThreshold = Math.ceil(baseHits * DIFFICULTY_CONFIG.enemyHealth); // Apply difficulty multiplier
               if (enemy.shieldHits >= shieldBreakThreshold) {
                 enemy.shielded = false;
                 enemy.shieldBroken = true; // Mark as broken so cascade doesn't restore it
@@ -7914,7 +8124,8 @@
         if (waveInProgress) {
           // Move formation center smoothly as a unit (ease-out lerp)
           if (!formationEntered) {
-            formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * 0.045;
+            var lerpFactor = 0.045 * DIFFICULTY_CONFIG.enemySpeed; // Apply difficulty multiplier
+            formationCurrentCenterY += (formationTargetCenterY - formationCurrentCenterY) * lerpFactor;
             if (formationTargetCenterY - formationCurrentCenterY < 1) {
               formationCurrentCenterY = formationTargetCenterY;
               formationEntered = true;
@@ -8185,6 +8396,66 @@
 
       // Update and draw explosion effects
       updateExplosions();
+
+      // Dev mode: bullet speed display (lower-right corner)
+      if (devMode && showSpeedDisplay) {
+        var baseSpeed = 7.0; // Green baseline
+        if (purplePhase) baseSpeed = 9.45;
+        else if (redPhase) baseSpeed = 8.05;
+
+        var effectiveSpeed = baseSpeed * DIFFICULTY_CONFIG.bulletSpeed;
+        effectiveSpeed = Math.round(effectiveSpeed * 100) / 100;
+
+        var multiplierText = DIFFICULTY_CONFIG.bulletSpeed.toFixed(2) + 'x';
+        var speedText = effectiveSpeed.toFixed(2);
+
+        ctx.save();
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+
+        // Background box
+        var text = '[DEV] Speed: ' + speedText + ' (' + multiplierText + ')';
+        var textWidth = ctx.measureText(text).width;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(canvas.width - textWidth - 16, canvas.height - 28, textWidth + 12, 24);
+
+        // Text
+        ctx.fillStyle = '#00FFFF';
+        ctx.fillText(text, canvas.width - 10, canvas.height - 8);
+        ctx.restore();
+      }
+
+      // Dev mode: FPS display (lower-left corner, drawn AFTER all game elements to prevent clearRect from erasing it)
+      if (devMode) {
+        var objectCount = enemies.length + playerBullets.length + enemyBullets.length + powerups.length;
+
+        ctx.save();
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+
+        // Background box
+        var text = '[DEV] FPS: ' + fps + ' | Objects: ' + objectCount;
+        var textWidth = ctx.measureText(text).width;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(4, canvas.height - 28, textWidth + 12, 24);
+
+        // FPS color coding
+        var fpsColor = '#00FF00'; // Green for 55-60 FPS
+        if (fps < 45) fpsColor = '#FF0000';      // Red for <45 FPS (stuttering)
+        else if (fps < 55) fpsColor = '#FFFF00'; // Yellow for 45-54 FPS (slight lag)
+
+        // Draw text with color-coded FPS
+        ctx.fillStyle = fpsColor;
+        ctx.fillText('[DEV] FPS: ' + fps, 10, canvas.height - 8);
+
+        ctx.fillStyle = '#00FFFF';
+        var fpsTextWidth = ctx.measureText('[DEV] FPS: ' + fps).width;
+        ctx.fillText(' | Objects: ' + objectCount, 10 + fpsTextWidth, canvas.height - 8);
+
+        ctx.restore();
+      }
 
       requestAnimationFrame(draw);
     }
