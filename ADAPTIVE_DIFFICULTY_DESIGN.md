@@ -1,10 +1,19 @@
 # Adaptive Difficulty System - Design Document
 ## NON-X Space Shooter Game
 
-**Status:** Design Phase
+**Status:** Stage 1 Complete + Dev Tools + Purple Rebalancing (Mar 29, 2026) - Ready for Testing
 **Created:** March 25, 2026
-**Version:** 1.0
-**Analytics Version Impact:** 4.1 → 4.2
+**Last Updated:** March 29, 2026
+**Version:** 1.2
+**Analytics Version Impact:** 4.0 → 4.2 (purple rebalancing complete)
+**Implementation Status:**
+- ✅ Stage 1: Multiplier infrastructure (COMPLETE - needs testing)
+- ✅ Dev Tools: FPS monitor + bullet speed testing (COMPLETE - Mar 28)
+- ✅ Purple Rebalancing: Reduce difficulty + object count (COMPLETE - Mar 29)
+- 🎨 Pink Levels: Easter egg levels 13-15 (FUTURE)
+- ❌ Stage 2: Static difficulty tiers (SKIPPED - optional)
+- ⏳ Stage 3: AI agent (PENDING - next sprint)
+- ⏳ Stage 4: ML-based agent (FUTURE)
 
 ---
 
@@ -448,38 +457,233 @@ function trySpawnPowerup() {
 
 ### 3.3 Testing Stage 1
 
-#### Manual Console Testing
-```javascript
-// In browser console, adjust multipliers mid-game (dev mode)
+⚠️ **TESTING STATUS: REQUIRED BEFORE DEPLOY**
 
-// Make game easier
+All features are implemented but **not yet tested**. Complete testing checklist below before creating PR.
+
+---
+
+#### A. Baseline Testing (No Multiplier Changes)
+
+**Goal:** Verify game plays identically to pre-Stage 1 implementation (all multipliers = 1.0)
+
+**Test Steps:**
+1. Start local server: `python3 -m http.server 8080`
+2. Open desktop: `http://localhost:8080/game.html`
+3. Play through levels 1-4 (green phase)
+4. Verify:
+   - [ ] Enemies take expected hits (15 hits for levels 1-8)
+   - [ ] Bullet speed feels normal (not faster/slower)
+   - [ ] Player damage feels normal (25 HP per hit)
+   - [ ] Health power-ups appear in cycle (Shield → Laser → Health)
+   - [ ] Formation descent speed feels normal
+   - [ ] Boss minions spawn at normal rate
+
+5. Repeat on mobile: `http://[LOCAL_IP]:8080/game_mobile.html`
+
+**Expected Result:** Game feels identical to production (no noticeable changes)
+
+---
+
+#### B. Multiplier Console Testing
+
+**Goal:** Verify multipliers actually affect gameplay when adjusted
+
+**Setup:**
+1. Enable Developer Mode: Press `Shift+D` on any page
+2. Open browser console (F12 or Cmd+Opt+J)
+3. Adjust multipliers mid-game
+
+**Test Case 1: Make Game Easier**
+```javascript
+// In browser console during gameplay
 DIFFICULTY_CONFIG.enemyHealth = 0.7;    // Enemies die 30% faster
 DIFFICULTY_CONFIG.bulletSpeed = 0.8;    // Bullets 20% slower
 DIFFICULTY_CONFIG.playerDamage = 0.7;   // Take 30% less damage
 DIFFICULTY_CONFIG.healthDropRate = 1.5; // 50% more health drops
+```
 
-// Make game harder
+**Verify:**
+- [ ] Enemy shields break faster (visibly fewer hits needed)
+- [ ] Enemy bullets move slower (easier to dodge)
+- [ ] Player takes less damage per hit (check HP bar)
+- [ ] Health power-ups spawn more often (some cycles spawn 2 health instead of 1)
+
+**Test Case 2: Make Game Harder**
+```javascript
+// In browser console during gameplay
 DIFFICULTY_CONFIG.enemyHealth = 1.3;    // Enemies take 30% more hits
 DIFFICULTY_CONFIG.bulletSpeed = 1.2;    // Bullets 20% faster
 DIFFICULTY_CONFIG.playerDamage = 1.2;   // Take 20% more damage
 DIFFICULTY_CONFIG.healthDropRate = 0.7; // 30% fewer health drops
+```
 
-// Reset to baseline
+**Verify:**
+- [ ] Enemy shields take more hits to break (visibly tankier)
+- [ ] Enemy bullets move faster (harder to dodge)
+- [ ] Player takes more damage per hit (check HP bar)
+- [ ] Health power-ups skip more often (some cycles: Shield → Laser → [skip] → repeat)
+
+**Test Case 3: Reset to Baseline**
+```javascript
+// Reset all multipliers
 DIFFICULTY_CONFIG.enemyHealth = 1.0;
 DIFFICULTY_CONFIG.bulletSpeed = 1.0;
 DIFFICULTY_CONFIG.playerDamage = 1.0;
 DIFFICULTY_CONFIG.healthDropRate = 1.0;
+DIFFICULTY_CONFIG.enemySpeed = 1.0;
+DIFFICULTY_CONFIG.spawnRate = 1.0;
 ```
 
-#### Verification Checklist
-- [ ] Enemy shields take more/fewer hits (test with console adjustment)
-- [ ] Enemy bullets move faster/slower visibly
-- [ ] Player health drops by adjusted amounts
-- [ ] Health power-ups spawn more/less frequently
-- [ ] Formation descent speed changes
-- [ ] Boss minions spawn more/less frequently
-- [ ] Syntax check passes (0 brace errors)
-- [ ] Game plays normally at baseline (1.0 multipliers)
+**Verify:**
+- [ ] Game returns to normal difficulty (matches baseline testing)
+
+---
+
+#### C. Health Remaining Bonus Testing
+
+**Goal:** Verify health bonus is added to score at victory and tracked in analytics
+
+**Test Case 1: High HP Victory**
+1. Enable god mode: `Shift+I` (dev mode)
+2. Play through to Level 12 boss
+3. Keep health high (180-200 HP)
+4. Defeat purple boss
+5. **Verify:**
+   - [ ] "Victory! You Win!" message appears first (3s)
+   - [ ] "Health Bonus: +[amount] pts!" appears 0.2s later (3.2s)
+   - [ ] Bonus amount matches remaining HP (e.g., 200 HP → "+200 pts!")
+   - [ ] Final score = (game score) + 100 (boss bonus) + [health bonus]
+   - [ ] Victory screen shows correct total score
+
+**Test Case 2: Low HP Victory**
+1. Play normally (no god mode)
+2. Finish purple boss with ~50 HP or less
+3. **Verify:**
+   - [ ] Health bonus shows smaller amount (e.g., "+47 pts!")
+   - [ ] Score calculation still correct
+
+**Test Case 3: Analytics Tracking**
+1. Enable GA4 DebugView in browser
+2. Defeat purple boss
+3. Check `player_won` event in DebugView
+4. **Verify:**
+   - [ ] Event fires successfully
+   - [ ] `health_remaining_bonus` parameter present
+   - [ ] Value matches HP remaining (e.g., 127)
+   - [ ] Value range: 0-250 (never negative or > maxHealth)
+
+---
+
+#### D. Mobile-Specific Testing
+
+**CRITICAL:** Must test on actual mobile device (not just browser emulation)
+
+**Setup:**
+1. Start local server: `python3 -m http.server 8080`
+2. Get local IP: `ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1`
+3. Open on mobile: `http://[LOCAL_IP]:8080/game_mobile.html`
+
+**Test:**
+- [ ] Baseline gameplay feels normal (all multipliers = 1.0)
+- [ ] Console multiplier adjustments work (use mobile browser dev tools)
+- [ ] Health bonus appears correctly at victory
+- [ ] Health bonus announcement doesn't overlap with touch controls
+- [ ] No performance issues (60 FPS maintained)
+- [ ] Touch controls remain responsive
+
+---
+
+#### E. Syntax & Build Checks
+
+**Pre-Commit Checks:**
+```bash
+python3 -c "
+c = open('game.html').read()
+print('game.html:')
+print('  Lines:', len(c.splitlines()))
+print('  Brace diff:', c[c.find('<script>'):].count('{') - c[c.find('<script>'):].count('}'))
+print('  draw function:', 'function draw(' in c)
+print('  DIFFICULTY_CONFIG:', 'DIFFICULTY_CONFIG' in c)
+print('  healthBonus:', 'healthBonus' in c)
+print()
+c = open('game_mobile.html').read()
+print('game_mobile.html:')
+print('  Lines:', len(c.splitlines()))
+print('  Brace diff:', c[c.find('<script>'):].count('{') - c[c.find('<script>'):].count('}'))
+print('  draw function:', 'function draw(' in c)
+print('  DIFFICULTY_CONFIG:', 'DIFFICULTY_CONFIG' in c)
+print('  healthBonus:', 'healthBonus' in c)
+"
+```
+
+**Expected Output:**
+```
+game.html:
+  Lines: 7731
+  Brace diff: 0
+  draw function: True
+  DIFFICULTY_CONFIG: True
+  healthBonus: True
+
+game_mobile.html:
+  Lines: 8600
+  Brace diff: 0
+  draw function: True
+  DIFFICULTY_CONFIG: True
+  healthBonus: True
+```
+
+**Verification:**
+- [x] Syntax check passed (completed Mar 26, 2026)
+- [ ] Local testing completed (desktop + mobile)
+- [ ] Health bonus tested (high HP + low HP scenarios)
+- [ ] Analytics verified in DebugView
+- [ ] No console errors during gameplay
+
+---
+
+#### F. Analytics Setup Checklist
+
+**Complete BEFORE merging to main:**
+
+**GA4 Configuration:**
+- [ ] Register custom dimension: `health_remaining_bonus` (Event-scoped, number)
+- [ ] Update existing explorations to include new parameter
+- [ ] Test in DebugView (send test event, verify parameter appears)
+
+**Post-Deploy Monitoring (First 48 Hours):**
+- [ ] Check `player_won` events in GA4 Realtime report
+- [ ] Verify `health_remaining_bonus` values look reasonable (0-250 range)
+- [ ] Confirm no errors in browser console logs
+- [ ] Monitor for any player reports of scoring issues
+
+**Analytics Questions to Answer (After 1 Week):**
+- What's the median health_remaining_bonus? (indicates difficulty balance)
+- Do players with higher bonuses have higher total scores? (correlation)
+- Desktop vs mobile: Which platform has higher average bonuses?
+- Does health bonus correlate with session duration? (fast vs safe play)
+
+---
+
+### Testing Summary
+
+**Status:** ⚠️ NOT TESTED - DO NOT DEPLOY YET
+
+**Completed:**
+- ✅ Implementation (Stage 1 multipliers + health bonus)
+- ✅ Syntax validation
+- ✅ Documentation
+
+**Required Before PR:**
+- [ ] Complete Section A: Baseline Testing
+- [ ] Complete Section B: Multiplier Console Testing
+- [ ] Complete Section C: Health Bonus Testing
+- [ ] Complete Section D: Mobile Testing
+- [ ] Complete Section E: Final syntax checks
+- [ ] Complete Section F: GA4 setup
+
+**Estimated Testing Time:** 2-3 hours (desktop + mobile, all test cases)
 
 ---
 
@@ -528,7 +732,316 @@ DIFFICULTY_CONFIG.healthDropRate = 1.0;
 
 ---
 
-### 3.5 Commit & Push
+### 3.5 Additional Feature: Health Remaining Bonus (Mar 26, 2026)
+
+**Added during Stage 1 implementation:**
+
+A new scoring mechanic was added alongside the multiplier infrastructure to incentivize health power-up collection and reward skilled play.
+
+**Feature:**
+- Defeating purple boss (level 12) adds remaining health points to score (1:1 ratio)
+- Example: Finish with 200 HP → +200 bonus points
+- Announcement: "Health Bonus: +[amount] pts!" shown 3.2s after victory message
+
+**Analytics Impact:**
+- Added `health_remaining_bonus` parameter to `player_won` event
+- Requires new GA4 custom dimension (event-scoped, number type)
+- Value range: 0-250 (matches CONFIG.maxHealth)
+
+**Strategic Impact:**
+- Makes health power-ups dual-purpose (survival + scoring resource)
+- Rewards skilled play (fewer hits taken = higher bonus)
+- Creates risk/reward decisions (speed vs safety)
+- Natural setup for Pink Mode (planned endless mode starting at 200 HP)
+
+**Files Modified:**
+- game.html: Boss 3 defeat section (~line 5235-5255), analytics (~5281-5288)
+- game_mobile.html: Boss 3 defeat section (~line 5860-5880), analytics (~5930-5937)
+- NON-X_PAIM_Memory.md: Full documentation
+
+**Testing Required:**
+- [ ] Defeat purple boss with varying HP amounts (25, 100, 200)
+- [ ] Verify bonus announcement timing (3.2s delay)
+- [ ] Verify correct score calculation (boss bonus + health bonus)
+- [ ] Test on both desktop and mobile platforms
+- [ ] Verify GA4 parameter appears in DebugView
+
+---
+
+### 3.6 Dev Tools: Performance Monitoring & Testing (Mar 28, 2026)
+
+**Purpose:** Provide real-time bullet speed testing and performance monitoring tools for rebalancing purple phase and validating improvements.
+
+**Status:** ✅ COMPLETE - Ready for testing
+
+---
+
+#### A. Bullet Speed Testing Tool
+
+**Features:**
+- Live bullet speed adjustment without code changes
+- On-screen display showing effective speed and multiplier
+- Phase-aware calculations (green/red/purple baselines)
+- Range validation (0.5x to 1.5x)
+
+**Keyboard Shortcuts:**
+- `Shift+S` — Toggle speed display on/off
+- `[` — Decrease bulletSpeed by 0.05 (min: 0.50x)
+- `]` — Increase bulletSpeed by 0.05 (max: 1.50x)
+- `Shift+R` — Reset bulletSpeed to 1.0x
+
+**Display Location:** Bottom-right corner (dev mode only)
+**Display Format:** `[DEV] Speed: 7.00 (1.00x)`
+
+**Example Usage:**
+```
+1. Press Shift+D (enable dev mode)
+2. Press Shift+S (show speed display)
+3. Press [ five times → 0.75x
+   Display shows: "Speed: 5.25 (0.75x)" on green level
+4. Jump to purple (Shift+0) → Display updates: "Speed: 7.09 (0.75x)"
+5. Press ] to increase, test different speeds
+6. Press Shift+R to reset to 1.0x
+```
+
+**Use Cases:**
+- Find optimal min/max bullet speeds for each phase
+- Test proposed rebalancing changes before coding
+- Validate player feedback about difficulty
+- A/B test different speed ranges
+
+**Implementation:**
+```javascript
+// Variables (both files, ~line 1690 desktop, ~1893 mobile)
+var showSpeedDisplay = false; // Toggled with Shift+S
+
+// Keyboard handlers (in keydown event listener)
+if (e.key === '[') {
+  if (devMode && !gameOver) {
+    DIFFICULTY_CONFIG.bulletSpeed = Math.max(0.5, DIFFICULTY_CONFIG.bulletSpeed - 0.05);
+    DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
+    console.log('[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x');
+  }
+}
+// Similar for ], Shift+R, Shift+S
+
+// Display rendering (in draw() loop, before requestAnimationFrame)
+if (devMode && showSpeedDisplay) {
+  var baseSpeed = 7.0; // Green
+  if (purplePhase) baseSpeed = 9.45;
+  else if (redPhase) baseSpeed = 8.05;
+
+  var effectiveSpeed = baseSpeed * DIFFICULTY_CONFIG.bulletSpeed;
+  // Render display in bottom-right corner...
+}
+```
+
+---
+
+#### B. FPS Counter & Object Count Monitor
+
+**Purpose:** Identify performance bottlenecks, measure purple phase optimization impact.
+
+**Features:**
+- Real-time FPS tracking (60-frame rolling average)
+- Color-coded performance indicators
+- Object count display (enemies + bullets + powerups)
+- Console warnings for frame drops
+- Automatic in dev mode (no toggle needed)
+
+**Display Location:** Bottom-left corner (dev mode only)
+**Display Format:** `[DEV] FPS: 58 | Objects: 45`
+
+**Color Coding:**
+- 🟢 **Green** (55-60 FPS): Smooth gameplay
+- 🟡 **Yellow** (45-54 FPS): Slight lag
+- 🔴 **Red** (<45 FPS): Stuttering/frame drops
+
+**Console Warnings:**
+Logs warning when frame time exceeds 33ms (below 30 FPS):
+```
+[PERF WARNING] Frame took 45ms (22 FPS)
+```
+
+**Use Cases:**
+- **Baseline purple phase metrics** - Measure current performance
+- **Post-rebalancing validation** - Verify improvements
+- **Mobile stuttering diagnosis** - Identify exact frame drops
+- **Object count optimization** - Track enemy/bullet counts
+
+**Implementation:**
+```javascript
+// Variables (both files, ~line 1693 desktop, ~1896 mobile)
+var fps = 60;
+var fpsFrameTimes = [];
+var fpsLastTime = Date.now();
+
+// Calculation (in draw() loop, after pause check)
+if (devMode) {
+  var currentTime = Date.now();
+  var deltaTime = currentTime - fpsLastTime;
+  fpsLastTime = currentTime;
+
+  fpsFrameTimes.push(deltaTime);
+  if (fpsFrameTimes.length > 60) fpsFrameTimes.shift();
+
+  var avgFrameTime = fpsFrameTimes.reduce(function(a, b) { return a + b; }, 0) / fpsFrameTimes.length;
+  fps = Math.round(1000 / avgFrameTime);
+
+  // Console warning for drops
+  if (deltaTime > 33) {
+    console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms');
+  }
+}
+
+// Display rendering (in draw() loop, with bullet speed display)
+if (devMode) {
+  var objectCount = enemies.length + bullets.length + enemyBullets.length + powerups.length;
+  // Render FPS with color coding...
+  // Render object count...
+}
+```
+
+---
+
+#### C. URL Parameters for Testing
+
+**Usage:** Jump directly to specific levels without playing through
+
+**Syntax:**
+```
+http://localhost:8080/game.html?level=11&god=true
+```
+
+**Parameters:**
+- `level=1-12` - Start at specific level (auto-enables dev mode)
+- `god=true` - Enable god mode (invincibility)
+
+**Examples:**
+```
+# Test purple boss fight
+http://localhost:8080/game.html?level=12&god=true
+
+# Test purple level 11 performance
+http://localhost:8080/game.html?level=11&god=true
+
+# Test green boss
+http://localhost:8080/game.html?level=4&god=true
+```
+
+---
+
+#### D. Testing Purple Phase Performance
+
+**Objective:** Establish baseline metrics before rebalancing
+
+**Test Protocol:**
+1. Open game with URL: `http://localhost:8080/game.html?level=11&god=true`
+2. Press `Shift+D` to enable dev mode (FPS/object display appears)
+3. Press `Shift+S` to show bullet speed
+4. Play through level 11:
+   - Watch FPS color (green/yellow/red)
+   - Note object count at peak (formation settled + bullets)
+   - Watch for console warnings during powerup collection
+   - Test bullet dodging difficulty
+5. Record metrics:
+   ```
+   Level 11 Baseline:
+   - FPS: Min ___ / Avg ___ / Max ___
+   - Object count: Peak ___
+   - Console warnings: ___ during 60s gameplay
+   - Bullet speed feels: Too Fast / Just Right / Too Slow
+   ```
+
+**Expected Purple Baseline (Before Rebalancing):**
+- Object count: ~45-50 objects at peak
+- FPS on desktop: 58-60 (stable green)
+- FPS on mobile: 45-55 (yellow, occasional red)
+- Console warnings: 2-5 during powerup collection on mobile
+
+**Success Criteria After Rebalancing:**
+- Object count: ~35-40 objects (10-15 fewer)
+- FPS on mobile: 55-60 (stable green)
+- Console warnings: 0-1 during powerup events
+- Bullet speed: Challenging but fair (8.0 vs current 9.45)
+
+---
+
+#### E. Dev Tools Shortcuts Summary
+
+**Dev Mode Control:**
+- `Shift+D` — Toggle dev mode on/off
+- `Shift+I` — Toggle god mode (invincibility)
+
+**Navigation:**
+- `Shift+V` — Skip to victory screen
+- `Shift+G` — Skip to game over screen
+- `Shift+1-9` — Jump to levels 1-9
+- `Shift+0` — Jump to level 12
+
+**Bullet Speed Testing:**
+- `Shift+S` — Toggle speed display
+- `[` — Decrease speed by 0.05
+- `]` — Increase speed by 0.05
+- `Shift+R` — Reset speed to 1.0x
+
+**Performance Monitoring:**
+- Always visible in dev mode (FPS + object count)
+- Console warnings for frame drops >33ms
+- Color-coded FPS (green/yellow/red)
+
+---
+
+### 3.7 Purple Phase Rebalancing (Implemented Mar 29, 2026)
+
+**Status:** ✅ COMPLETE - Ready for testing
+
+See NON-X_PAIM_Memory.md "Purple Phase Rebalancing" section for full details.
+
+**Changes Implemented:**
+1. ✅ Removed barriers from levels 9-12 (barrierCount: 0)
+   - Level 9: Removed 8 barriers (orbitingShield)
+   - Level 10: Removed 10 barriers (dualLines)
+   - Level 11: Removed 8 barriers (circle)
+   - Level 12: Removed 8 barriers (arrow)
+2. ✅ Reduced bullet speeds (both desktop and mobile):
+   - Red: 8.05 → 7.5 (multiplier: 1.4 → 1.07)
+   - Purple: 9.45 → 8.0 (desktop: 1.65 → 1.14, mobile: 1.35 → 1.14)
+3. ✅ Reduced purple boss orbiters: 8 → 6 (completed Mar 28)
+4. ✅ Updated analytics_version: 4.0 → 4.2
+
+**Expected Impact:**
+- Object count: 59 → 49 (-17% on level 12)
+- Max bullet speed with AI: 10.0 (8.0 × 1.25)
+- Mobile FPS: Stable 55-60 instead of 45-55
+- Difficulty: Challenging but achievable
+
+**Implementation Branch:** feature/dev_tools_fps_bullet_speed (combined with dev tools)
+
+---
+
+### 3.8 Pink Levels Expansion (Future)
+
+**Status:** 🎨 PLANNED - Post-purple rebalancing
+
+Easter egg levels 13-15 with extreme difficulty (0.5-2.5x multiplier range, max bullet speed 17.5).
+
+See NON-X_PAIM_Memory.md "Pink Levels Expansion" section for full design documentation.
+
+**Key Features:**
+- Baseline bullet speed: 7.0 (same as green)
+- Extended multiplier range: 0.5-2.5x (vs 0.5-1.25x for levels 1-12)
+- Legacy formations: Spiral, pincer, sine wave
+- Boss 4 encounter at level 15
+- Optional content (level 12 victory is canonical ending)
+
+**Implementation Estimate:** ~8 hours
+
+**Priority:** LOW - Implement after Stage 3 AI agent is complete
+
+---
+
+### 3.9 Commit & Push
 
 ```bash
 # Stage 1 complete workflow
