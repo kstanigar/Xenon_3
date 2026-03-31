@@ -1791,81 +1791,133 @@ git revert <commit-hash>  # Revert all rebalancing changes
 
 ---
 
-### PROPOSED: AI Agent Redesign - 4-Parameter Direct Adjustment System (Mar 30, 2026)
-**Status:** 📋 PLANNING - For next session implementation
-**Purpose:** Simplify AI agent from 6 multipliers to 4 direct parameters with incremental adjustments
+### PROPOSED: AI Agent v1.0 - Simplified Direct Adjustment System (Mar 30, 2026)
+**Status:** 📋 READY FOR IMPLEMENTATION
+**Purpose:** Simple, predictable AI agent with 3 parameters (speed, shields, counts)
 
-**Current System (Stage 1 - Multipliers):**
+**Core Concept:**
+- **Cycle** = Beat all 3 bosses (green, red, purple) in one playthrough
+- **3 Parameters:** Bullet speed, Shield hits, Enemy counts
+- **Simple rules:** Die 2x in phase = decrease, Complete cycle = increase
+
+---
+
+### Starting Values (Green Phase Baseline)
+
+| Parameter | Value | Range |
+|-----------|-------|-------|
+| Bullet Speed | 4.0 | 3.0 - 7.0 |
+| Shield Hits | 10 | 0 - 20 |
+| Enemy Counts | 3 | 2 - 5 |
+
+*(Red/Purple scale proportionally)*
+
+---
+
+### Adjustment Triggers
+
+**DECREASE (Die 2x in same phase):**
+```
+1st penalty: Shields -5
+2nd penalty: Counts -1
+3rd penalty: Shields -5 (minimum: 0)
+```
+
+**INCREASE (Complete cycle - beat all 3 bosses):**
+```
+1st victory: Shields +5 (AND speed locks - never decreases again)
+2nd victory: Shields +5 (maxed at 20)
+3rd victory: Counts +1
+4th victory: Counts +1 (maxed at 5)
+5th victory: Speed +1.0 (then reset shields/counts to baseline, repeat)
+```
+
+---
+
+### Speed Ratchet (One-Way Lock)
+
+**Before first cycle completion:**
+- Speed can decrease (tutorial mode: 4.0 → 3.0)
+
+**After first cycle completion:**
+- Speed LOCKS at current level
+- Speed can only increase (never decrease)
+- Support params (shields, counts) still flex to help adaptation
+
+---
+
+### Example Progression
+
+```
+Start: Speed 4.0, Shields 10, Counts 3
+
+Die 2x green → Shields 5
+Die 2x green → Counts 2
+Die 2x green → Shields 0 (floor)
+
+Complete cycle 1 → Shields 5 (speed locks at 4.0!)
+Complete cycle 2 → Shields 10
+Complete cycle 3 → Counts 3
+Complete cycle 4 → Shields 15
+Complete cycle 5 → Speed 5.0, Shields reset to 10 (new tier begins)
+```
+
+---
+
+### Implementation
+
+**State to track (localStorage):**
 ```javascript
-var DIFFICULTY_CONFIG = {
-  enemyHealth: 1.0,      // 0.5-2.0 range
-  enemySpeed: 1.0,       // 0.7-1.4 range
-  bulletSpeed: 1.0,      // 0.7-1.5 range
-  spawnRate: 1.0,        // 0.7-1.3 range
-  playerDamage: 1.0,     // 0.6-1.5 range
-  healthDropRate: 1.0    // 0.5-2.0 range
+var bulletSpeed = 4.0;        // 3.0 - 7.0
+var shieldHits = 10;          // 0 - 20
+var enemyCounts = 3;          // 2 - 5
+var cyclesCompleted = 0;      // Total cycles
+var deathsInPhase = {         // Session only
+  green: 0,
+  red: 0,
+  purple: 0
 };
 ```
-- All hardcoded to 1.0, never change during gameplay
-- Applied at 6 locations in each file
-- No AI agent logic exists yet
 
-**Proposed System (4-Parameter Direct):**
-
-| Parameter | Green | Red | Purple | AI Step | Min | Max |
-|-----------|-------|-----|--------|---------|-----|-----|
-| Bullet Speed | 4.0 | 5.0 | 6.0 | ±1.0 | 3.0 | 8.0 |
-| Shield Hits | 10 | 15 | 20 | ±5 | 5 | 30 |
-| Cascade Enemies | 3 | 4 | 5 | ±1 | 2 | 6 |
-| Boss Orbiters | 3 | 4 | 5 | ±1 | 2 | 6 |
-| Boss Fillers (Max) | 3 | 4 | 5 | ±1 | 2 | 6 |
-| Boss Minions (Max) | 3 | 4 | 5 | ±1 | 2 | 6 |
-
-**AI Agent Logic (Simplified):**
+**Adjustment functions:**
 ```javascript
-// Player struggling → decrease all by 1 step
-bulletSpeed -= 1.0;      // 5.0 → 4.0
-shieldHits -= 5;         // 15 → 10
-cascadeEnemies -= 1;     // 4 → 3
-bossOrbiters -= 1;       // 4 → 3
-bossFillers -= 1;        // 4 → 3
-bossMinions -= 1;        // 4 → 3
+function onPlayerDeath() {
+  deathsInPhase[currentPhase]++;
+  if (deathsInPhase[currentPhase] >= 2) {
+    decreaseDifficulty();
+    deathsInPhase[currentPhase] = 0;
+  }
+}
 
-// Player doing well → increase all by 1 step
-bulletSpeed += 1.0;      // 5.0 → 6.0
-shieldHits += 5;         // 15 → 20
-// etc.
+function onCycleComplete() {
+  cyclesCompleted++;
+  increaseDifficulty();
+}
 ```
 
-**Implementation Checklist:**
-- [ ] Update shield hit values (green: 15→10, purple: 25→20)
-- [ ] Update boss orbiter counts (boss 1: 4→3, boss 2: 5→4)
-- [ ] Change boss fillers from fixed 4 to phase-dependent 3/4/5
-- [ ] Convert boss minions from probabilistic spawning to fixed max count 3/4/5
-- [ ] Remove DIFFICULTY_CONFIG multiplier system
-- [ ] Add direct parameter adjustment functions
-- [ ] Update analytics to track parameter changes (not multipliers)
-- [ ] Test baseline difficulty with new values
+---
 
-**Additional AI Parameter Suggestion:**
-- **Boss Shield Duration:** Time shield is active (e.g., 3s/4s/5s per phase, ±1s adjustments)
+### Known Issues to Fix First
 
-**Known Issues to Fix:**
-1. **Green Boss Shield Bug:** Boss 1 currently loses health while shield is active (should be invulnerable during shield phase)
+1. **Green Boss Shield Bug:** Boss 1 loses health while shield is active (should be invulnerable)
 2. **Pause Music Bug:** Pressing 'P' to unpause incorrectly toggles music on/off
 
-**Rationale:**
-- Simpler for AI agent (one rule: ±1 step for all parameters)
-- More intuitive (direct counts vs abstract multipliers)
-- Easier to debug and balance
-- More granular control over specific mechanics
+---
 
-**Trade-offs:**
-- Changes baseline game difficulty (makes green/purple easier)
-- Requires testing to validate new balance
-- Less flexible than multipliers for future expansion
+### Next Steps
 
-**Priority:** MEDIUM - Discuss and validate approach before implementing
+- [ ] Fix green boss shield bug
+- [ ] Fix pause music toggle bug
+- [ ] Implement 3-parameter tracking (speed, shields, counts)
+- [ ] Add death counter per phase
+- [ ] Add cycle completion counter
+- [ ] Add adjustment functions (increase/decrease difficulty)
+- [ ] Add analytics events for difficulty changes
+- [ ] Test with real gameplay
+
+**Priority:** MEDIUM - Fix bugs first, then implement AI agent
+
+**Note:** See AI_AGENT_ADVANCED_IDEAS.md for complex tier-based system discussions (future iteration)
 
 ---
 
