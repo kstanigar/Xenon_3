@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 19, 2026 (mobile optimizations + touch improvements + power-up cleanup)_
+_Last updated: March 30, 2026 (major bullet speed reduction: 4.0/5.0/6.0)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -1559,8 +1559,8 @@ http://localhost:8080/game.html?level=11&god=true
 
 ---
 
-### Purple Phase Rebalancing (Implemented Mar 29, 2026)
-**Status:** ✅ COMPLETE - Ready for testing
+### Purple Phase Rebalancing (Implemented Mar 29-30, 2026)
+**Status:** ✅ COMPLETE - Updated Mar 30 with major bullet speed reduction
 **Purpose:** Reduce purple phase difficulty and mobile performance issues through coordinated changes.
 
 **Problem Analysis:**
@@ -1606,16 +1606,17 @@ Boss 3 (Purple):
 - Impact: Reduces enemy count by 8-10 per level
 - Rationale: Barriers contribute to visual clutter without adding strategic depth
 
-**2. Reduce Bullet Speeds**
+**2. Reduce Bullet Speeds (Updated Mar 30, 2026 - Major Reduction)**
+- **Base Speed:** 7.0 → 4.0 (-43% reduction)
+- **Green Phase (Levels 1-4):**
+  - Final: 4.0 (no multiplier)
 - **Red Phase (Levels 5-8):**
-  - Current: 8.05 (7.0 × 1.15)
-  - Proposed: 7.5 (7.0 × 1.07)
-  - Reduction: 6.8% slower
+  - Final: 5.0 (4.0 × 1.25)
+  - Original: 8.05, First reduction: 7.5, Current: 5.0 (-38% from original)
 - **Purple Phase (Levels 9-12):**
-  - Current: 9.45 (7.0 × 1.35)
-  - Proposed: 8.0 (7.0 × 1.14)
-  - Reduction: 15.3% slower
-- Rationale: Current purple max (9.45) is at developer's skill ceiling; AI needs headroom to increase difficulty
+  - Final: 6.0 (4.0 × 1.5)
+  - Original: 9.45, First reduction: 8.0, Current: 6.0 (-36% from original)
+- Rationale: Improve accessibility; AI can still reach challenging speeds (6.0 × 1.25 = 7.5)
 
 **3. Reduce Purple Boss Orbiters**
 - Current: 8 orbiters
@@ -1656,17 +1657,20 @@ Boss 3 (Purple) - AFTER:
   TOTAL OBJECTS: 30 (was 33, -9%)
 ```
 
-**Bullet Speed Math (0.5-1.25 Multiplier Range):**
+**Bullet Speed Math (0.5-1.25 Multiplier Range) - Updated Mar 30, 2026:**
 
 | Phase | Baseline | Min (0.5x) | Max (1.25x) | AI Range | Notes |
 |-------|----------|------------|-------------|----------|-------|
-| Green | 7.0 | 3.5 | 8.75 | 0.5-1.25x | Beginner-friendly |
-| Red | 7.5 | 3.75 | 9.38 | 0.5-1.25x | Moderate challenge |
-| Purple | 8.0 | 4.0 | 10.0 | 0.5-1.25x | Hard (10.0 = developer limit) |
+| Green | 4.0 | 2.0 | 5.0 | 0.5-1.25x | Very beginner-friendly |
+| Red | 5.0 | 2.5 | 6.25 | 0.5-1.25x | Moderate challenge |
+| Purple | 6.0 | 3.0 | 7.5 | 0.5-1.25x | Accessible hard mode |
 
 **Implementation Checklist:**
 - [x] Reduce red bullet speed multiplier (desktop: 1.4→1.07, mobile: 1.15→1.07) ✅ Mar 29, 2026
 - [x] Reduce purple bullet speed multiplier (desktop: 1.65→1.14, mobile: 1.35→1.14) ✅ Mar 29, 2026
+- [x] **MAJOR UPDATE:** Reduce base bullet speed from 7.0→4.0 ✅ Mar 30, 2026
+- [x] **MAJOR UPDATE:** Update red multiplier to 1.25 (4.0×1.25=5.0) ✅ Mar 30, 2026
+- [x] **MAJOR UPDATE:** Update purple multiplier to 1.5 (4.0×1.5=6.0) ✅ Mar 30, 2026
 - [x] Set barriers to 0 for levels 9-12 in CONFIG.waves ✅ Mar 29, 2026
 - [x] Reduce purple boss orbiters from 8 to 6 in spawnBoss() ✅ Mar 28, 2026 (previous session)
 - [x] Update analytics_version from 4.0 to 4.2 (gameplay mechanics changed) ✅ Mar 29, 2026
@@ -1784,6 +1788,136 @@ git revert <commit-hash>  # Revert all rebalancing changes
 **Priority:** LOW - Implement after purple rebalancing is validated and AI agent (Stage 3) is complete.
 
 **Branch:** TBD (will create feature/pink_levels_expansion)
+
+---
+
+### PROPOSED: AI Agent v1.0 - Simplified Direct Adjustment System (Mar 30, 2026)
+**Status:** 📋 READY FOR IMPLEMENTATION
+**Purpose:** Simple, predictable AI agent with 3 parameters (speed, shields, counts)
+
+**Core Concept:**
+- **Cycle** = Beat all 3 bosses (green, red, purple) in one playthrough
+- **3 Parameters:** Bullet speed, Shield hits, Enemy counts
+- **Simple rules:** Die 2x in phase = decrease, Complete cycle = increase
+
+---
+
+### Starting Values (Green Phase Baseline)
+
+| Parameter | Value | Range |
+|-----------|-------|-------|
+| Bullet Speed | 4.0 | 3.0 - 7.0 |
+| Shield Hits | 10 | 0 - 20 |
+| Enemy Counts | 3 | 2 - 5 |
+
+*(Red/Purple scale proportionally)*
+
+---
+
+### Adjustment Triggers
+
+**DECREASE (Die 2x in same phase):**
+```
+1st penalty: Shields -5
+2nd penalty: Counts -1
+3rd penalty: Shields -5 (minimum: 0)
+```
+
+**INCREASE (Complete cycle - beat all 3 bosses):**
+```
+1st victory: Shields +5 (AND speed locks - never decreases again)
+2nd victory: Shields +5 (maxed at 20)
+3rd victory: Counts +1
+4th victory: Counts +1 (maxed at 5)
+5th victory: Speed +1.0 (then reset shields/counts to baseline, repeat)
+```
+
+---
+
+### Speed Ratchet (One-Way Lock)
+
+**Before first cycle completion:**
+- Speed can decrease (tutorial mode: 4.0 → 3.0)
+
+**After first cycle completion:**
+- Speed LOCKS at current level
+- Speed can only increase (never decrease)
+- Support params (shields, counts) still flex to help adaptation
+
+---
+
+### Example Progression
+
+```
+Start: Speed 4.0, Shields 10, Counts 3
+
+Die 2x green → Shields 5
+Die 2x green → Counts 2
+Die 2x green → Shields 0 (floor)
+
+Complete cycle 1 → Shields 5 (speed locks at 4.0!)
+Complete cycle 2 → Shields 10
+Complete cycle 3 → Counts 3
+Complete cycle 4 → Shields 15
+Complete cycle 5 → Speed 5.0, Shields reset to 10 (new tier begins)
+```
+
+---
+
+### Implementation
+
+**State to track (localStorage):**
+```javascript
+var bulletSpeed = 4.0;        // 3.0 - 7.0
+var shieldHits = 10;          // 0 - 20
+var enemyCounts = 3;          // 2 - 5
+var cyclesCompleted = 0;      // Total cycles
+var deathsInPhase = {         // Session only
+  green: 0,
+  red: 0,
+  purple: 0
+};
+```
+
+**Adjustment functions:**
+```javascript
+function onPlayerDeath() {
+  deathsInPhase[currentPhase]++;
+  if (deathsInPhase[currentPhase] >= 2) {
+    decreaseDifficulty();
+    deathsInPhase[currentPhase] = 0;
+  }
+}
+
+function onCycleComplete() {
+  cyclesCompleted++;
+  increaseDifficulty();
+}
+```
+
+---
+
+### Known Issues to Fix First
+
+1. **Green Boss Shield Bug:** Boss 1 loses health while shield is active (should be invulnerable)
+2. **Pause Music Bug:** Pressing 'P' to unpause incorrectly toggles music on/off
+
+---
+
+### Next Steps
+
+- [ ] Fix green boss shield bug
+- [ ] Fix pause music toggle bug
+- [ ] Implement 3-parameter tracking (speed, shields, counts)
+- [ ] Add death counter per phase
+- [ ] Add cycle completion counter
+- [ ] Add adjustment functions (increase/decrease difficulty)
+- [ ] Add analytics events for difficulty changes
+- [ ] Test with real gameplay
+
+**Priority:** MEDIUM - Fix bugs first, then implement AI agent
+
+**Note:** See AI_AGENT_ADVANCED_IDEAS.md for complex tier-based system discussions (future iteration)
 
 ---
 
@@ -2813,3 +2947,188 @@ html += "<button onclick='startGameFromModal()'...>🎮 START GAME</button>";
 - ✅ Play Again button restarts game (game files)
 - ✅ Leave Game button returns to index.html (game files)
 - ⏳ Test on deployed GitHub Pages (pending PR merge)
+
+---
+
+## 19. RED BOSS REBALANCING + PERFORMANCE OPTIMIZATIONS (Mar 30, 2026)
+
+### Overview
+Performance optimization sprint focused on reducing stuttering during powerup collection and boss fights, especially in red/purple phases on mobile. Combined bullet count reduction with code-level performance improvements.
+
+### Changes Implemented
+
+#### A. Red Boss Difficulty Rebalancing
+
+**Orbiter Count Reduction:**
+- **Before:** 7 orbiters
+- **After:** 5 orbiters
+- **Impact:** 2.4 bullets/sec from orbiters (was 3.36)
+- **Location:**
+  - game.html line ~4330
+  - game_mobile.html line ~5026
+- **Reduction:** 28% fewer bullets from orbiters
+
+**Rapid Burst Count Reduction:**
+- **Before:** 3 bullets per burst
+- **After:** 2 bullets per burst
+- **Impact:** State 1 now fires 2 bullets over 2.5sec (was 3)
+- **Location:**
+  - game.html line ~4308
+  - game_mobile.html line ~4974
+- **Reduction:** 33% fewer bullets in rapid burst state
+
+**Total Red Boss Bullets:**
+- **Before:** ~5.6-6.4 bullets/second (boss + 7 orbiters + 4 fillers)
+- **After:** ~4.4-5.6 bullets/second (boss + 5 orbiters + 4 fillers)
+- **Overall Reduction:** 19-21% fewer bullets during red boss fights
+
+**Boss Firing States Analysis:**
+- Evaluated eliminating one of 4 attack states for performance
+- **Decision:** Keep all 4 states (RANDOM_FIRE, RAPID_BURST, QUICK_AIMED, AIMED_SHOTS)
+- **Rationale:** State cycling is cheap, only 1 state runs at a time, performance gain would be negligible (~2-3%) vs 25% loss in boss pattern variety
+
+#### B. Deferred Analytics Optimization
+
+**Problem:** Analytics network calls during powerup collection blocked frame rendering, causing stuttering.
+
+**Root Cause:**
+```javascript
+// BEFORE (blocking):
+fireEvent('powerup_collected', { ...data });
+// gtag() call blocks current frame
+```
+
+**Solution:**
+```javascript
+// AFTER (non-blocking):
+setTimeout(function() {
+  fireEvent('powerup_collected', { ...data });
+}, 0);
+// Analytics deferred to next frame (16ms later)
+```
+
+**Impact:**
+- ✅ Zero frame blocking from analytics
+- ✅ All data still collected (no analytics loss)
+- ✅ Events fire 16ms later (imperceptible to user/GA4)
+- ✅ Major improvement when collecting powerups during combat
+
+**Location:**
+- game.html line ~2083
+- game_mobile.html line ~2277
+
+#### C. Alpha Transparency Blinking Optimization
+
+**Problem:** Player blink effect toggled sprite visibility every 3 frames, causing GPU state changes and stuttering, especially during red/purple phases with high object counts.
+
+**Old Implementation:**
+```javascript
+// BEFORE (conditional rendering):
+if (playerVisible) {
+  ctx.drawImage(playerImg, ...);
+}
+// Alternates: draw → skip → draw → skip (GPU state change)
+```
+
+**New Implementation:**
+```javascript
+// AFTER (alpha fade):
+if (playerBlinking) {
+  ctx.globalAlpha = playerVisible ? 1.0 : 0.4;
+}
+ctx.drawImage(playerImg, ...);
+if (playerBlinking) {
+  ctx.globalAlpha = 1.0;
+}
+// Always draws player, just fades to 40% opacity
+```
+
+**Impact:**
+- ✅ No GPU state changes from toggling sprite visibility
+- ✅ Smoother blinking effect (fades instead of disappears)
+- ✅ Better FPS during invincibility frames in red/purple phases
+- ⚠️ Visual change: Player fades to 40% opacity (was completely invisible)
+
+**Location:**
+- game.html line ~7008
+- game_mobile.html line ~7881
+
+### Performance Results
+
+**User-Reported:**
+- ✅ "Less stuttering!" after optimizations applied
+- ✅ Noticeable improvement during powerup collection
+- ✅ Smoother gameplay in red/purple boss fights
+
+**Expected Metrics:**
+- ~15-20% fewer bullets during red boss fights
+- Zero frame blocking from analytics calls
+- Reduced GPU state changes during player invincibility
+- Combined effect: Significantly improved mobile performance
+
+### Files Modified
+- ✅ game.html (desktop): 4 changes
+  - Orbiter count: 7 → 5
+  - Rapid burst: 3 → 2
+  - Deferred analytics in collectPowerup()
+  - Alpha transparency blinking
+- ✅ game_mobile.html (mobile): 4 changes (same as desktop)
+- ✅ NON-X_PAIM_Memory.md (this file)
+
+### Branch Info
+- **Branch:** main (changes applied directly during session)
+- **Testing:** Verified on desktop and mobile during development
+- **Status:** ✅ Deployed and tested
+
+### Analytics Impact
+- **Version bump:** Not required (performance optimization, not gameplay mechanic change)
+- **Data collection:** Unchanged (analytics still fire, just deferred 16ms)
+- **Event timing:** Powerup collection events now fire on next frame instead of current frame
+
+### Revert Instructions
+
+If issues arise, revert with:
+```bash
+# Full revert:
+git log --oneline | grep "red boss\|performance\|analytics\|blinking"
+git revert <commit-hash>
+
+# Manual revert if needed:
+# game.html + game_mobile.html:
+# - Line ~4330/5026: orbiterCount change 5 → 7
+# - Line ~4308/4974: rapidBurstCount change 2 → 3
+# - Line ~2083/2277: Remove setTimeout wrapper from fireEvent
+# - Line ~7008/7881: Restore conditional "if (playerVisible)" check
+```
+
+### Future Optimization Opportunities
+
+**Not Implemented (Evaluated but Declined):**
+- ❌ Eliminate boss firing state (2-3% gain, 25% variety loss)
+- ❌ Reduce blink frequency (less dramatic effect)
+- ❌ Remove blinking entirely (less clear invincibility indicator)
+
+**DO NOT IMPLEMENT (User Rejected - Mar 30, 2026):**
+- ❌ Debounced analytics queue (500ms flush) - User does not want this
+- ❌ Remove screen shake on boss death - User does not want this
+- ❌ Object pooling for bullets - User does not want this attempted
+- ❌ Spatial partitioning for collision detection - User does not want this attempted
+
+**Potential Future Work (Approved for Consideration):**
+- Batch DOM updates in collectPowerup() (reduce updateUI() calls from 3 to 1)
+- Purple boss orbiter reduction (6 → 5, matching red boss)
+- Purple boss rapid burst reduction (4 → 3 bullets)
+
+### Key Learnings
+
+1. **Analytics calls in game loop are expensive** - Even "async" network calls block the main thread during setup
+2. **Conditional rendering causes GPU state changes** - Always drawing with alpha is cheaper than toggling visibility
+3. **Mobile has tighter performance budget** - Optimizations that are invisible on desktop can cause stuttering on mobile
+4. **Combine bullet reduction + code optimization** - Attacking both gameplay and code performance yields best results
+5. **Test one change at a time** - We reverted failed optimizations before, this time we implemented proven changes only
+
+### Notes
+- Purple boss orbiters remain at 6 (already reduced from 8 on Mar 28, 2026)
+- Green boss orbiters remain at 4 (baseline)
+- Boss filler count remains at 4 max (unchanged)
+- Orbiter respawn delay remains at 3 seconds (unchanged, was considered for 4 seconds but not implemented)

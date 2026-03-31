@@ -16,15 +16,19 @@
 | 12    | 8         | **0**     | arrow        | -8 |
 | **TOTAL** | **34** | **0** | | **-34 enemies** |
 
-### 2. Bullet Speeds Reduced
+### 2. Bullet Speeds Reduced (Mar 30, 2026 - Major Reduction)
 
 **Desktop (game.html):**
-- Red Phase: `bulletSpeed *= 1.4` → `1.07` (8.05 → 7.5)
-- Purple Phase: `bulletSpeed *= 1.65` → `1.14` (9.45 → 8.0)
+- Base Speed: `7.0` → `4.0` (-43%)
+- Green Phase: No multiplier → **4.0 px/frame**
+- Red Phase: `bulletSpeed *= 1.25` → **5.0 px/frame** (4.0 × 1.25)
+- Purple Phase: `bulletSpeed *= 1.5` → **6.0 px/frame** (4.0 × 1.5)
 
 **Mobile (game_mobile.html):**
-- Red Phase: `bulletSpeed *= 1.15` → `1.07` (8.05 → 7.5) ✨ NOW MATCHES DESKTOP
-- Purple Phase: `bulletSpeed *= 1.35` → `1.14` (9.45 → 8.0) ✨ NOW MATCHES DESKTOP
+- Base Speed: `7.0` → `4.0` (-43%)
+- Green Phase: No multiplier → **4.0 px/frame**
+- Red Phase: `bulletSpeed *= 1.25` → **5.0 px/frame** (4.0 × 1.25) ✨ MATCHES DESKTOP
+- Purple Phase: `bulletSpeed *= 1.5` → **6.0 px/frame** (4.0 × 1.5) ✨ MATCHES DESKTOP
 
 ### 3. Analytics Version
 - Updated: `'4.0'` → `'4.2'` (both files)
@@ -64,11 +68,11 @@ AFTER: 30 objects (1 boss + 6 orbiters + 5 minions + bullets) (-9%)
 ### Bullet Speed Math (with AI Multiplier)
 | Phase | Base | Min (0.5x) | Max (1.25x) | Range |
 |-------|------|------------|-------------|-------|
-| Green | 7.0  | 3.5        | 8.75        | 0.5-1.25x |
-| Red   | 7.5  | 3.75       | 9.38        | 0.5-1.25x |
-| Purple| 8.0  | 4.0        | **10.0**    | 0.5-1.25x |
+| Green | 4.0  | 2.0        | 5.0         | 0.5-1.25x |
+| Red   | 5.0  | 2.5        | 6.25        | 0.5-1.25x |
+| Purple| 6.0  | 3.0        | **7.5**     | 0.5-1.25x |
 
-**Note:** Max 10.0 is developer's skill ceiling - leaves headroom for AI adjustments.
+**Note:** Dramatically reduced from original speeds (green: 7.0, red: 7.5, purple: 8.0) to improve accessibility.
 
 ---
 
@@ -127,16 +131,18 @@ git push origin feature/dev_tools_fps_bullet_speed
 **Option 2: Manual Revert (Emergency)**
 
 **game.html (desktop):**
-- Line 6158: `bulletSpeed *= 1.14` → `bulletSpeed *= 1.65`
-- Line 6160: `bulletSpeed *= 1.07` → `bulletSpeed *= 1.4`
+- Line 676: `enemyBulletSpeed: 4` → `enemyBulletSpeed: 7`
+- Line 6163: `bulletSpeed *= 1.5` → `bulletSpeed *= 1.14` (or original 1.65)
+- Line 6165: `bulletSpeed *= 1.25` → `bulletSpeed *= 1.07` (or original 1.4)
 - Line 2793: `barrierCount: 0` → `barrierCount: 8` (level 9)
 - Line 2799: `barrierCount: 0` → `barrierCount: 10` (level 10)
 - Line 2805: `barrierCount: 0` → `barrierCount: 8` (level 11)
 - Line 2811: `barrierCount: 0` → `barrierCount: 8` (level 12)
 
 **game_mobile.html (mobile):**
-- Line 6892: `bulletSpeed *= 1.14` → `bulletSpeed *= 1.35`
-- Line 6894: `bulletSpeed *= 1.07` → `bulletSpeed *= 1.15`
+- Line 624: `enemyBulletSpeed: 4` → `enemyBulletSpeed: 7`
+- Line 6907: `bulletSpeed *= 1.5` → `bulletSpeed *= 1.14` (or original 1.35)
+- Line 6909: `bulletSpeed *= 1.25` → `bulletSpeed *= 1.07` (or original 1.15)
 - Line 3071: `barrierCount: 0` → `barrierCount: 8` (level 9)
 - Line 3077: `barrierCount: 0` → `barrierCount: 10` (level 10)
 - Line 3083: `barrierCount: 0` → `barrierCount: 8` (level 11)

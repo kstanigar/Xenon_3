@@ -621,7 +621,7 @@
       // Enemy shooting (starts at level 2)
       enemyShootChance: 0.003,
       enemyShootIncrease: 0.001,
-      enemyBulletSpeed: 7,  // Mobile-optimized (reduced from 8 for touch control playability)
+      enemyBulletSpeed: 4,  // Major reduction (Mar 30, 2026) - green: 4.0, red: 5.0, purple: 6.0
 
       // Boss settings
       boss1ScoreThreshold: 400,
@@ -672,39 +672,41 @@
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // COORDINATED ATTACK SYSTEM (Mar 2026)
+    // COORDINATED ATTACK SYSTEM (Mar 2026, rebalanced Mar 30, 2026)
     // ═══════════════════════════════════════════════════════════════════════════
     // Fixed-rhythm bullet patterns with three attack types: single, sync, rain
-    // Replaces random per-enemy cooldowns with choreographed coordinated attacks
+    // Final optimization: Fixed enemy counts (5/7/9), slow cascades for visual clarity,
+    // increased intervals for AI agent headroom, prioritize rain cascades (75-80%)
+    // Performance target: <6 bullets/sec on mobile, leaves compute budget for adaptive AI
     var ATTACK_CONFIG = {
       green: {
-        interval: 3000,              // Attack every 3 seconds
-        bulletCounts: [1, 2],        // 1-2 bullets per attack
-        rainStagger: 100,            // 100ms between rain bullets
+        interval: 2800,              // Attack every 2.8 seconds
+        bulletCounts: [3],           // FIXED: 3 enemies (25-30% of formation)
+        rainStagger: 180,            // Slow cascade (3 × 180ms = 0.54 sec wave)
         patterns: {
-          single: 0.60,              // 60% single shots
-          sync: 0.25,                // 25% synchronized
-          rain: 0.15                 // 15% rain effect
+          single: 0.15,              // 15% single shots
+          sync: 0.10,                // 10% synchronized (minimal bullet walls)
+          rain: 0.75                 // 75% rain cascades (left-right alternating)
         }
       },
       red: {
-        interval: 2000,              // Attack every 2 seconds (+25% frequency)
-        bulletCounts: [2, 3, 4],     // 2-4 bullets per attack
-        rainStagger: 80,             // 80ms (faster rain)
+        interval: 2200,              // Attack every 2.2 seconds (+10% more frequent than green)
+        bulletCounts: [4],           // FIXED: 4 enemies (25-29% of formation)
+        rainStagger: 150,            // Medium-slow cascade (4 × 150ms = 0.6 sec wave)
         patterns: {
-          single: 0.30,
-          sync: 0.50,
-          rain: 0.20
+          single: 0.10,              // 10% single shots
+          sync: 0.15,                // 15% synchronized
+          rain: 0.75                 // 75% rain cascades
         }
       },
       purple: {
-        interval: 1200,              // Attack every 1.2 seconds (+25% frequency)
-        bulletCounts: [3, 4, 5, 6],  // 3-6 bullets per attack
-        rainStagger: 60,             // 60ms (fastest rain)
+        interval: 1800,              // Attack every 1.8 seconds (+20% more frequent than red)
+        bulletCounts: [5],           // FIXED: 5 enemies (23-31% of formation)
+        rainStagger: 120,            // Medium cascade (5 × 120ms = 0.6 sec wave)
         patterns: {
-          single: 0.20,
-          sync: 0.30,
-          rain: 0.50
+          single: 0.10,              // 10% single shots
+          sync: 0.10,                // 10% synchronized
+          rain: 0.80                 // 80% rain cascades
         }
       }
     };
@@ -2274,17 +2276,20 @@
       // powerup_type values: 'health', 'double_laser', 'shield'.
       // level_number and phase allow drop analysis — e.g. do players collect
       // shields more in red/purple phase? Does powerup collection correlate with survival?
-      fireEvent('powerup_collected', {
-        'ab_music_group': userABGroup,
-        'platform': 'mobile',
-        'powerup_type': powerup.type === POWERUP_TYPES.HEALTH ? 'health'
-          : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
-            : 'shield',
-        'level_number': level,
-        'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
-        'score': score,
-        'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
-      });
+      // OPTIMIZATION (Mar 30, 2026): Defer analytics to next frame to prevent stuttering
+      setTimeout(function() {
+        fireEvent('powerup_collected', {
+          'ab_music_group': userABGroup,
+          'platform': 'mobile',
+          'powerup_type': powerup.type === POWERUP_TYPES.HEALTH ? 'health'
+            : powerup.type === POWERUP_TYPES.DOUBLE_LASER ? 'double_laser'
+              : 'shield',
+          'level_number': level,
+          'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+          'score': score,
+          'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off'
+        });
+      }, 0);
     }
 
     // ============================================
@@ -4970,8 +4975,8 @@
       // Attack state system parameters (Mar 14, 2026 - unpredictable attack patterns)
       // Green: slower, fewer bullets | Red: medium | Purple: fast, many bullets
       // PERFORMANCE OPTIMIZED (Mar 18, 2026): Reduced burst counts for mobile performance
-      // Green: 3→2, Red: 5→3, Purple: 7→4 (33-43% bullet reduction)
-      var rapidBurstCount = isPurpleBoss ? 4 : (isRedBoss ? 3 : 2);
+      // Green: 3→2, Red: 5→3→2 (Mar 30, 2026), Purple: 7→4 (33-50% bullet reduction)
+      var rapidBurstCount = isPurpleBoss ? 4 : (isRedBoss ? 2 : 2);
       var burstInterval = isPurpleBoss ? 150 : (isRedBoss ? 180 : 200); // ms between shots
       var aimedShotCount = isPurpleBoss ? 3 : (isRedBoss ? 2 : 1);
       var quickAimedCount = isPurpleBoss ? 2 : (isRedBoss ? 2 : 1); // Quick aimed shots (state 2)
@@ -5021,9 +5026,9 @@
       if (orbitersInitialized) return;
       orbitersInitialized = true;
 
-      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 28, 2026)
-      // Green: 4, Red: 7 (+3), Purple: 6 (+2 from green, -1 from red)
-      var orbiterCount = boss.isPurpleBoss ? 6 : (boss.isRedBoss ? 7 : 4);
+      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 28, 2026, Mar 30, 2026)
+      // Green: 4, Red: 5 (+1), Purple: 5 (+1, matched to red)
+      var orbiterCount = boss.isPurpleBoss ? 5 : (boss.isRedBoss ? 5 : 4);
       maxOrbiters = orbiterCount;
 
       for (var i = 0; i < orbiterCount; i++) {
@@ -6899,9 +6904,9 @@
     function shootEnemyBullet(enemy, useAimed) {
       var bulletSpeed = CONFIG.enemyBulletSpeed;
       if (purplePhase) {
-        bulletSpeed *= 1.14; // Purple rebalancing (Mar 29, 2026): Reduced from 1.35 to 1.14 (8.0 vs 9.45) - MATCHES DESKTOP
+        bulletSpeed *= 1.5; // Purple: 4.0 × 1.5 = 6.0 (Mar 30, 2026 major reduction)
       } else if (redPhase) {
-        bulletSpeed *= 1.07; // Red rebalancing (Mar 29, 2026): Reduced from 1.15 to 1.07 (7.5 vs 8.05) - MATCHES DESKTOP
+        bulletSpeed *= 1.25; // Red: 4.0 × 1.25 = 5.0 (Mar 30, 2026 major reduction)
       }
 
       // Apply adaptive difficulty multiplier
@@ -7874,9 +7879,14 @@
         ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width * 2, player.height * 2);
       }
 
-      // Draw and move player (only if visible during blink)
-      if (playerVisible) {
-        ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+      // Draw player with alpha transparency when blinking (Mar 30, 2026 - performance optimization)
+      // Always draw player, use alpha fade instead of conditional render to prevent GPU state changes
+      if (playerBlinking) {
+        ctx.globalAlpha = playerVisible ? 1.0 : 0.4; // Fade to 40% opacity when "invisible"
+      }
+      ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+      if (playerBlinking) {
+        ctx.globalAlpha = 1.0; // Reset for other drawing
       }
       // Touch movement + auto-shoot cycle
       updateTouchControls();
