@@ -56,7 +56,7 @@
   ============================================================
   GA4 Property : G-9ECFZ9JBE5
   Platform tag : 'mobile' (sent on all in-game events)
-  Version      : analytics_version: '4.2'
+  Version      : analytics_version: '4.3'
                  Injected automatically by fireEvent() wrapper.
                  Bump ONLY when gameplay mechanics change.
                  Do NOT bump for instrumentation-only changes.
@@ -66,7 +66,7 @@
 
   fireEvent(eventName, params)
     Central wrapper for all GA4 events in this file.
-    Automatically merges { analytics_version: '4.2' } into every
+    Automatically merges { analytics_version: '4.3' } into every
     event payload. Mirrors game.html — keep in sync.
 
   Events fired: identical to game.html (26 events).
@@ -621,7 +621,7 @@
       // Enemy shooting (starts at level 2)
       enemyShootChance: 0.003,
       enemyShootIncrease: 0.001,
-      enemyBulletSpeed: 4,  // Major reduction (Mar 30, 2026) - green: 4.0, red: 5.0, purple: 6.0
+      enemyBulletSpeed: 5,  // Tier 0 baseline (Mar 31, 2026) - green: 5.0, red: 6.25, purple: 7.5
 
       // Boss settings
       boss1ScoreThreshold: 400,
@@ -1028,7 +1028,7 @@
         );
         return;
       }
-      gtag('event', eventName, Object.assign({ analytics_version: '4.2' }, params));
+      gtag('event', eventName, Object.assign({ analytics_version: '4.3' }, params));
     }
 
     // ── Session & User Identity Events ───────────────────────────────────────
@@ -5026,9 +5026,9 @@
       if (orbitersInitialized) return;
       orbitersInitialized = true;
 
-      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 28, 2026, Mar 30, 2026)
-      // Green: 4, Red: 5 (+1), Purple: 5 (+1, matched to red)
-      var orbiterCount = boss.isPurpleBoss ? 5 : (boss.isRedBoss ? 5 : 4);
+      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 28, 2026, Mar 30, 2026, baseline Mar 31, 2026)
+      // Tier 0 baseline - Green: 4, Red: 5 (+1), Purple: 6 (+2)
+      var orbiterCount = boss.isPurpleBoss ? 6 : (boss.isRedBoss ? 5 : 4);
       maxOrbiters = orbiterCount;
 
       for (var i = 0; i < orbiterCount; i++) {

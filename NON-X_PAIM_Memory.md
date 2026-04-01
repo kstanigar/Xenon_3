@@ -1791,209 +1791,147 @@ git revert <commit-hash>  # Revert all rebalancing changes
 
 ---
 
-### AI Agent v1.0 - 7-Tier System (Mar 31, 2026)
-**Status:** ✅ DESIGNED - Implementation plan complete, ready to code
-**Purpose:** Adaptive difficulty using 7 discrete tiers with 3 parameter types
+### AI Agent v1.0 - 7-Tier Discrete Adjustment System (Mar 31, 2026)
+**Status:** ✅ BASELINE ESTABLISHED (Tier 0) | 📋 READY FOR IMPLEMENTATION
+**Purpose:** Adaptive difficulty using 7 discrete tiers (Tier -3 to +3) with speed ratchet
 
 **Core Concept:**
 - **Cycle** = Beat all 3 bosses (green, red, purple) in one playthrough
-- **3 Parameter Types:** Bullet speed, Shield hits, Boss difficulty (orbiters/minions/barriers)
-- **Simple rules:** Die 2x in phase → decrease tier, Complete cycle → increase tier
-- **Speed ratchet:** After 1st cycle, speed locks (can't decrease below Tier 0)
+- **7 Tiers:** Discrete difficulty levels from Tier -3 (Tutorial) to +3 (Expert)
+- **Adjustment Rules:** Die 2x in phase = decrease tier, Complete cycle = increase tier
+- **Speed Ratchet:** After 1st cycle, bullet speed locks (never decreases)
 
 ---
 
 ### 7-Tier System (Tier -3 to +3)
 
-| Tier | Name | Bullet Speed | Shield Hits | Boss Orbiters (1/2/3) | Minion Rate | Barriers |
-|------|------|--------------|-------------|----------------------|-------------|----------|
-| **-3** | Tutorial | 3.5 | 0 | 2 / 3 / 4 | 0x (disabled) | 0 |
-| **-2** | Beginner | 4.0 | 5 | 3 / 4 / 5 | 0.5x (low) | 2 |
-| **-1** | Easy | 4.5 | 10 | 3 / 4 / 5 | 1.0x (normal) | 4 |
-| **0** | Normal | **5.0** | **15** | **4 / 5 / 6** | **1.0x** | **Default*** |
-| **+1** | Challenge | 5.5 | 18 | 4 / 6 / 7 | 1.5x (high) | Default* |
-| **+2** | Veteran | 6.0 | 20 | 5 / 6 / 8 | 1.5x (high) | Default* |
-| **+3** | Expert | 6.5 | 25 | 5 / 7 / 9 | 2.0x (very high) | Default* |
+| Tier | Name | Bullet Speed | Shield Hits | Boss Orbiters | Boss Minions | Barriers |
+|------|------|--------------|-------------|---------------|--------------|----------|
+| **-3** | Tutorial | 3.5 | 0 | 2 / 3 / 4 | Disabled | 0 |
+| **-2** | Beginner | 4.0 | 5 | 3 / 4 / 5 | Low (50%) | 2 |
+| **-1** | Easy | 4.5 | 10 | 3 / 4 / 5 | Normal | 4 |
+| **0** | Normal | **5.0** ✨ | **15** ✨ | **4 / 5 / 6** ✨ | Normal | Default |
+| **+1** | Challenge | 5.5 | 18 | 4 / 6 / 7 | High (150%) | Default |
+| **+2** | Veteran | 6.0 | 20 | 5 / 6 / 8 | High (150%) | Default |
+| **+3** | Expert | 6.5 | 25 | 5 / 7 / 9 | Very High (200%) | Default |
 
-\* **Default barriers:** Keep original LEVEL_WAVES counts for Tier 0+ (mobile optimization). Only reduce for lower tiers.
+✨ **Tier 0 baseline established in commit 183b38e (Mar 31, 2026)**
 
-**Bullet Speed Notes:**
-- Values shown are BASE speeds (green phase)
-- Red phase applies 1.25x multiplier (Tier 0: 5.0 × 1.25 = 6.25)
-- Purple phase applies 1.5x multiplier (Tier 0: 5.0 × 1.5 = 7.5)
-
-**Example speeds by tier:**
-- Tier 0 Normal: Green 5.0, Red 6.25, Purple 7.5 (new baseline)
-- Tier +3 Expert: Green 6.5, Red 8.13, Purple 9.75 (maximum)
-
-**Starting Tier:** 0 (Normal) - New baseline after March 30 bullet speed reduction
+**Notes:**
+- **Bullet Speed:** Base speed for green phase (Red ×1.25, Purple ×1.5)
+- **Shield Hits:** Base hits for green/red (Purple ×1.67)
+- **Boss Orbiters:** Boss 1 / Boss 2 / Boss 3
+- **Boss Minions:** Spawn rate multiplier (1.0x = normal)
+- **Barriers:** "Default" = use LEVEL_WAVES counts (mobile optimization)
 
 ---
 
-### What AI Adjusts
-
-**✅ AI Adjusts:**
-- Bullet speed (base: 3.5 to 6.5)
-- Shield hits (0 to 25)
-- Boss orbiters (varies per boss: 2/3/4 to 5/7/9)
-- Boss minion spawn rates (0x to 2.0x multiplier)
-- Barriers (0 to 4 for lower tiers, default for Tier 0+)
-
-**❌ AI Does NOT Adjust:**
-- Main formations (grid/diamond/V/circle stay fixed)
-- Formation enemy counts (preserved for game balance)
-- Kamikaze counts (stays per LEVEL_WAVES)
-
----
-
-### Adjustment Logic
+### Adjustment Rules
 
 **DECREASE TIER (Die 2x in same phase):**
-- Tier decreases by 1 (min: Tier -3)
-- If speed locked + at/below Tier 0: cannot decrease
-- Immediately applies new tier parameters
+- Tier decreases by 1 (e.g., Tier 0 → Tier -1)
+- Min tier: -3 (Tutorial)
+- If speed locked and at/below Tier 0, no decrease
+- Death counter resets to 0 for that phase
 
 **INCREASE TIER (Complete cycle - beat all 3 bosses):**
-- Tier increases by 1 (max: Tier +3)
-- On 1st cycle: Speed locks (tier can't decrease below 0)
-- Immediately applies new tier parameters
+- Tier increases by 1 (e.g., Tier 0 → Tier +1)
+- Max tier: +3 (Expert)
+- **After 1st cycle:** Speed locks permanently (see Speed Ratchet below)
 
 ---
 
-### localStorage State
+### Speed Ratchet (One-Way Lock)
 
+**Before first cycle completion:**
+- Tiers can move freely: -3 to +3
+- Speed can decrease (e.g., Tier 0 → Tier -1)
+
+**After first cycle completion:**
+- **Speed locks at current value** (never decreases again)
+- Tiers can still decrease, but only if above Tier 0
+- Example: At Tier +2, can drop to Tier +1/0, but not below 0
+- Support params (shields, orbiters, minions) still adjust with tier
+
+---
+
+### Example Progression
+
+```
+Start: Tier 0 (Speed 5.0, Shields 15, Orbiters 4/5/6)
+
+Die 2x green → Tier -1 (Speed 4.5, Shields 10, Orbiters 3/4/5)
+Die 2x green → Tier -2 (Speed 4.0, Shields 5, Orbiters 3/4/5)
+
+Complete cycle 1 → Tier -1 (speed locks at 4.5!)
+Complete cycle 2 → Tier 0 (5.0, 15, 4/5/6)
+Complete cycle 3 → Tier +1 (5.5, 18, 4/6/7)
+Complete cycle 4 → Tier +2 (6.0, 20, 5/6/8)
+Complete cycle 5 → Tier +3 (6.5, 25, 5/7/9) - MAX TIER
+```
+
+---
+
+### Implementation Summary
+
+**State to track (localStorage):**
 ```javascript
-var currentTier = 0;              // -3 to +3 (default: 0)
-var cyclesCompleted = 0;          // Total cycles completed
-var speedLocked = false;          // True after 1st cycle
-var deathsInPhase = {             // Session only (not persisted)
+var currentTier = 0;                    // -3 to +3 (starts at Tier 0)
+var cyclesCompleted = 0;                // Total cycles completed
+var speedLocked = false;                // True after 1st cycle
+var deathsInPhase = {                   // Session only (reset on game start)
   green: 0,
   red: 0,
   purple: 0
 };
 ```
 
-**Keys:**
-- `nonx_ai_tier` - Current difficulty tier
-- `nonx_ai_cycles_completed` - Total cycles
-- `nonx_ai_speed_locked` - Speed lock flag
-
----
-
-### Implementation Summary
-
-**Files to modify:** game.html + game_mobile.html (identical changes)
-**Total additions:** ~200 lines per file
-**Estimated time:** ~3 hours
-
-**Key integration points:**
-1. Add TIER_CONFIG object with 7 tier definitions
-2. Replace CONFIG.enemyBulletSpeed with tier-based speed
-3. Replace hardcoded shield hits (15/25) with tier-based hits
-4. Modify spawnBoss() to use tier-based orbiter counts
-5. Modify minion spawning to use tier-based spawn rates
-6. Add getBarrierCountForLevel() for tier-based barriers
-7. Add death counter in player death handler
-8. Add tier increase in Boss 3 defeat handler
-9. Add decreaseTier(), increaseTier(), saveTierState() functions
-10. Add dev mode display showing current tier
-
-**Analytics:** New event `ai_difficulty_adjusted` with tier metadata
-
-**Full implementation plan:** `/Users/keithstanigar/.claude/plans/quiet-brewing-deer.md`
-
----
-
-### Known Issues Fixed (Mar 31, 2026)
-
-1. ✅ **Green Boss Shield Bug:** Fixed - Boss 1 now fully invulnerable during shield phase
-2. ✅ **Pause Music Bug:** Fixed - 'P' key respects localStorage music setting
-
-**Status:** All P1 bugs resolved, ready for AI Agent implementation
-
----
-
-### Next Steps
-
-**When limit resets:**
-1. Update baseline to Tier 0 (5.0 speed, 15 shields) OR
-2. Implement full AI Agent system (~3 hours)
-
-**After AI Agent validated (2-4 weeks):**
-1. Implement tier-based scoring system (see DEFERRED section above)
-2. Launch Pink Levels (13-15) + Survey Triple Laser
-3. Release all as "Easter Egg Update"
-
-**Priority:** HIGH - Design complete, ready to code
-
-**See Also:**
-- AI_AGENT_ADVANCED_IDEAS.md - Future iteration concepts
-- ADAPTIVE_DIFFICULTY_DESIGN.md Section 14 - Tier-based scoring (deferred)
-
----
-
-### DEFERRED: Tier-Based Scoring System (Phase 2 of AI Agent)
-**Status:** 🎨 PLANNED - Implement after Pink Levels (13-15) + Survey Triple Laser
-**Created:** March 30, 2026
-**Purpose:** Maintain leaderboard fairness when AI agent adjusts difficulty
-
-**Problem:**
-After bullet speed reduction (4.0/5.0/6.0), game became too easy. Tester achieved #1 on first completion. New baseline (Tier 0) needs to be 5.0/6.0/7.0, but AI agent will lower difficulty for struggling players. Without score adjustments, easy-mode players could dominate leaderboard.
-
-**Solution:**
-Apply score multipliers based on difficulty tier:
-- **Tier -3 (Tutorial):** 0.50x final score, no bonuses
-- **Tier -1 (Easy):** 0.80x final score, no bonuses
-- **Tier 0 (Normal):** 1.00x final score, standard bonuses (NEW BASELINE)
-- **Tier +1 (Challenging):** 1.20x final score, enhanced bonuses (+500 pts)
-- **Tier +2 (Veteran):** 1.45x final score, enhanced bonuses (+1000 pts)
-- **Tier +3 (Expert):** 1.75x final score, enhanced bonuses (+2000 pts)
-
-**Key Design Decisions (User Feedback - Mar 30, 2026):**
-1. **Expert multiplier reduced:** 2.0x → 1.75x (user: "2.0x is too high")
-2. **Silent system:** No tier displays to players, scoring happens behind-the-scenes
-3. **Avoid player confusion:** Players never see "You are in Tier -1" message
-4. **Natural experience:** AI adjusts difficulty invisibly, scores reflect skill naturally
-
-**Why Deferred:**
-- Current priority: Fix P1 bugs (green boss shield, pause music, curving bullets)
-- Need to validate new Tier 0 baseline (5.0/6.0/7.0) with real player data
-- AI agent v1.0 should be tested independently before adding score complexity
-- Natural milestone: Launch with Pink Levels (13-15) + Survey Triple Laser as "Easter Egg Update"
-
-**Implementation Plan:**
-```
-Phase 1 (Current):
-- Fix P1 bugs ✅
-- Implement AI agent v1.0 (simple tier adjustment)
-- Validate new baseline difficulty
-- Collect 2-4 weeks of player data
-
-Phase 2 (Future - Easter Egg Update):
-- Implement Pink Levels 13-15
-- Add Survey Triple Laser unlock
-- Implement Tier-Based Scoring System
-- Launch all features together
+**Tier lookup structure:**
+```javascript
+var TIER_CONFIG = {
+  '-3': { bulletSpeed: 3.5, shieldHits: 0, bossOrbiters: [2,3,4], minionRate: 0, barriers: 0 },
+  '0':  { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4,5,6], minionRate: 1.0, barriers: -1 },
+  '3':  { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [5,7,9], minionRate: 2.0, barriers: -1 }
+  // ... (see full table in .claude/plans/quiet-brewing-deer.md)
+};
 ```
 
-**Full Design Documentation:**
-See ADAPTIVE_DIFFICULTY_DESIGN.md Section 14 for:
-- Complete multiplier table (all 7 tiers)
-- Bonus structure by tier
-- Example score calculations
-- Implementation pseudocode
-- Firebase schema updates
-- Analytics events
-- Testing checklist
+**Core functions:**
+- `decreaseTier(phase)` - Called when 2 deaths in same phase
+- `increaseTier()` - Called when cycle complete (all 3 bosses beaten)
+- `saveTierState()` - Persist tier/cycles/speedLocked to localStorage
 
-**Example Impact:**
-| Tier | Base Score | Bonuses | Final Score | Leaderboard |
-|------|------------|---------|-------------|-------------|
-| -1 Easy | 10,000 | 0 (disabled) | 8,000 | Bottom 40% |
-| 0 Normal | 10,000 | +5,000 | 15,000 | Middle 50% |
-| +3 Expert | 10,000 | +7,000 | 29,750 | Top 5% |
+**See:** `.claude/plans/quiet-brewing-deer.md` for complete implementation plan (~200 lines per file)
 
-**Result:** Expert tier player earns 1.98x more than Normal tier player. Lower tier players unlikely to reach top 25.
+---
+
+### Current Status (Mar 31, 2026)
+
+**✅ COMPLETED:**
+- [x] Fix green boss shield bug (PR #84)
+- [x] Fix pause music toggle bug (PR #84)
+- [x] Establish Tier 0 baseline (commit 183b38e)
+  - Bullet speed: 5.0 base (green 5.0, red 6.25, purple 7.5)
+  - Shield hits: 15 base (green/red 15, purple 25)
+  - Boss orbiters: 4/5/6 (Boss 1/2/3)
+
+**📋 NEXT:**
+- [ ] Implement 7-tier tracking system (~200 lines per file)
+- [ ] Add TIER_CONFIG lookup object
+- [ ] Add death counter logic (on player death)
+- [ ] Add tier increase logic (on Boss 3 defeat)
+- [ ] Add decreaseTier() and increaseTier() functions
+- [ ] Apply tier-based bullet speed in shootEnemyBullet()
+- [ ] Apply tier-based shield hits in collision detection
+- [ ] Apply tier-based boss orbiters in spawnBoss()
+- [ ] Apply tier-based minion spawn rates
+- [ ] Apply tier-based barrier counts (or use defaults)
+- [ ] Add analytics event: ai_difficulty_adjusted
+- [ ] Add dev mode display for AI state
+
+**Priority:** HIGH - P1 bugs fixed, baseline established, ready to implement
+
+**Note:** See AI_AGENT_ADVANCED_IDEAS.md for complex tier-based system discussions (future iteration)
 
 ---
 
