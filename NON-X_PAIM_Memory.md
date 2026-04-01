@@ -1791,131 +1791,145 @@ git revert <commit-hash>  # Revert all rebalancing changes
 
 ---
 
-### PROPOSED: AI Agent v1.0 - Simplified Direct Adjustment System (Mar 30, 2026)
-**Status:** 📋 READY FOR IMPLEMENTATION
-**Purpose:** Simple, predictable AI agent with 3 parameters (speed, shields, counts)
+### AI Agent v1.0 - 7-Tier Discrete Adjustment System (Mar 31, 2026)
+**Status:** ✅ BASELINE ESTABLISHED (Tier 0) | 📋 READY FOR IMPLEMENTATION
+**Purpose:** Adaptive difficulty using 7 discrete tiers (Tier -3 to +3) with speed ratchet
 
 **Core Concept:**
 - **Cycle** = Beat all 3 bosses (green, red, purple) in one playthrough
-- **3 Parameters:** Bullet speed, Shield hits, Enemy counts
-- **Simple rules:** Die 2x in phase = decrease, Complete cycle = increase
+- **7 Tiers:** Discrete difficulty levels from Tier -3 (Tutorial) to +3 (Expert)
+- **Adjustment Rules:** Die 2x in phase = decrease tier, Complete cycle = increase tier
+- **Speed Ratchet:** After 1st cycle, bullet speed locks (never decreases)
 
 ---
 
-### Starting Values (Green Phase Baseline)
+### 7-Tier System (Tier -3 to +3)
 
-| Parameter | Value | Range |
-|-----------|-------|-------|
-| Bullet Speed | 4.0 | 3.0 - 7.0 |
-| Shield Hits | 10 | 0 - 20 |
-| Enemy Counts | 3 | 2 - 5 |
+| Tier | Name | Bullet Speed | Shield Hits | Boss Orbiters | Boss Minions | Barriers |
+|------|------|--------------|-------------|---------------|--------------|----------|
+| **-3** | Tutorial | 3.5 | 0 | 2 / 3 / 4 | Disabled | 0 |
+| **-2** | Beginner | 4.0 | 5 | 3 / 4 / 5 | Low (50%) | 2 |
+| **-1** | Easy | 4.5 | 10 | 3 / 4 / 5 | Normal | 4 |
+| **0** | Normal | **5.0** ✨ | **15** ✨ | **4 / 5 / 6** ✨ | Normal | Default |
+| **+1** | Challenge | 5.5 | 18 | 4 / 6 / 7 | High (150%) | Default |
+| **+2** | Veteran | 6.0 | 20 | 5 / 6 / 8 | High (150%) | Default |
+| **+3** | Expert | 6.5 | 25 | 5 / 7 / 9 | Very High (200%) | Default |
 
-*(Red/Purple scale proportionally)*
+✨ **Tier 0 baseline established in commit 183b38e (Mar 31, 2026)**
+
+**Notes:**
+- **Bullet Speed:** Base speed for green phase (Red ×1.25, Purple ×1.5)
+- **Shield Hits:** Base hits for green/red (Purple ×1.67)
+- **Boss Orbiters:** Boss 1 / Boss 2 / Boss 3
+- **Boss Minions:** Spawn rate multiplier (1.0x = normal)
+- **Barriers:** "Default" = use LEVEL_WAVES counts (mobile optimization)
 
 ---
 
-### Adjustment Triggers
+### Adjustment Rules
 
-**DECREASE (Die 2x in same phase):**
-```
-1st penalty: Shields -5
-2nd penalty: Counts -1
-3rd penalty: Shields -5 (minimum: 0)
-```
+**DECREASE TIER (Die 2x in same phase):**
+- Tier decreases by 1 (e.g., Tier 0 → Tier -1)
+- Min tier: -3 (Tutorial)
+- If speed locked and at/below Tier 0, no decrease
+- Death counter resets to 0 for that phase
 
-**INCREASE (Complete cycle - beat all 3 bosses):**
-```
-1st victory: Shields +5 (AND speed locks - never decreases again)
-2nd victory: Shields +5 (maxed at 20)
-3rd victory: Counts +1
-4th victory: Counts +1 (maxed at 5)
-5th victory: Speed +1.0 (then reset shields/counts to baseline, repeat)
-```
+**INCREASE TIER (Complete cycle - beat all 3 bosses):**
+- Tier increases by 1 (e.g., Tier 0 → Tier +1)
+- Max tier: +3 (Expert)
+- **After 1st cycle:** Speed locks permanently (see Speed Ratchet below)
 
 ---
 
 ### Speed Ratchet (One-Way Lock)
 
 **Before first cycle completion:**
-- Speed can decrease (tutorial mode: 4.0 → 3.0)
+- Tiers can move freely: -3 to +3
+- Speed can decrease (e.g., Tier 0 → Tier -1)
 
 **After first cycle completion:**
-- Speed LOCKS at current level
-- Speed can only increase (never decrease)
-- Support params (shields, counts) still flex to help adaptation
+- **Speed locks at current value** (never decreases again)
+- Tiers can still decrease, but only if above Tier 0
+- Example: At Tier +2, can drop to Tier +1/0, but not below 0
+- Support params (shields, orbiters, minions) still adjust with tier
 
 ---
 
 ### Example Progression
 
 ```
-Start: Speed 4.0, Shields 10, Counts 3
+Start: Tier 0 (Speed 5.0, Shields 15, Orbiters 4/5/6)
 
-Die 2x green → Shields 5
-Die 2x green → Counts 2
-Die 2x green → Shields 0 (floor)
+Die 2x green → Tier -1 (Speed 4.5, Shields 10, Orbiters 3/4/5)
+Die 2x green → Tier -2 (Speed 4.0, Shields 5, Orbiters 3/4/5)
 
-Complete cycle 1 → Shields 5 (speed locks at 4.0!)
-Complete cycle 2 → Shields 10
-Complete cycle 3 → Counts 3
-Complete cycle 4 → Shields 15
-Complete cycle 5 → Speed 5.0, Shields reset to 10 (new tier begins)
+Complete cycle 1 → Tier -1 (speed locks at 4.5!)
+Complete cycle 2 → Tier 0 (5.0, 15, 4/5/6)
+Complete cycle 3 → Tier +1 (5.5, 18, 4/6/7)
+Complete cycle 4 → Tier +2 (6.0, 20, 5/6/8)
+Complete cycle 5 → Tier +3 (6.5, 25, 5/7/9) - MAX TIER
 ```
 
 ---
 
-### Implementation
+### Implementation Summary
 
 **State to track (localStorage):**
 ```javascript
-var bulletSpeed = 4.0;        // 3.0 - 7.0
-var shieldHits = 10;          // 0 - 20
-var enemyCounts = 3;          // 2 - 5
-var cyclesCompleted = 0;      // Total cycles
-var deathsInPhase = {         // Session only
+var currentTier = 0;                    // -3 to +3 (starts at Tier 0)
+var cyclesCompleted = 0;                // Total cycles completed
+var speedLocked = false;                // True after 1st cycle
+var deathsInPhase = {                   // Session only (reset on game start)
   green: 0,
   red: 0,
   purple: 0
 };
 ```
 
-**Adjustment functions:**
+**Tier lookup structure:**
 ```javascript
-function onPlayerDeath() {
-  deathsInPhase[currentPhase]++;
-  if (deathsInPhase[currentPhase] >= 2) {
-    decreaseDifficulty();
-    deathsInPhase[currentPhase] = 0;
-  }
-}
-
-function onCycleComplete() {
-  cyclesCompleted++;
-  increaseDifficulty();
-}
+var TIER_CONFIG = {
+  '-3': { bulletSpeed: 3.5, shieldHits: 0, bossOrbiters: [2,3,4], minionRate: 0, barriers: 0 },
+  '0':  { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4,5,6], minionRate: 1.0, barriers: -1 },
+  '3':  { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [5,7,9], minionRate: 2.0, barriers: -1 }
+  // ... (see full table in .claude/plans/quiet-brewing-deer.md)
+};
 ```
 
+**Core functions:**
+- `decreaseTier(phase)` - Called when 2 deaths in same phase
+- `increaseTier()` - Called when cycle complete (all 3 bosses beaten)
+- `saveTierState()` - Persist tier/cycles/speedLocked to localStorage
+
+**See:** `.claude/plans/quiet-brewing-deer.md` for complete implementation plan (~200 lines per file)
+
 ---
 
-### Known Issues to Fix First
+### Current Status (Mar 31, 2026)
 
-1. **Green Boss Shield Bug:** Boss 1 loses health while shield is active (should be invulnerable)
-2. **Pause Music Bug:** Pressing 'P' to unpause incorrectly toggles music on/off
+**✅ COMPLETED:**
+- [x] Fix green boss shield bug (PR #84)
+- [x] Fix pause music toggle bug (PR #84)
+- [x] Establish Tier 0 baseline (commit 183b38e)
+  - Bullet speed: 5.0 base (green 5.0, red 6.25, purple 7.5)
+  - Shield hits: 15 base (green/red 15, purple 25)
+  - Boss orbiters: 4/5/6 (Boss 1/2/3)
 
----
+**📋 NEXT:**
+- [ ] Implement 7-tier tracking system (~200 lines per file)
+- [ ] Add TIER_CONFIG lookup object
+- [ ] Add death counter logic (on player death)
+- [ ] Add tier increase logic (on Boss 3 defeat)
+- [ ] Add decreaseTier() and increaseTier() functions
+- [ ] Apply tier-based bullet speed in shootEnemyBullet()
+- [ ] Apply tier-based shield hits in collision detection
+- [ ] Apply tier-based boss orbiters in spawnBoss()
+- [ ] Apply tier-based minion spawn rates
+- [ ] Apply tier-based barrier counts (or use defaults)
+- [ ] Add analytics event: ai_difficulty_adjusted
+- [ ] Add dev mode display for AI state
 
-### Next Steps
-
-- [ ] Fix green boss shield bug
-- [ ] Fix pause music toggle bug
-- [ ] Implement 3-parameter tracking (speed, shields, counts)
-- [ ] Add death counter per phase
-- [ ] Add cycle completion counter
-- [ ] Add adjustment functions (increase/decrease difficulty)
-- [ ] Add analytics events for difficulty changes
-- [ ] Test with real gameplay
-
-**Priority:** MEDIUM - Fix bugs first, then implement AI agent
+**Priority:** HIGH - P1 bugs fixed, baseline established, ready to implement
 
 **Note:** See AI_AGENT_ADVANCED_IDEAS.md for complex tier-based system discussions (future iteration)
 
