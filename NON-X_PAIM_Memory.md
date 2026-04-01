@@ -1810,19 +1810,21 @@ git revert <commit-hash>  # Revert all rebalancing changes
 | **-3** | Tutorial | 3.5 | 0 | 2 / 3 / 4 | Disabled | 0 |
 | **-2** | Beginner | 4.0 | 5 | 3 / 4 / 5 | Low (50%) | 2 |
 | **-1** | Easy | 4.5 | 10 | 3 / 4 / 5 | Normal | 4 |
-| **0** | Normal | **5.0** ✨ | **15** ✨ | **4 / 5 / 6** ✨ | Normal | Default |
-| **+1** | Challenge | 5.5 | 18 | 4 / 6 / 7 | High (150%) | Default |
-| **+2** | Veteran | 6.0 | 20 | 5 / 6 / 8 | High (150%) | Default |
-| **+3** | Expert | 6.5 | 25 | 5 / 7 / 9 | Very High (200%) | Default |
+| **0** | Normal | **5.0** ✨ | **15** ✨ | **4 / 5 / 6** 🔒 | Normal | Default |
+| **+1** | Challenge | 5.5 | 18 | **4 / 5 / 6** 🔒 | High (150%) | Default |
+| **+2** | Veteran | 6.0 | 20 | **4 / 5 / 6** 🔒 | High (150%) | Default |
+| **+3** | Expert | 6.5 | 25 | **4 / 5 / 6** 🔒 | Very High (200%) | Default |
 
 ✨ **Tier 0 baseline established in commit 183b38e (Mar 31, 2026)**
+🔒 **Orbiter cap:** 4/5/6 max for all tiers ≥0 (mobile performance - iPhone 12 stutters with current baseline)
 
 **Notes:**
 - **Bullet Speed:** Base speed for green phase (Red ×1.25, Purple ×1.5)
 - **Shield Hits:** Base hits for green/red (Purple ×1.67)
-- **Boss Orbiters:** Boss 1 / Boss 2 / Boss 3
+- **Boss Orbiters:** Boss 1 / Boss 2 / Boss 3 - **CAPPED at 4/5/6** (Tier 0+)
 - **Boss Minions:** Spawn rate multiplier (1.0x = normal)
 - **Barriers:** "Default" = use LEVEL_WAVES counts (mobile optimization)
+- **Upper tier scaling:** Speed, shields, and minions increase; orbiters stay capped for performance
 
 ---
 
