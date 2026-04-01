@@ -2169,7 +2169,411 @@ Reward players for completing game on higher difficulties:
 
 ---
 
-## 14. Contact & Support
+## 14. Future Enhancement: Tier-Based Scoring System
+
+### 14.1 Overview
+
+**Status:** 🎨 DEFERRED - Implement after Pink Levels (13-15) + Survey Triple Laser
+**Created:** March 30, 2026
+**Implementation Priority:** LOW (Phase 2 of AI agent)
+**Design Philosophy:** Silent system - no tier displays to players, scoring adjustments happen behind-the-scenes
+
+---
+
+### 14.2 Problem Statement
+
+After bullet speed reduction (4.0/5.0/6.0), game became too easy. Tester achieved #1 leaderboard on first completion. New baseline (Tier 0) needs to be 5.0/6.0/7.0, but this creates leaderboard fairness issue:
+
+**Issue:** If AI agent lowers difficulty for struggling players, they could complete game on easier settings and dominate leaderboard.
+
+**Solution:** Implement tier-based score multipliers that:
+- Reduce scoring for lower tiers (easier = fewer points)
+- Increase scoring for higher tiers (harder = more points)
+- Maintain leaderboard competitiveness
+- Keep system transparent in design docs but silent to players
+
+---
+
+### 14.3 Adjusted Score Multiplier Table
+
+**User Feedback:** Expert 2.0x is too generous, adjusted to 1.75x with proportional scaling.
+
+| Tier | Name | Difficulty | Final Score Multiplier | Reasoning |
+|------|------|------------|----------------------|-----------|
+| **-3** | Tutorial | Easiest | **0.50x** | Learning mode, not competitive |
+| **-2** | Beginner | Very Easy | **0.65x** | Needs significant help |
+| **-1** | Easy | Easy | **0.80x** | Below baseline |
+| **0** | Normal | Baseline | **1.00x** | New baseline (5.0/6.0/7.0 speeds) |
+| **+1** | Challenging | Hard | **1.20x** | Above baseline (was 1.25x) |
+| **+2** | Veteran | Very Hard | **1.45x** | Expert play (was 1.50x) |
+| **+3** | Expert | Extreme | **1.75x** | Top tier mastery (was 2.00x) |
+
+**Key Adjustment:** Reduced top-tier multipliers to prevent score inflation while maintaining competitive advantage for skilled players.
+
+---
+
+### 14.4 Bonus Structure by Tier
+
+#### Lower Tiers (-3 to -1): Reduced Bonuses
+```javascript
+// No replay bonus multipliers
+var replayBonus = 1; // Disabled (normally 2x/3x/4x/5x)
+
+// No level completion bonuses
+var levelBonus = 0; // Disabled (normally +50/+100/+150/+200)
+
+// Base scoring still active
+// - Enemy kills: ✅
+// - Powerups: ✅
+// - Boss defeat base points: ✅
+```
+
+**Rationale:** Prevents easy mode from dominating leaderboard via replay farming or completion bonuses.
+
+#### Tier 0 (Normal): Standard Bonuses
+```javascript
+// All bonuses active (current implementation)
+var replayBonus = Math.min(gamesWon + 2, 5); // 2x/3x/4x/5x
+var levelBonus = getLevelCompletionBonus(level); // +50/+100/+150/+200
+```
+
+#### Higher Tiers (+1 to +3): Enhanced Bonuses
+```javascript
+// Standard replay bonus PLUS tier completion bonus
+var tierCompletionBonus = {
+  '1': 500,   // Challenging: +500 points
+  '2': 1000,  // Veteran: +1000 points
+  '3': 2000   // Expert: +2000 points
+};
+
+// Added when player defeats final boss
+if (gameCompleted && currentTier > 0) {
+  score += tierCompletionBonus[currentTier];
+}
+```
+
+**Rationale:** Reward skilled players with flat bonus + multiplier for completing harder difficulties.
+
+---
+
+### 14.5 Example Score Calculations
+
+**Scenario:** Player completes game with 10,000 base points
+
+| Tier | Base Points | Bonuses | Subtotal | Multiplier | Final Score | Leaderboard Position |
+|------|-------------|---------|----------|------------|-------------|---------------------|
+| -3 Tutorial | 10,000 | 0 (disabled) | 10,000 | 0.50x | **5,000** | Bottom 25% |
+| -1 Easy | 10,000 | 0 (disabled) | 10,000 | 0.80x | **8,000** | Bottom 40% |
+| 0 Normal | 10,000 | +5,000 | 15,000 | 1.00x | **15,000** | Middle 50% |
+| +1 Challenge | 10,000 | +5,500 | 15,500 | 1.20x | **18,600** | Top 30% |
+| +2 Veteran | 10,000 | +6,000 | 16,000 | 1.45x | **23,200** | Top 15% |
+| +3 Expert | 10,000 | +7,000 | 17,000 | 1.75x | **29,750** | Top 5% |
+
+**Result:** Expert tier player earns 1.98x more than Normal tier player (not 2.0x, per user feedback). Lower tier players unlikely to reach top 25.
+
+---
+
+### 14.6 Implementation Pseudocode
+
+```javascript
+// ═══════════════════════════════════════════════════════════════════════════
+// TIER-BASED SCORING SYSTEM (DEFERRED - Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Score multiplier lookup table
+ * Applied to final score after all bonuses
+ */
+var TIER_MULTIPLIERS = {
+  '-3': 0.50,  // Tutorial
+  '-2': 0.65,  // Beginner
+  '-1': 0.80,  // Easy
+  '0': 1.00,   // Normal (baseline)
+  '1': 1.20,   // Challenging (adjusted from 1.25)
+  '2': 1.45,   // Veteran (adjusted from 1.50)
+  '3': 1.75    // Expert (adjusted from 2.00)
+};
+
+/**
+ * Tier completion bonuses (only for positive tiers)
+ */
+var TIER_COMPLETION_BONUS = {
+  '1': 500,    // Challenging
+  '2': 1000,   // Veteran
+  '3': 2000    // Expert
+};
+
+/**
+ * Check if bonuses are enabled for current tier
+ * Lower tiers (-3 to -1) have bonuses disabled
+ */
+function areBonusesEnabled() {
+  return currentTier >= 0;
+}
+
+/**
+ * Calculate final score with tier adjustments
+ * Called when submitting to leaderboard
+ */
+function calculateFinalScore(baseScore, replayCount, gameCompleted) {
+  var finalScore = baseScore;
+
+  // Apply replay bonus if enabled
+  if (areBonusesEnabled() && replayCount > 0) {
+    var replayMultiplier = Math.min(replayCount + 2, 5); // 2x/3x/4x/5x
+    finalScore *= replayMultiplier;
+  }
+
+  // Add tier completion bonus for higher tiers
+  if (gameCompleted && currentTier > 0) {
+    var tierBonus = TIER_COMPLETION_BONUS[currentTier.toString()] || 0;
+    finalScore += tierBonus;
+  }
+
+  // Apply tier multiplier (main balancing factor)
+  var tierMultiplier = TIER_MULTIPLIERS[currentTier.toString()] || 1.0;
+  finalScore = Math.floor(finalScore * tierMultiplier);
+
+  return finalScore;
+}
+```
+
+---
+
+### 14.7 Silent System Design (No Player-Facing UI)
+
+**User Decision:** Keep scoring system behind-the-scenes to avoid overwhelming players.
+
+**What players DON'T see:**
+- ❌ No tier badges or labels during gameplay
+- ❌ No "Difficulty: 🟠 Challenge (1.20x)" display
+- ❌ No tier selection UI (AI adjusts silently)
+- ❌ No multiplier notifications on game over screen
+
+**What players DO experience:**
+- ✅ Game feels appropriately challenging (AI adjusts difficulty)
+- ✅ Scores reflect their actual skill level (multipliers applied silently)
+- ✅ Leaderboard rankings are fair (lower tier scores naturally lower)
+- ✅ Replay bonuses and completion bonuses work as expected (if tier allows)
+
+**Internal tracking only:**
+- Store `currentTier` in localStorage
+- Submit tier to Firebase with leaderboard entry
+- Track tier in GA4 analytics
+- Never display tier value to players
+
+---
+
+### 14.8 Firebase Schema Update
+
+```javascript
+// Leaderboard submission includes tier metadata
+{
+  player_id: "uuid-here",
+  instagram: "PlayerName",
+  score: 18600,              // Already multiplied by tier
+  tier: 1,                   // NEW: Difficulty tier when score achieved
+  raw_score: 15500,          // NEW: Score before tier multiplier (optional)
+  platform: "mobile",
+  movement_group: "A",
+  date: timestamp
+}
+```
+
+**Note:** `tier` field only used for analytics and debugging, never displayed to players.
+
+---
+
+### 14.9 Analytics Events
+
+```javascript
+// Add tier to existing game_complete event
+fireEvent('game_complete', {
+  final_score: 18600,
+  difficulty_tier: 1,           // NEW: Current tier at completion
+  tier_multiplier: 1.20,        // NEW: Multiplier applied
+  bonuses_enabled: true,        // NEW: Were bonuses active?
+  tier_completion_bonus: 500    // NEW: Flat bonus added
+});
+```
+
+---
+
+### 14.10 Why Defer Implementation?
+
+**Reasons to implement later:**
+1. **Current Priority:** Fix bugs first (green boss shield, pause music toggle, curving bullets)
+2. **Baseline Needs Validation:** Need real player data on new Tier 0 (5.0/6.0/7.0) before adding multipliers
+3. **AI Agent v1.0 First:** Simple tier adjustment system needs testing before adding score complexity
+4. **Pink Levels Integration:** Scoring system should launch with levels 13-15 (expanded content)
+5. **Survey Triple Laser:** Natural milestone to introduce scoring changes alongside new reward
+
+**Implementation Timeline:**
+```
+Phase 1 (Current):
+- Fix P1 bugs ✅
+- Implement AI agent v1.0 (simple tier adjustment)
+- Validate new baseline difficulty (Tier 0)
+- Collect 2-4 weeks of player data
+
+Phase 2 (Future - with Pink Levels):
+- Implement levels 13-15 (pink phase)
+- Add survey triple laser unlock
+- Implement tier-based scoring system
+- Launch all features together as "Easter Egg Update"
+```
+
+---
+
+### 14.11 User Concern: Player Confusion
+
+**User Feedback:** "Players will see their tier but may not understand why they are in a lower tier. Some players will leave the game if they are in a lower tier with no explanation."
+
+**Solution:** Don't show tier to players at all.
+
+**Design Decision:**
+- AI adjusts difficulty silently in background
+- Players never see "You are in Tier -1"
+- Players just experience game getting easier/harder naturally
+- Score multipliers applied invisibly at game over
+- No explanation needed because system is transparent to players
+
+**Alternative (if transparency desired later):**
+- Add "How-To" section explaining adaptive difficulty
+- Simple message: "Game adjusts to your skill level for best experience"
+- No mention of tiers, multipliers, or scoring penalties
+
+---
+
+### 14.12 Integration with AI Agent v1.0
+
+**AI Agent adjusts tier based on cross-session deaths:**
+
+```javascript
+// Persistent tracking across playthroughs
+var persistentStats = {
+  deathsInGreen: 0,
+  deathsInRed: 0,
+  deathsInPurple: 0,
+  cyclesCompleted: 0,
+  currentTier: 0  // Starts at Tier 0 (Normal)
+};
+
+// Phase-weighted thresholds
+var DEATH_THRESHOLDS = {
+  green: 3,   // Can continue from level, less punishing
+  red: 2,     // Back to L1, help faster
+  purple: 1   // Back to L1 from late game, help immediately
+};
+
+// On game over, track deaths and adjust tier
+function onGameOver() {
+  var deathPhase = getCurrentPhase();
+  persistentStats['deathsIn' + capitalize(deathPhase)]++;
+
+  // Check threshold for current phase
+  if (persistentStats.deathsInPurple >= 1) {
+    currentTier = Math.max(-3, currentTier - 1); // Decrease difficulty
+    persistentStats.deathsInPurple = 0;
+  }
+  // Similar for red/green
+
+  // Apply tier parameters (bullet speed, shield hits, enemy counts)
+  applyTierParameters();
+
+  // Save to localStorage
+  savePersistentStats();
+}
+
+// On cycle complete (beat all 3 bosses)
+function onCycleComplete() {
+  currentTier = Math.min(3, currentTier + 1); // Increase difficulty
+  persistentStats.cyclesCompleted++;
+
+  applyTierParameters();
+  savePersistentStats();
+}
+```
+
+**When scoring system is implemented:**
+- `currentTier` already tracked by AI agent
+- Just apply multipliers during score calculation
+- No additional tracking needed
+
+---
+
+### 14.13 Testing Checklist (When Implemented)
+
+**Tier Multiplier Tests:**
+- [ ] Tier -3: Score multiplied by 0.50x
+- [ ] Tier 0: Score multiplied by 1.00x (no change)
+- [ ] Tier +3: Score multiplied by 1.75x
+
+**Bonus Disable Tests:**
+- [ ] Tier -1: Replay bonus disabled (1x, not 2x/3x/4x)
+- [ ] Tier -1: Level completion bonus disabled (0 pts, not +50/+100)
+- [ ] Tier 0: All bonuses active
+
+**Tier Completion Bonus Tests:**
+- [ ] Tier +1: +500 bonus added at victory
+- [ ] Tier +2: +1000 bonus added at victory
+- [ ] Tier +3: +2000 bonus added at victory
+
+**Leaderboard Tests:**
+- [ ] Lower tier scores appear lower on leaderboard
+- [ ] Higher tier scores appear higher (even with same base points)
+- [ ] Tier field submitted to Firebase correctly
+- [ ] Analytics events include tier metadata
+
+**Silent System Tests:**
+- [ ] No tier badges visible during gameplay
+- [ ] No tier labels on game over screen
+- [ ] No tier multiplier notifications
+- [ ] Players unaware of tier adjustments
+
+---
+
+### 14.14 Multiplier Adjustment Rationale
+
+**Original proposal vs User feedback:**
+
+| Tier | Original | Adjusted | Reason |
+|------|----------|----------|--------|
+| +1 Challenge | 1.25x | **1.20x** | Reduce score inflation |
+| +2 Veteran | 1.50x | **1.45x** | Prevent excessive advantage |
+| +3 Expert | 2.00x | **1.75x** | User: "2.0x is too high" |
+
+**Impact:**
+- Expert player still earns 1.98x more than Normal player (was 2.27x)
+- Maintains competitive advantage without excessive score inflation
+- Leaderboard top 5 still dominated by high-tier players
+- More balanced progression between tiers
+
+---
+
+### 14.15 Summary
+
+**What:** Tier-based score multipliers that silently adjust final scores based on difficulty tier.
+
+**Why:** Maintain leaderboard fairness when AI agent lowers difficulty for struggling players.
+
+**When:** Deferred until after Pink Levels (13-15) + Survey Triple Laser implementation.
+
+**How:** Apply multipliers to final score calculation, disable bonuses for lower tiers, enhance bonuses for higher tiers.
+
+**Philosophy:** Keep system silent to players (no tier displays), scoring adjustments happen behind-the-scenes.
+
+**Next Steps:**
+1. Implement AI agent v1.0 (simple tier adjustment)
+2. Validate new baseline (Tier 0: 5.0/6.0/7.0)
+3. Collect 2-4 weeks of player data
+4. Implement Pink Levels + Survey Triple Laser
+5. Add tier-based scoring system
+6. Launch all as "Easter Egg Update"
+
+---
+
+## 15. Contact & Support
 
 **For questions about this implementation:**
 - Review NON-X_PAIM_Memory.md Section 13 (Workflow Rules)
@@ -2184,7 +2588,7 @@ Reward players for completing game on higher difficulties:
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** March 25, 2026
+**Document Version:** 1.1
+**Last Updated:** March 30, 2026
 **Author:** Claude Sonnet 4.5 + Keith Stanigar
-**Status:** Ready for Implementation
+**Status:** Stage 1 Complete + Dev Tools + Purple Rebalancing, Stage 3 (AI Agent) Pending, Tier-Based Scoring Deferred
