@@ -5107,18 +5107,18 @@
     function damageBoss() {
       if (!boss) return;
 
-      // ── Shielded Hit (Chip Damage) ─────────────────────────────────────────────
-      // Boss shield reduces damage to 0.5 HP per hit
+      // ── Shielded Hit (Full Invulnerability) ────────────────────────────────────
+      // Boss shield provides complete invulnerability (no damage taken)
       if (boss.shielded) {
-        boss.health -= 0.5; // Half damage through shield
+        // No health reduction - boss is fully protected by shield
         bossBlinking = true;
-        bossBlinkTimer = 6; // Short blink for chip damage
+        bossBlinkTimer = 6; // Short blink for visual feedback
 
         // Trigger visual feedback effects (zero performance cost)
         boss.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
         boss.shieldWobble = 3;        // Wobble amount in pixels
 
-        return; // Exit early, no defeat check
+        return; // Exit early, no damage dealt
       }
 
       // ── Unshielded Hit (Full Damage) ───────────────────────────────────────────
@@ -6760,7 +6760,11 @@
           if (paused) {
             bgMusic.pause();
           } else {
-            bgMusic.play();
+            // Only resume music if it wasn't muted (respects user preference)
+            var musicEnabled = localStorage.getItem('nonex_music') !== 'off';
+            if (musicEnabled) {
+              bgMusic.play();
+            }
           }
         }
         return;
