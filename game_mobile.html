@@ -1786,6 +1786,25 @@
         localStorage.setItem('nonx_ai_tier', currentTier);
         console.log('[AI Agent] Tier decreased: ' + oldTier + ' → ' + currentTier);
 
+        // Update AI Mode indicator if active
+        var aiIndicator = document.getElementById('aiModeIndicator');
+        if (aiIndicator && aiIndicator.style.display !== 'none') {
+          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierName = tierNames[currentTier.toString()] || 'Unknown';
+          var tierParams = TIER_CONFIG[currentTier.toString()];
+          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+          var tierMult = getTierMultiplier();
+          var moveMult = scoreMultiplier;
+          var totalMult = (tierMult * moveMult).toFixed(2);
+          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+            'Use [ / ] to adjust tier';
+        }
+
         // Analytics event
         if (typeof fireEvent === 'function') {
           fireEvent('ai_difficulty_adjusted', {
@@ -1813,6 +1832,25 @@
       if (oldTier !== currentTier) {
         localStorage.setItem('nonx_ai_tier', currentTier);
         console.log('[AI Agent] Tier increased: ' + oldTier + ' → ' + currentTier);
+
+        // Update AI Mode indicator if active
+        var aiIndicator = document.getElementById('aiModeIndicator');
+        if (aiIndicator && aiIndicator.style.display !== 'none') {
+          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierName = tierNames[currentTier.toString()] || 'Unknown';
+          var tierParams = TIER_CONFIG[currentTier.toString()];
+          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+          var tierMult = getTierMultiplier();
+          var moveMult = scoreMultiplier;
+          var totalMult = (tierMult * moveMult).toFixed(2);
+          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+            'Use [ / ] to adjust tier';
+        }
 
         // Analytics event
         if (typeof fireEvent === 'function') {
