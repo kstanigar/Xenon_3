@@ -6213,6 +6213,9 @@
       // score is used (not final_score) to match naming convention across all events.
       // session_duration_seconds measures the full run length for completion-time analysis.
       // health_remaining_bonus tracks the health bonus added at victory (Mar 26, 2026)
+      // tier_multiplier and effective_multiplier track AI Agent scoring impact (Apr 1, 2026)
+      var tierMult = getTierMultiplier();
+      var effectiveMult = tierMult * scoreMultiplier;
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
@@ -6220,7 +6223,10 @@
         'health_remaining_bonus': Math.floor(health),
         'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
         'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
-        'score_multiplier': scoreMultiplier
+        'tier': currentTier,
+        'tier_multiplier': tierMult,
+        'movement_multiplier': scoreMultiplier,
+        'effective_multiplier': effectiveMult
       });
 
       // game_complete fires on every session ending regardless of outcome.

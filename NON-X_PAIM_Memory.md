@@ -12,11 +12,12 @@ This is the single source of truth for the NON-X project. It is shared with ever
 1. **Data-first workflow** — before building any visual or metric, confirm data is being captured correctly. Audit as: 🟢 Good / 🟡 Improve / 🔴 Fix.
 2. **Never recommend destructive operations** (delete Firebase collections, clear localStorage, reset GA4 properties) without tracing all dependent code first.
 3. **Never diagnose a game over screen bug** without asking: what level, what score, first game or replay?
-4. **analytics_version = 4.0** — filter ALL GA4 explorations and Looker Studio reports to this version. Bump ONLY when gameplay mechanics change, not for instrumentation fixes.
+4. **analytics_version = 4.3** — filter ALL GA4 explorations and Looker Studio reports to this version. Bump ONLY when gameplay mechanics change, not for instrumentation fixes.
 5. **Pre-launch data (Feb 10 – Mar 9, 2026) is QA/self-testing** — do not draw product conclusions or calibrate benchmarks from it.
 6. **Real player baseline starts: ~Mar 10, 2026.**
 7. **Investigate and report before making any changes** — always trace root cause first, confirm findings, then implement with comments and revert instructions.
 8. **Git workflow: NEVER push directly to `main`** — always create a feature branch, push to remote, then create a PR. Main branch is protected and requires pull request review.
+9. **Session summaries required** — At the end of each work session, add a 3-bullet summary to the "Session History" section below. Include: (1) What was implemented/fixed, (2) Files modified, (3) Next steps or blockers. This ensures continuity between AI sessions.
 
 ---
 
@@ -3159,3 +3160,32 @@ git revert <commit-hash>
 - Green boss orbiters remain at 4 (baseline)
 - Boss filler count remains at 4 max (unchanged)
 - Orbiter respawn delay remains at 3 seconds (unchanged, was considered for 4 seconds but not implemented)
+
+---
+
+## SESSION HISTORY
+
+**Purpose:** Track work done in each AI session for continuity across models. Each model should add a 3-bullet summary at the end of their session.
+
+**Format:**
+```
+### [Date] — [Model Name] — [Project: Xenon_3 or non-x_analytics]
+- **Implemented/Fixed:** Brief description of main work completed
+- **Files Modified:** List of changed files with line numbers if relevant
+- **Next Steps:** What needs to happen next or any blockers discovered
+```
+
+---
+
+### April 2, 2026 — Claude Sonnet 4.5 — Project: Xenon_3 + non-x_analytics
+
+- **Implemented/Fixed:** (1) Added tier_multiplier, movement_multiplier, effective_multiplier parameters to player_won event in both game files for AI Agent analytics tracking. (2) Built complete AI Agent Performance tab in analytics dashboard with 6 charts (tier distribution, progression flow, score multipliers, tier vs score correlation, death triggers, performance metrics table). (3) Updated CSV_VERSION_FILTER from 3.0 to 4.3. (4) Created symlink between projects so both share same NON-X_PAIM_Memory.md master file.
+
+- **Files Modified:**
+  - `Xenon_3/game.html` (line ~5589): player_won event parameters
+  - `Xenon_3/game_mobile.html` (line ~6216): player_won event parameters
+  - `non-x_analytics/index.html` (+783 lines): AI Agent tab, DATA.aiAgent object, 6 chart functions, CSV version filter
+  - `non-x_analytics/docs/NON-X_PAIM_Memory.md`: Converted to symlink → `../../Xenon_3/NON-X_PAIM_Memory.md`
+  - `Xenon_3/NON-X_PAIM_Memory.md`: Added Rule #9 (session summaries), updated analytics_version to 4.3, added Session History section
+
+- **Next Steps:** (1) Push non-x_analytics changes to main (user paused the push). (2) Build CSV parser for ai_difficulty_adjusted event data when GA4 exports become available. (3) Test AI Agent tab with real player data once analytics v4.3 events start flowing. (4) Add CSV import handler in detectReportType() and processCSVFile() for AI Agent reports. (5) Consider adding tier-progression timeline chart (shows how individual players move through tiers over time).
