@@ -1,6 +1,6 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: March 30, 2026 (major bullet speed reduction: 4.0/5.0/6.0)_
+_Last updated: April 1, 2026 (AI Agent v1.0 + Tier-Based Scoring implemented)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
@@ -1791,8 +1791,8 @@ git revert <commit-hash>  # Revert all rebalancing changes
 
 ---
 
-### AI Agent v1.0 - 7-Tier Discrete Adjustment System (Mar 31, 2026)
-**Status:** ✅ BASELINE ESTABLISHED (Tier 0) | 📋 READY FOR IMPLEMENTATION
+### AI Agent v1.0 - 7-Tier Discrete Adjustment System (Apr 1, 2026)
+**Status:** ✅ IMPLEMENTED - Branch: feature/ai_agent_v1 (ready for PR)
 **Purpose:** Adaptive difficulty using 7 discrete tiers (Tier -3 to +3) with speed ratchet
 
 **Core Concept:**
@@ -1833,7 +1833,8 @@ git revert <commit-hash>  # Revert all rebalancing changes
 **DECREASE TIER (Die 2x in same phase):**
 - Tier decreases by 1 (e.g., Tier 0 → Tier -1)
 - Min tier: -3 (Tutorial)
-- If speed locked and at/below Tier 0, no decrease
+- **Speed ratchet:** If speed locked and at/below Tier -1, no decrease
+- Allows players to access Easy mode even after first cycle
 - Death counter resets to 0 for that phase
 
 **INCREASE TIER (Complete cycle - beat all 3 bosses):**
@@ -1851,8 +1852,9 @@ git revert <commit-hash>  # Revert all rebalancing changes
 
 **After first cycle completion:**
 - **Speed locks at current value** (never decreases again)
-- Tiers can still decrease, but only if above Tier 0
-- Example: At Tier +2, can drop to Tier +1/0, but not below 0
+- Tiers can still decrease, but only if above Tier -1 (Easy)
+- Example: At Tier +2, can drop to Tier +1/0/-1, but not below -1
+- **Rationale:** Players should access Easy mode even after completing cycles
 - Support params (shields, orbiters, minions) still adjust with tier
 
 ---
@@ -1907,33 +1909,42 @@ var TIER_CONFIG = {
 
 ---
 
-### Current Status (Mar 31, 2026)
+### Current Status (Apr 1, 2026)
 
 **✅ COMPLETED:**
 - [x] Fix green boss shield bug (PR #84)
 - [x] Fix pause music toggle bug (PR #84)
 - [x] Establish Tier 0 baseline (commit 183b38e)
-  - Bullet speed: 5.0 base (green 5.0, red 6.25, purple 7.5)
-  - Shield hits: 15 base (green/red 15, purple 25)
-  - Boss orbiters: 4/5/6 (Boss 1/2/3)
+- [x] **AI Agent v1.0 implemented** (commit f5af422)
+  - [x] Implement 7-tier tracking system (320 lines total)
+  - [x] Add TIER_CONFIG lookup object with 7 tiers
+  - [x] Add death counter logic (on player death)
+  - [x] Add tier increase logic (on Boss 3 defeat)
+  - [x] Add decreaseTier() and increaseTier() functions
+  - [x] Apply tier-based bullet speed in shootEnemyBullet()
+  - [x] Apply tier-based shield hits in collision detection
+  - [x] Apply tier-based boss orbiters in spawnBoss()
+  - [x] Apply tier-based minion spawn rates
+  - [x] Apply tier-based barrier counts (or use defaults)
+  - [x] Add analytics event: ai_difficulty_adjusted
+  - [x] Add AI Mode testing interface (Shift+A)
+- [x] **Tier-Based Scoring implemented** (commit e0c3a01)
+  - [x] Add scoreMultiplier to TIER_CONFIG (0.50× to 1.75×)
+  - [x] Create getTierMultiplier() and addScore() helper functions
+  - [x] Replace all scoring events with addScore() (9 locations per file)
+  - [x] Multiplicative with movement multiplier
+  - [x] Update AI Mode display to show score multipliers (commit 2e7cd61)
+- [x] **Bug fix:** AI Mode display updates when tier changes (commit 09ff7e1)
+
+**Branch:** feature/ai_agent_v1 (4 commits, ready for PR to main)
 
 **📋 NEXT:**
-- [ ] Implement 7-tier tracking system (~200 lines per file)
-- [ ] Add TIER_CONFIG lookup object
-- [ ] Add death counter logic (on player death)
-- [ ] Add tier increase logic (on Boss 3 defeat)
-- [ ] Add decreaseTier() and increaseTier() functions
-- [ ] Apply tier-based bullet speed in shootEnemyBullet()
-- [ ] Apply tier-based shield hits in collision detection
-- [ ] Apply tier-based boss orbiters in spawnBoss()
-- [ ] Apply tier-based minion spawn rates
-- [ ] Apply tier-based barrier counts (or use defaults)
-- [ ] Add analytics event: ai_difficulty_adjusted
-- [ ] Add dev mode display for AI state
+- [ ] Create PR: feature/ai_agent_v1 → main
+- [ ] Update CI integrity checks for new AI Agent functions
+- [ ] Test with real players for 1-2 weeks
+- [ ] Monitor analytics: ai_difficulty_adjusted events
 
-**Priority:** HIGH - P1 bugs fixed, baseline established, ready to implement
-
-**Note:** See AI_AGENT_ADVANCED_IDEAS.md for complex tier-based system discussions (future iteration)
+**Note:** See TIER_BASED_SCORING_DESIGN.md, DIFFICULTY_TOGGLE_DISCUSSION.md for detailed design docs
 
 ---
 
