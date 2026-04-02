@@ -672,6 +672,34 @@
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // AI AGENT v1.0 - 7-TIER ADAPTIVE DIFFICULTY SYSTEM (Apr 1, 2026)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Automatic difficulty adjustment based on player performance
+    // - Die 2x in same phase → decrease tier (easier)
+    // - Complete cycle (beat all 3 bosses) → increase tier (harder)
+    // - Speed ratchet: After 1st cycle, bullet speed locks (can't decrease below Tier 0)
+    // - Orbiters capped at 4/5/6 for mobile performance (iPhone 12 stutters at baseline)
+
+    /**
+     * AI Agent Tier Configuration
+     * Defines difficulty parameters for each of 7 tiers (Tier -3 to +3)
+     *
+     * @property {number} bulletSpeed - Base bullet speed for green phase (Red ×1.25, Purple ×1.5)
+     * @property {number} shieldHits - Base shield hits for green/red phases (Purple ×1.67)
+     * @property {number[]} bossOrbiters - Orbiter counts [Boss1, Boss2, Boss3] (CAPPED at 4/5/6 for Tier 0+)
+     * @property {number} minionRate - Boss minion spawn rate multiplier (0x to 2.0x)
+     */
+    var TIER_CONFIG = {
+      '-3': { bulletSpeed: 3.5, shieldHits: 0,  bossOrbiters: [2,3,4], minionRate: 0,   scoreMultiplier: 0.50 }, // Tutorial
+      '-2': { bulletSpeed: 4.0, shieldHits: 5,  bossOrbiters: [3,4,5], minionRate: 0.5, scoreMultiplier: 0.70 }, // Beginner
+      '-1': { bulletSpeed: 4.5, shieldHits: 10, bossOrbiters: [3,4,5], minionRate: 1.0, scoreMultiplier: 0.85 }, // Easy
+      '0':  { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4,5,6], minionRate: 1.0, scoreMultiplier: 1.00 }, // Normal (baseline)
+      '1':  { bulletSpeed: 5.5, shieldHits: 18, bossOrbiters: [4,5,6], minionRate: 1.5, scoreMultiplier: 1.20 }, // Challenge
+      '2':  { bulletSpeed: 6.0, shieldHits: 20, bossOrbiters: [4,5,6], minionRate: 1.5, scoreMultiplier: 1.40 }, // Veteran
+      '3':  { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [4,5,6], minionRate: 2.0, scoreMultiplier: 1.75 }  // Expert
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // COORDINATED ATTACK SYSTEM (Mar 2026, rebalanced Mar 30, 2026)
     // ═══════════════════════════════════════════════════════════════════════════
     // Fixed-rhythm bullet patterns with three attack types: single, sync, rain
@@ -1012,6 +1040,18 @@
     //   Shift+G  → skip to game over screen
     // All analytics are suppressed and logged to console instead.
     var devMode = false;
+
+    // ── AI Mode (Tier Testing) ───────────────────────────────────────────────────
+    // Toggle with Shift+A. Persists across sessions via localStorage.
+    // Enables AI Agent tier testing interface.
+    //
+    // AI Mode controls:
+    //   [ key → Decrease tier (-1, min -3)
+    //   ] key → Increase tier (+1, max +3)
+    //
+    // When AI Mode is OFF, [ / ] keys adjust bullet speed multiplier (legacy testing).
+    // When AI Mode is ON, [ / ] keys adjust AI difficulty tier (new testing).
+    var aiMode = localStorage.getItem('nonx_ai_mode') === 'true';
 
     /**
      * Wrapper for all GA4 event calls. In devMode, logs to console instead of
@@ -1657,6 +1697,188 @@
     var bulletQueue = [];         // {enemy, fireTime} — for rain effect stagger
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // AI AGENT v1.0 - STATE TRACKING (Apr 1, 2026)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Persists across sessions via localStorage
+    // Tracks player performance and adjusts difficulty automatically
+
+    /**
+     * AI Agent difficulty tier (-3 to +3)
+     * Tier 0 = Normal (baseline), negative = easier, positive = harder
+     */
+    var currentTier = parseInt(localStorage.getItem('nonx_ai_tier')) || 0;
+
+    /**
+     * Total cycles completed (1 cycle = beat all 3 bosses: green, red, purple)
+     * Used to track speed ratchet (locks after 1st cycle)
+     */
+    var cyclesCompleted = parseInt(localStorage.getItem('nonx_ai_cycles')) || 0;
+
+    /**
+     * Speed ratchet flag - once true, bullet speed cannot decrease below Tier 0
+     * Set to true after first cycle completion
+     */
+    var speedLocked = localStorage.getItem('nonx_ai_speed_locked') === 'true';
+
+    /**
+     * Death counter per phase (session only - resets on game start)
+     * Tracks deaths in current session to trigger tier decrease (2 deaths in same phase)
+     */
+    var deathsInPhase = {
+      green: 0,
+      red: 0,
+      purple: 0
+    };
+
+    /**
+     * Get current phase based on level
+     * @returns {string} 'green', 'red', or 'purple'
+     */
+    function getCurrentPhase() {
+      if (level >= 9) return 'purple';
+      if (level >= 5) return 'red';
+      return 'green';
+    }
+
+    /**
+     * Get the current tier's score multiplier
+     * @returns {number} Score multiplier (0.50 to 1.75)
+     */
+    function getTierMultiplier() {
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      return tierConfig ? tierConfig.scoreMultiplier : 1.0;
+    }
+
+    /**
+     * Add points to score with tier and movement multipliers applied
+     * Formula: finalScore = basePoints × tierMultiplier × movementMultiplier
+     *
+     * @param {number} basePoints - Base points before multipliers
+     */
+    function addScore(basePoints) {
+      var tierMult = getTierMultiplier();        // 0.50 (Tutorial) to 1.75 (Expert)
+      var movementMult = scoreMultiplier;        // 1.25 (horizontal only) or 1.0 (full movement)
+      var totalMult = tierMult * movementMult;   // Multiplicative: e.g., 1.75 × 1.25 = 2.19×
+      var earnedPoints = Math.round(basePoints * totalMult);
+      score += earnedPoints;
+      updateUI();
+    }
+
+    /**
+     * Decrease difficulty tier (make game easier)
+     * Called when player dies 2x in same phase
+     *
+     * Respects speed ratchet: If speed is locked and at/below Tier -1 (Easy), prevent decrease.
+     * Allows access to Easy mode even after first cycle, but blocks Tutorial/Beginner.
+     */
+    function decreaseTier() {
+      // Speed ratchet: Can't go below Tier -1 (Easy) if speed is locked
+      // Allows struggling players to access Easy mode, but protects Tutorial/Beginner for first-timers
+      if (speedLocked && currentTier <= -1) {
+        console.log('[AI Agent] Tier decrease blocked - speed locked at Tier -1 (Easy minimum)');
+        return;
+      }
+
+      var oldTier = currentTier;
+      currentTier = Math.max(-3, currentTier - 1); // Min: Tier -3
+
+      if (oldTier !== currentTier) {
+        localStorage.setItem('nonx_ai_tier', currentTier);
+        console.log('[AI Agent] Tier decreased: ' + oldTier + ' → ' + currentTier);
+
+        // Update AI Mode indicator if active
+        var aiIndicator = document.getElementById('aiModeIndicator');
+        if (aiIndicator && aiIndicator.style.display !== 'none') {
+          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierName = tierNames[currentTier.toString()] || 'Unknown';
+          var tierParams = TIER_CONFIG[currentTier.toString()];
+          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+          var tierMult = getTierMultiplier();
+          var moveMult = scoreMultiplier;
+          var totalMult = (tierMult * moveMult).toFixed(2);
+          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+            'Use [ / ] to adjust tier';
+        }
+
+        // Analytics event
+        if (typeof fireEvent === 'function') {
+          fireEvent('ai_difficulty_adjusted', {
+            old_tier: oldTier,
+            new_tier: currentTier,
+            direction: 'decrease',
+            phase: getCurrentPhase(),
+            level: level,
+            speed_locked: speedLocked
+          });
+        }
+      }
+    }
+
+    /**
+     * Increase difficulty tier (make game harder)
+     * Called when player completes a cycle (beats all 3 bosses)
+     *
+     * Sets speed ratchet after 1st cycle - speed can't decrease below Tier 0 afterward
+     */
+    function increaseTier() {
+      var oldTier = currentTier;
+      currentTier = Math.min(3, currentTier + 1); // Max: Tier +3
+
+      if (oldTier !== currentTier) {
+        localStorage.setItem('nonx_ai_tier', currentTier);
+        console.log('[AI Agent] Tier increased: ' + oldTier + ' → ' + currentTier);
+
+        // Update AI Mode indicator if active
+        var aiIndicator = document.getElementById('aiModeIndicator');
+        if (aiIndicator && aiIndicator.style.display !== 'none') {
+          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierName = tierNames[currentTier.toString()] || 'Unknown';
+          var tierParams = TIER_CONFIG[currentTier.toString()];
+          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+          var tierMult = getTierMultiplier();
+          var moveMult = scoreMultiplier;
+          var totalMult = (tierMult * moveMult).toFixed(2);
+          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+            'Use [ / ] to adjust tier';
+        }
+
+        // Analytics event
+        if (typeof fireEvent === 'function') {
+          fireEvent('ai_difficulty_adjusted', {
+            old_tier: oldTier,
+            new_tier: currentTier,
+            direction: 'increase',
+            phase: getCurrentPhase(),
+            level: level,
+            cycles_completed: cyclesCompleted,
+            speed_locked: speedLocked
+          });
+        }
+      }
+
+      // Increment cycle counter
+      cyclesCompleted++;
+      localStorage.setItem('nonx_ai_cycles', cyclesCompleted);
+
+      // Set speed ratchet after 1st cycle
+      if (cyclesCompleted === 1 && !speedLocked) {
+        speedLocked = true;
+        localStorage.setItem('nonx_ai_speed_locked', 'true');
+        console.log('[AI Agent] Speed ratchet engaged - speed locked at Tier ' + currentTier);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // DEV MODE: URL Parameter Support (Mar 14, 2026)
     // ═══════════════════════════════════════════════════════════════════════════
     // Allows jumping to specific levels via URL parameters for testing
@@ -2234,8 +2456,7 @@
      */
     function collectPowerup(powerup) {
       playSound('powerUp');
-      score += Math.floor(5 * scoreMultiplier); // Apply elite tier multiplier
-      updateUI();
+      addScore(5); // Power-up collection (tier + movement multipliers)
       if (powerup.type === POWERUP_TYPES.HEALTH) {
         health = Math.min(health + CONFIG.healthPowerupAmount, CONFIG.maxHealth);
         updateUI();
@@ -2250,17 +2471,15 @@
             showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
           } else {
             // Already at max power in purple phase
-            var bonusPoints = Math.floor(50 * scoreMultiplier);
-            score += bonusPoints;
-            updateUI();
-            showAnnouncement("powerupDisplay", "MAX POWER +" + bonusPoints, 1500);
+            addScore(50); // Max power bonus (tier + movement multipliers)
+            var displayPoints = Math.round(50 * getTierMultiplier() * scoreMultiplier);
+            showAnnouncement("powerupDisplay", "MAX POWER +" + displayPoints, 1500);
           }
         } else if (hasDoubleLaser && !purplePhase) {
           // Green/red phase already has double laser — bonus score instead
-          var bonusPoints = Math.floor(50 * scoreMultiplier);
-          score += bonusPoints;
-          updateUI();
-          showAnnouncement("powerupDisplay", "MAX POWER +" + bonusPoints, 1500);
+          addScore(50); // Max power bonus (tier + movement multipliers)
+          var displayPoints = Math.round(50 * getTierMultiplier() * scoreMultiplier);
+          showAnnouncement("powerupDisplay", "MAX POWER +" + displayPoints, 1500);
         } else {
           hasDoubleLaser = true;
           laserLevel = 2;
@@ -4733,8 +4952,10 @@
       // Trigger: Set enemy.shieldFlashFrames=3 and enemy.shieldWobble=3 on shield hit.
       // Location: Bullet collision code (~line 6607) sets these values.
 
-      // Check if enemy is shielded
-      var isShielded = enemy.shielded === true;
+      // Check if enemy is shielded AND tier has shields enabled (AI Agent v1.0)
+      // Tier -3 (Tutorial) has shieldHits: 0, so shields should be invisible
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      var isShielded = enemy.shielded === true && tierConfig && tierConfig.shieldHits > 0;
 
       // Update shield visual effects (decay timers each frame)
       if (enemy.shieldFlashFrames > 0) enemy.shieldFlashFrames--;
@@ -4744,7 +4965,12 @@
       var shieldDamagePercent = 0;
       if (isShielded) {
         var shieldHits = enemy.shieldHits || 0;
-        var baseHits = level >= 9 ? 25 : 15;
+        // AI Agent v1.0: Get tier-based shield hits (Apr 1, 2026)
+        var tierConfig = TIER_CONFIG[currentTier.toString()];
+        var baseHits = tierConfig ? tierConfig.shieldHits : (level >= 9 ? 25 : 15);
+        if (purplePhase) {
+          baseHits = Math.ceil(baseHits * 1.67); // Purple: base × 1.67 (e.g., Tier 0: 15 × 1.67 ≈ 25)
+        }
         var shieldBreakThreshold = Math.ceil(baseHits * DIFFICULTY_CONFIG.enemyHealth); // Apply difficulty multiplier
         shieldDamagePercent = Math.min(shieldHits / shieldBreakThreshold, 1); // 0=healthy, 1=almost broken
       }
@@ -5026,9 +5252,11 @@
       if (orbitersInitialized) return;
       orbitersInitialized = true;
 
-      // Orbiter count scaling (Mar 14, 2026 difficulty update, reduced Mar 28, 2026, Mar 30, 2026, baseline Mar 31, 2026)
-      // Tier 0 baseline - Green: 4, Red: 5 (+1), Purple: 6 (+2)
-      var orbiterCount = boss.isPurpleBoss ? 6 : (boss.isRedBoss ? 5 : 4);
+      // AI Agent v1.0: Tier-based orbiter counts (Apr 1, 2026)
+      // Capped at 4/5/6 for mobile performance (iPhone 12 stutters at baseline)
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      var orbiterCounts = tierConfig ? tierConfig.bossOrbiters : [4, 5, 6]; // [Boss1, Boss2, Boss3]
+      var orbiterCount = orbiterCounts[currentBoss - 1]; // currentBoss is 1-indexed
       maxOrbiters = orbiterCount;
 
       for (var i = 0; i < orbiterCount; i++) {
@@ -5160,8 +5388,7 @@
             playerBullets.splice(j, 1);
             orbiter.alive = false;
             bossOrbiters.splice(i, 1);
-            score += Math.floor(15 * scoreMultiplier); // Slightly more than regular enemies
-            updateUI();
+            addScore(15); // Orbiter kill (tier + movement multipliers)
             playSound('enemyDead');
             spawnExplosion(orbiter.x + orbiter.width / 2, orbiter.y + orbiter.height / 2);
             lastOrbiterDeathTime = time;
@@ -5363,8 +5590,7 @@
           if (isColliding(playerBullets[j], minion)) {
             playerBullets.splice(j, 1);
             bossMinions.splice(i, 1);
-            score += Math.floor(10 * scoreMultiplier);
-            updateUI();
+            addScore(10); // Boss minion kill (tier + movement multipliers)
             playSound('enemyDead');
             spawnExplosion(minion.x + minion.width / 2, minion.y + minion.height / 2);
             break;
@@ -5402,8 +5628,10 @@
         lastMinionShotTime = now;
       }
 
-      // Spawn new minions (apply difficulty to spawn rate - lower spawnRate = more minions)
-      var adjustedSpawnChance = CONFIG.bossMinionSpawnChance / DIFFICULTY_CONFIG.spawnRate;
+      // Spawn new minions (AI Agent v1.0: apply tier-based minion rate)
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      var minionMultiplier = tierConfig ? tierConfig.minionRate : 1.0;
+      var adjustedSpawnChance = (CONFIG.bossMinionSpawnChance / DIFFICULTY_CONFIG.spawnRate) * minionMultiplier;
       if (Math.random() < adjustedSpawnChance) {
         createBossMinion();
       }
@@ -5617,11 +5845,16 @@
       var bossCy = boss.y + boss.height / 2;
       var time = Date.now();
 
+      // AI Agent v1.0: Only process boss shield if tier has shields enabled (Apr 1, 2026)
+      // Tier -3 (Tutorial) has shieldHits: 0, so shields should be invisible
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      var bossShieldEnabled = boss.shielded && tierConfig && tierConfig.shieldHits > 0;
+
       // Calculate boss shield damage percentage for visual feedback (based on boss health)
-      var bossDamagePercent = boss.shielded ? (1 - (boss.health / boss.maxHealth)) : 0;
+      var bossDamagePercent = bossShieldEnabled ? (1 - (boss.health / boss.maxHealth)) : 0;
 
       // Faster Pulse Rate: Boss shield pulses faster as boss health decreases (1.0x → 1.5x)
-      var bossBeatMultiplier = boss.shielded ? (1 + bossDamagePercent * 0.5) : 1;
+      var bossBeatMultiplier = bossShieldEnabled ? (1 + bossDamagePercent * 0.5) : 1;
       var beatPhase = ((time % BPM_INTERVAL) / BPM_INTERVAL) * bossBeatMultiplier;
       beatPhase = beatPhase % 1; // Keep in 0-1 range
       var rippleAlpha = 1 - beatPhase;
@@ -5874,6 +6107,14 @@
           boss3Defeated = true;
           bossDefeated = true;
 
+          // ═══════════════════════════════════════════════════════════════════════════
+          // AI AGENT: Cycle Completion Logic (Apr 1, 2026)
+          // ═══════════════════════════════════════════════════════════════════════════
+          // Cycle complete = beat all 3 bosses (green, red, purple)
+          // Increase difficulty tier and set speed ratchet after 1st cycle
+          console.log('[AI Agent] Cycle complete - Boss 3 defeated');
+          increaseTier();
+
           // Track boss 3 defeat
           fireEvent('boss_defeated', {
             'ab_music_group': userABGroup,
@@ -5887,21 +6128,20 @@
           });
 
           // Boss defeat bonus
-          score += Math.floor(100 * scoreMultiplier);
+          addScore(100); // Boss defeat (tier + movement multipliers)
 
           // Health Remaining Bonus (Mar 26, 2026)
           // Incentivizes health power-up collection and skilled play
-          // Remaining HP converted 1:1 to score points (not affected by scoreMultiplier)
-          var healthBonus = Math.floor(health);
-          score += healthBonus;
-
-          updateUI();
+          // Rewards harder difficulty: multiplied by tier + movement multipliers
+          var baseHealthBonus = Math.floor(health);
+          addScore(baseHealthBonus); // Health bonus (tier + movement multipliers)
           showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
 
           // Show health bonus announcement after victory message
           setTimeout(function() {
-            if (healthBonus > 0) {
-              showAnnouncement("powerupDisplay", "Health Bonus: +" + healthBonus + " pts!", 2500);
+            if (baseHealthBonus > 0) {
+              var displayBonus = Math.round(baseHealthBonus * getTierMultiplier() * scoreMultiplier);
+              showAnnouncement("powerupDisplay", "Health Bonus: +" + displayBonus + " pts!", 2500);
             }
           }, 3200);
 
@@ -6902,11 +7142,14 @@
      * @param {boolean} [useAimed=false] - If true, bullet tracks toward player position
      */
     function shootEnemyBullet(enemy, useAimed) {
-      var bulletSpeed = CONFIG.enemyBulletSpeed;
+      // AI Agent v1.0: Get tier-based bullet speed (Apr 1, 2026)
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      var bulletSpeed = tierConfig ? tierConfig.bulletSpeed : CONFIG.enemyBulletSpeed;
+
       if (purplePhase) {
-        bulletSpeed *= 1.5; // Purple: 4.0 × 1.5 = 6.0 (Mar 30, 2026 major reduction)
+        bulletSpeed *= 1.5; // Purple: base × 1.5 (e.g., Tier 0: 5.0 × 1.5 = 7.5)
       } else if (redPhase) {
-        bulletSpeed *= 1.25; // Red: 4.0 × 1.25 = 5.0 (Mar 30, 2026 major reduction)
+        bulletSpeed *= 1.25; // Red: base × 1.25 (e.g., Tier 0: 5.0 × 1.25 = 6.25)
       }
 
       // Apply adaptive difficulty multiplier
@@ -7090,6 +7333,20 @@
         stopBossMusic();
         // Keep background music playing - don't stop it
 
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AI AGENT: Death Counter Logic (Apr 1, 2026)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Track deaths per phase - if 2 deaths in same phase, decrease tier
+        var currentPhase = getCurrentPhase();
+        deathsInPhase[currentPhase]++;
+        console.log('[AI Agent] Death in ' + currentPhase + ' phase | Deaths this phase:', deathsInPhase[currentPhase]);
+
+        if (deathsInPhase[currentPhase] >= 2) {
+          console.log('[AI Agent] 2 deaths in ' + currentPhase + ' phase - decreasing tier');
+          decreaseTier();
+          deathsInPhase[currentPhase] = 0; // Reset counter for this phase
+        }
+
         // Check if top 10 score and save
         // CRITICAL: Capture prevBest BEFORE calling addHighScore()
         var prevBest = highScores.length > 0 ? highScores[0] : null;
@@ -7219,11 +7476,64 @@
           indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
             'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
             'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
-          indicator.textContent = '⚠ DEV MODE — Analytics OFF | Shift+S: Speed Display | Shift+V: Victory | Shift+G: Game Over';
           document.body.appendChild(indicator);
         }
+        // AI Agent v1.0: Show tier info in dev mode
+        var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+        var tierName = tierNames[currentTier.toString()] || 'Unknown';
+        var lockStatus = speedLocked ? '🔒' : '🔓';
+        var tierMult = getTierMultiplier();
+        var moveMult = scoreMultiplier;
+        var totalMult = (tierMult * moveMult).toFixed(2);
+        indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
         indicator.style.display = devMode ? 'block' : 'none';
         console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢' : 'DISABLED 🔴'), 'color:#FF0;font-weight:bold;font-size:14px;');
+        return;
+      }
+
+      // Shift+A — toggle AI Mode (tier testing interface)
+      if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        aiMode = !aiMode;
+        localStorage.setItem('nonx_ai_mode', aiMode.toString());
+        var aiIndicator = document.getElementById('aiModeIndicator');
+        if (!aiIndicator) {
+          aiIndicator = document.createElement('div');
+          aiIndicator.id = 'aiModeIndicator';
+          aiIndicator.style.cssText = 'position:fixed;top:8px;right:8px;' +
+            'background:#FFD700;color:#000;font-family:monospace;font-size:11px;font-weight:bold;' +
+            'padding:4px 10px;border-radius:4px;z-index:9999;pointer-events:none;line-height:1.4;';
+          document.body.appendChild(aiIndicator);
+        }
+        if (aiMode) {
+          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierName = tierNames[currentTier.toString()] || 'Unknown';
+          var tierParams = TIER_CONFIG[currentTier.toString()];
+          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+          var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+          var tierMult = getTierMultiplier();
+          var moveMult = scoreMultiplier;
+          var totalMult = (tierMult * moveMult).toFixed(2);
+          var moveType = moveMult === 1.25 ? 'Horizontal' : 'Full';
+          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+            'Use [ / ] to adjust tier';
+          console.log('%c[AI MODE] ENABLED 🟢', 'color:#FFD700;font-weight:bold;font-size:14px;');
+          console.log('%c[AI MODE] Current tier: ' + currentTier + ' (' + tierName + ')', 'color:#FFD700;font-weight:bold;');
+          console.log('%c[AI MODE] • Speed: ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ' phase)', 'color:#FFD700;');
+          console.log('%c[AI MODE] • Shields: ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ' in purple)' : ''), 'color:#FFD700;');
+          console.log('%c[AI MODE] • Orbiters: ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
+          console.log('%c[AI MODE] • Minions: ' + tierParams.minionRate + 'x', 'color:#FFD700;');
+          console.log('%c[AI MODE] • Score: ' + tierMult + 'x (tier) × ' + moveMult + 'x (' + moveType + ') = ' + totalMult + 'x total', 'color:#FFD700;');
+          console.log('%c[AI MODE] • Deaths: G:' + deathsInPhase.green + ' R:' + deathsInPhase.red + ' P:' + deathsInPhase.purple, 'color:#FFD700;');
+          console.log('%c[AI MODE] • Cycles: ' + cyclesCompleted + ' | Speed Locked: ' + (speedLocked ? 'Yes' : 'No'), 'color:#FFD700;');
+        } else {
+          console.log('%c[AI MODE] DISABLED 🔴', 'color:#FFD700;font-weight:bold;font-size:14px;');
+        }
+        aiIndicator.style.display = aiMode ? 'block' : 'none';
         return;
       }
 
@@ -7312,9 +7622,44 @@
         return;
       }
 
-      // [ key — decrease bullet speed multiplier (devMode only)
+      // [ key — decrease tier (AI Mode) OR bullet speed multiplier (devMode)
       if (e.key === '[') {
-        if (devMode && !gameOver) {
+        if (aiMode && !gameOver) {
+          // AI Mode: decrease tier
+          var oldTier = currentTier;
+          currentTier = Math.max(-3, currentTier - 1);
+          if (oldTier !== currentTier) {
+            localStorage.setItem('nonx_ai_tier', currentTier.toString());
+            var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+            var oldName = tierNames[oldTier.toString()];
+            var newName = tierNames[currentTier.toString()];
+            var tierParams = TIER_CONFIG[currentTier.toString()];
+            var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+            var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+            var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+            var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+            var oldScoreMult = TIER_CONFIG[oldTier.toString()].scoreMultiplier;
+            var newScoreMult = tierParams.scoreMultiplier;
+            var moveMult = scoreMultiplier;
+            var totalMult = (newScoreMult * moveMult).toFixed(2);
+            console.log('%c[AI MODE] Tier: ' + oldTier + ' (' + oldName + ') → ' + currentTier + ' (' + newName + ')', 'color:#FFD700;font-weight:bold;');
+            console.log('%c[AI MODE] • Speed: ' + TIER_CONFIG[oldTier.toString()].bulletSpeed + ' → ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ')', 'color:#FFD700;');
+            console.log('%c[AI MODE] • Shields: ' + TIER_CONFIG[oldTier.toString()].shieldHits + ' → ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ')' : ''), 'color:#FFD700;');
+            console.log('%c[AI MODE] • Orbiters: ' + TIER_CONFIG[oldTier.toString()].bossOrbiters.join('/') + ' → ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
+            console.log('%c[AI MODE] • Minions: ' + TIER_CONFIG[oldTier.toString()].minionRate + 'x → ' + tierParams.minionRate + 'x', 'color:#FFD700;');
+            console.log('%c[AI MODE] • Score: ' + oldScoreMult + 'x → ' + newScoreMult + 'x (total: ' + totalMult + 'x)', 'color:#FFD700;');
+            // Update AI Mode indicator
+            var aiIndicator = document.getElementById('aiModeIndicator');
+            if (aiIndicator) {
+              aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+                'Tier: ' + currentTier + ' (' + newName + ')<br>' +
+                'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+                'Score: ' + newScoreMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+                'Use [ / ] to adjust tier';
+            }
+          }
+        } else if (devMode && !aiMode && !gameOver) {
+          // Dev Mode (legacy): decrease bullet speed multiplier
           DIFFICULTY_CONFIG.bulletSpeed = Math.max(0.5, DIFFICULTY_CONFIG.bulletSpeed - 0.05);
           DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
           console.log('%c[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x', 'color:#00FFFF;font-weight:bold;');
@@ -7322,9 +7667,44 @@
         return;
       }
 
-      // ] key — increase bullet speed multiplier (devMode only)
+      // ] key — increase tier (AI Mode) OR bullet speed multiplier (devMode)
       if (e.key === ']') {
-        if (devMode && !gameOver) {
+        if (aiMode && !gameOver) {
+          // AI Mode: increase tier
+          var oldTier = currentTier;
+          currentTier = Math.min(3, currentTier + 1);
+          if (oldTier !== currentTier) {
+            localStorage.setItem('nonx_ai_tier', currentTier.toString());
+            var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+            var oldName = tierNames[oldTier.toString()];
+            var newName = tierNames[currentTier.toString()];
+            var tierParams = TIER_CONFIG[currentTier.toString()];
+            var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+            var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+            var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+            var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+            var oldScoreMult = TIER_CONFIG[oldTier.toString()].scoreMultiplier;
+            var newScoreMult = tierParams.scoreMultiplier;
+            var moveMult = scoreMultiplier;
+            var totalMult = (newScoreMult * moveMult).toFixed(2);
+            console.log('%c[AI MODE] Tier: ' + oldTier + ' (' + oldName + ') → ' + currentTier + ' (' + newName + ')', 'color:#FFD700;font-weight:bold;');
+            console.log('%c[AI MODE] • Speed: ' + TIER_CONFIG[oldTier.toString()].bulletSpeed + ' → ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ')', 'color:#FFD700;');
+            console.log('%c[AI MODE] • Shields: ' + TIER_CONFIG[oldTier.toString()].shieldHits + ' → ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ')' : ''), 'color:#FFD700;');
+            console.log('%c[AI MODE] • Orbiters: ' + TIER_CONFIG[oldTier.toString()].bossOrbiters.join('/') + ' → ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
+            console.log('%c[AI MODE] • Minions: ' + TIER_CONFIG[oldTier.toString()].minionRate + 'x → ' + tierParams.minionRate + 'x', 'color:#FFD700;');
+            console.log('%c[AI MODE] • Score: ' + oldScoreMult + 'x → ' + newScoreMult + 'x (total: ' + totalMult + 'x)', 'color:#FFD700;');
+            // Update AI Mode indicator
+            var aiIndicator = document.getElementById('aiModeIndicator');
+            if (aiIndicator) {
+              aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+                'Tier: ' + currentTier + ' (' + newName + ')<br>' +
+                'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+                'Score: ' + newScoreMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+                'Use [ / ] to adjust tier';
+            }
+          }
+        } else if (devMode && !aiMode && !gameOver) {
+          // Dev Mode (legacy): increase bullet speed multiplier
           DIFFICULTY_CONFIG.bulletSpeed = Math.min(1.5, DIFFICULTY_CONFIG.bulletSpeed + 0.05);
           DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
           console.log('%c[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x', 'color:#00FFFF;font-weight:bold;');
@@ -7952,8 +8332,12 @@
               enemy.shieldFlashFrames = 3;  // Flash for 3 frames (~50ms)
               enemy.shieldWobble = 3;        // Wobble amount in pixels
 
-              // Break shield permanently - 15 hits for levels 1-8, 25 for levels 9+ (difficulty-adjusted)
-              var baseHits = level >= 9 ? 25 : 15;
+              // Break shield permanently (AI Agent v1.0: tier-based shield hits)
+              var tierConfig = TIER_CONFIG[currentTier.toString()];
+              var baseHits = tierConfig ? tierConfig.shieldHits : (level >= 9 ? 25 : 15);
+              if (purplePhase) {
+                baseHits = Math.ceil(baseHits * 1.67); // Purple: base × 1.67 (e.g., Tier 0: 15 × 1.67 ≈ 25)
+              }
               var shieldBreakThreshold = Math.ceil(baseHits * DIFFICULTY_CONFIG.enemyHealth); // Apply difficulty multiplier
               if (enemy.shieldHits >= shieldBreakThreshold) {
                 enemy.shielded = false;
@@ -7976,8 +8360,7 @@
                 EnemyPool.release(enemy);
                 enemies.splice(realIndex, 1);
               }
-              score += Math.floor(10 * scoreMultiplier);
-              updateUI();
+              addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
               checkLevelUp();
               break;
@@ -8150,8 +8533,7 @@
               spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
-              score += Math.floor(10 * scoreMultiplier);
-              updateUI();
+              addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
               break;
             }
