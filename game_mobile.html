@@ -690,13 +690,13 @@
      * @property {number} minionRate - Boss minion spawn rate multiplier (0x to 2.0x)
      */
     var TIER_CONFIG = {
-      '-3': { bulletSpeed: 3.5, shieldHits: 0,  bossOrbiters: [2,3,4], minionRate: 0   }, // Tutorial
-      '-2': { bulletSpeed: 4.0, shieldHits: 5,  bossOrbiters: [3,4,5], minionRate: 0.5 }, // Beginner
-      '-1': { bulletSpeed: 4.5, shieldHits: 10, bossOrbiters: [3,4,5], minionRate: 1.0 }, // Easy
-      '0':  { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4,5,6], minionRate: 1.0 }, // Normal (baseline)
-      '1':  { bulletSpeed: 5.5, shieldHits: 18, bossOrbiters: [4,5,6], minionRate: 1.5 }, // Challenge
-      '2':  { bulletSpeed: 6.0, shieldHits: 20, bossOrbiters: [4,5,6], minionRate: 1.5 }, // Veteran
-      '3':  { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [4,5,6], minionRate: 2.0 }  // Expert
+      '-3': { bulletSpeed: 3.5, shieldHits: 0,  bossOrbiters: [2,3,4], minionRate: 0,   scoreMultiplier: 0.50 }, // Tutorial
+      '-2': { bulletSpeed: 4.0, shieldHits: 5,  bossOrbiters: [3,4,5], minionRate: 0.5, scoreMultiplier: 0.70 }, // Beginner
+      '-1': { bulletSpeed: 4.5, shieldHits: 10, bossOrbiters: [3,4,5], minionRate: 1.0, scoreMultiplier: 0.85 }, // Easy
+      '0':  { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4,5,6], minionRate: 1.0, scoreMultiplier: 1.00 }, // Normal (baseline)
+      '1':  { bulletSpeed: 5.5, shieldHits: 18, bossOrbiters: [4,5,6], minionRate: 1.5, scoreMultiplier: 1.20 }, // Challenge
+      '2':  { bulletSpeed: 6.0, shieldHits: 20, bossOrbiters: [4,5,6], minionRate: 1.5, scoreMultiplier: 1.40 }, // Veteran
+      '3':  { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [4,5,6], minionRate: 2.0, scoreMultiplier: 1.75 }  // Expert
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1741,6 +1741,30 @@
     }
 
     /**
+     * Get the current tier's score multiplier
+     * @returns {number} Score multiplier (0.50 to 1.75)
+     */
+    function getTierMultiplier() {
+      var tierConfig = TIER_CONFIG[currentTier.toString()];
+      return tierConfig ? tierConfig.scoreMultiplier : 1.0;
+    }
+
+    /**
+     * Add points to score with tier and movement multipliers applied
+     * Formula: finalScore = basePoints × tierMultiplier × movementMultiplier
+     *
+     * @param {number} basePoints - Base points before multipliers
+     */
+    function addScore(basePoints) {
+      var tierMult = getTierMultiplier();        // 0.50 (Tutorial) to 1.75 (Expert)
+      var movementMult = scoreMultiplier;        // 1.25 (horizontal only) or 1.0 (full movement)
+      var totalMult = tierMult * movementMult;   // Multiplicative: e.g., 1.75 × 1.25 = 2.19×
+      var earnedPoints = Math.round(basePoints * totalMult);
+      score += earnedPoints;
+      updateUI();
+    }
+
+    /**
      * Decrease difficulty tier (make game easier)
      * Called when player dies 2x in same phase
      *
@@ -2394,8 +2418,7 @@
      */
     function collectPowerup(powerup) {
       playSound('powerUp');
-      score += Math.floor(5 * scoreMultiplier); // Apply elite tier multiplier
-      updateUI();
+      addScore(5); // Power-up collection (tier + movement multipliers)
       if (powerup.type === POWERUP_TYPES.HEALTH) {
         health = Math.min(health + CONFIG.healthPowerupAmount, CONFIG.maxHealth);
         updateUI();
@@ -2410,17 +2433,15 @@
             showAnnouncement("powerupDisplay", "QUAD LASER!", 1500);
           } else {
             // Already at max power in purple phase
-            var bonusPoints = Math.floor(50 * scoreMultiplier);
-            score += bonusPoints;
-            updateUI();
-            showAnnouncement("powerupDisplay", "MAX POWER +" + bonusPoints, 1500);
+            addScore(50); // Max power bonus (tier + movement multipliers)
+            var displayPoints = Math.round(50 * getTierMultiplier() * scoreMultiplier);
+            showAnnouncement("powerupDisplay", "MAX POWER +" + displayPoints, 1500);
           }
         } else if (hasDoubleLaser && !purplePhase) {
           // Green/red phase already has double laser — bonus score instead
-          var bonusPoints = Math.floor(50 * scoreMultiplier);
-          score += bonusPoints;
-          updateUI();
-          showAnnouncement("powerupDisplay", "MAX POWER +" + bonusPoints, 1500);
+          addScore(50); // Max power bonus (tier + movement multipliers)
+          var displayPoints = Math.round(50 * getTierMultiplier() * scoreMultiplier);
+          showAnnouncement("powerupDisplay", "MAX POWER +" + displayPoints, 1500);
         } else {
           hasDoubleLaser = true;
           laserLevel = 2;
@@ -5329,8 +5350,7 @@
             playerBullets.splice(j, 1);
             orbiter.alive = false;
             bossOrbiters.splice(i, 1);
-            score += Math.floor(15 * scoreMultiplier); // Slightly more than regular enemies
-            updateUI();
+            addScore(15); // Orbiter kill (tier + movement multipliers)
             playSound('enemyDead');
             spawnExplosion(orbiter.x + orbiter.width / 2, orbiter.y + orbiter.height / 2);
             lastOrbiterDeathTime = time;
@@ -5532,8 +5552,7 @@
           if (isColliding(playerBullets[j], minion)) {
             playerBullets.splice(j, 1);
             bossMinions.splice(i, 1);
-            score += Math.floor(10 * scoreMultiplier);
-            updateUI();
+            addScore(10); // Boss minion kill (tier + movement multipliers)
             playSound('enemyDead');
             spawnExplosion(minion.x + minion.width / 2, minion.y + minion.height / 2);
             break;
@@ -6071,21 +6090,20 @@
           });
 
           // Boss defeat bonus
-          score += Math.floor(100 * scoreMultiplier);
+          addScore(100); // Boss defeat (tier + movement multipliers)
 
           // Health Remaining Bonus (Mar 26, 2026)
           // Incentivizes health power-up collection and skilled play
-          // Remaining HP converted 1:1 to score points (not affected by scoreMultiplier)
-          var healthBonus = Math.floor(health);
-          score += healthBonus;
-
-          updateUI();
+          // Rewards harder difficulty: multiplied by tier + movement multipliers
+          var baseHealthBonus = Math.floor(health);
+          addScore(baseHealthBonus); // Health bonus (tier + movement multipliers)
           showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
 
           // Show health bonus announcement after victory message
           setTimeout(function() {
-            if (healthBonus > 0) {
-              showAnnouncement("powerupDisplay", "Health Bonus: +" + healthBonus + " pts!", 2500);
+            if (baseHealthBonus > 0) {
+              var displayBonus = Math.round(baseHealthBonus * getTierMultiplier() * scoreMultiplier);
+              showAnnouncement("powerupDisplay", "Health Bonus: +" + displayBonus + " pts!", 2500);
             }
           }, 3200);
 
@@ -8283,8 +8301,7 @@
                 EnemyPool.release(enemy);
                 enemies.splice(realIndex, 1);
               }
-              score += Math.floor(10 * scoreMultiplier);
-              updateUI();
+              addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
               checkLevelUp();
               break;
@@ -8457,8 +8474,7 @@
               spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
-              score += Math.floor(10 * scoreMultiplier);
-              updateUI();
+              addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
               break;
             }
