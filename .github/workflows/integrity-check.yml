@@ -73,6 +73,16 @@ jobs:
           check "function playAgainFromModal"
           check "function leaveGameFromModal"
 
+          # AI Agent v1.0 (adaptive difficulty - Apr 2026)
+          check "var TIER_CONFIG"
+          check "function getCurrentPhase"
+          check "function decreaseTier"
+          check "function increaseTier"
+          check "var currentTier"
+          check "var cyclesCompleted"
+          check "var speedLocked"
+          check "ai_difficulty_adjusted"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -156,6 +166,16 @@ jobs:
           check "function closeLeaderboardModal"
           check "function playAgainFromModal"
           check "function leaveGameFromModal"
+
+          # AI Agent v1.0 (adaptive difficulty - Apr 2026)
+          check "var TIER_CONFIG"
+          check "function getCurrentPhase"
+          check "function decreaseTier"
+          check "function increaseTier"
+          check "var currentTier"
+          check "var cyclesCompleted"
+          check "var speedLocked"
+          check "ai_difficulty_adjusted"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
