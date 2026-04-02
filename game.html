@@ -6887,7 +6887,10 @@
         var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
         var tierName = tierNames[currentTier.toString()] || 'Unknown';
         var lockStatus = speedLocked ? '🔒' : '🔓';
-        indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
+        var tierMult = getTierMultiplier();
+        var moveMult = scoreMultiplier;
+        var totalMult = (tierMult * moveMult).toFixed(2);
+        indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
         indicator.style.display = devMode ? 'block' : 'none';
         console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢' : 'DISABLED 🔴'), 'color:#FF0;font-weight:bold;font-size:14px;');
         return;
@@ -6914,9 +6917,14 @@
           var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
           var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
           var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+          var tierMult = getTierMultiplier();
+          var moveMult = scoreMultiplier;
+          var totalMult = (tierMult * moveMult).toFixed(2);
+          var moveType = moveMult === 1.25 ? 'Horizontal' : 'Full';
           aiIndicator.innerHTML = '⚡ AI MODE<br>' +
             'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
             'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
             'Use [ / ] to adjust tier';
           console.log('%c[AI MODE] ENABLED 🟢', 'color:#FFD700;font-weight:bold;font-size:14px;');
           console.log('%c[AI MODE] Current tier: ' + currentTier + ' (' + tierName + ')', 'color:#FFD700;font-weight:bold;');
@@ -6924,6 +6932,7 @@
           console.log('%c[AI MODE] • Shields: ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ' in purple)' : ''), 'color:#FFD700;');
           console.log('%c[AI MODE] • Orbiters: ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
           console.log('%c[AI MODE] • Minions: ' + tierParams.minionRate + 'x', 'color:#FFD700;');
+          console.log('%c[AI MODE] • Score: ' + tierMult + 'x (tier) × ' + moveMult + 'x (' + moveType + ') = ' + totalMult + 'x total', 'color:#FFD700;');
           console.log('%c[AI MODE] • Deaths: G:' + deathsInPhase.green + ' R:' + deathsInPhase.red + ' P:' + deathsInPhase.purple, 'color:#FFD700;');
           console.log('%c[AI MODE] • Cycles: ' + cyclesCompleted + ' | Speed Locked: ' + (speedLocked ? 'Yes' : 'No'), 'color:#FFD700;');
         } else {
@@ -7024,17 +7033,23 @@
             var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
             var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
             var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+            var oldScoreMult = TIER_CONFIG[oldTier.toString()].scoreMultiplier;
+            var newScoreMult = tierParams.scoreMultiplier;
+            var moveMult = scoreMultiplier;
+            var totalMult = (newScoreMult * moveMult).toFixed(2);
             console.log('%c[AI MODE] Tier: ' + oldTier + ' (' + oldName + ') → ' + currentTier + ' (' + newName + ')', 'color:#FFD700;font-weight:bold;');
             console.log('%c[AI MODE] • Speed: ' + TIER_CONFIG[oldTier.toString()].bulletSpeed + ' → ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ')', 'color:#FFD700;');
             console.log('%c[AI MODE] • Shields: ' + TIER_CONFIG[oldTier.toString()].shieldHits + ' → ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ')' : ''), 'color:#FFD700;');
             console.log('%c[AI MODE] • Orbiters: ' + TIER_CONFIG[oldTier.toString()].bossOrbiters.join('/') + ' → ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
             console.log('%c[AI MODE] • Minions: ' + TIER_CONFIG[oldTier.toString()].minionRate + 'x → ' + tierParams.minionRate + 'x', 'color:#FFD700;');
+            console.log('%c[AI MODE] • Score: ' + oldScoreMult + 'x → ' + newScoreMult + 'x (total: ' + totalMult + 'x)', 'color:#FFD700;');
             // Update AI Mode indicator
             var aiIndicator = document.getElementById('aiModeIndicator');
             if (aiIndicator) {
               aiIndicator.innerHTML = '⚡ AI MODE<br>' +
                 'Tier: ' + currentTier + ' (' + newName + ')<br>' +
                 'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+                'Score: ' + newScoreMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
                 'Use [ / ] to adjust tier';
             }
           }
@@ -7063,17 +7078,23 @@
             var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
             var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
             var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+            var oldScoreMult = TIER_CONFIG[oldTier.toString()].scoreMultiplier;
+            var newScoreMult = tierParams.scoreMultiplier;
+            var moveMult = scoreMultiplier;
+            var totalMult = (newScoreMult * moveMult).toFixed(2);
             console.log('%c[AI MODE] Tier: ' + oldTier + ' (' + oldName + ') → ' + currentTier + ' (' + newName + ')', 'color:#FFD700;font-weight:bold;');
             console.log('%c[AI MODE] • Speed: ' + TIER_CONFIG[oldTier.toString()].bulletSpeed + ' → ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ')', 'color:#FFD700;');
             console.log('%c[AI MODE] • Shields: ' + TIER_CONFIG[oldTier.toString()].shieldHits + ' → ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ')' : ''), 'color:#FFD700;');
             console.log('%c[AI MODE] • Orbiters: ' + TIER_CONFIG[oldTier.toString()].bossOrbiters.join('/') + ' → ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
             console.log('%c[AI MODE] • Minions: ' + TIER_CONFIG[oldTier.toString()].minionRate + 'x → ' + tierParams.minionRate + 'x', 'color:#FFD700;');
+            console.log('%c[AI MODE] • Score: ' + oldScoreMult + 'x → ' + newScoreMult + 'x (total: ' + totalMult + 'x)', 'color:#FFD700;');
             // Update AI Mode indicator
             var aiIndicator = document.getElementById('aiModeIndicator');
             if (aiIndicator) {
               aiIndicator.innerHTML = '⚡ AI MODE<br>' +
                 'Tier: ' + currentTier + ' (' + newName + ')<br>' +
                 'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+                'Score: ' + newScoreMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
                 'Use [ / ] to adjust tier';
             }
           }
