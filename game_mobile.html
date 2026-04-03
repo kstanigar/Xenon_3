@@ -6216,6 +6216,11 @@
       // tier_multiplier and effective_multiplier track AI Agent scoring impact (Apr 1, 2026)
       var tierMult = getTierMultiplier();
       var effectiveMult = tierMult * scoreMultiplier;
+
+      // Diagnostic logging for player_won event (Apr 3, 2026)
+      console.log('[VICTORY] About to fire player_won event');
+      console.log('[VICTORY] tierMult:', tierMult, 'scoreMultiplier:', scoreMultiplier, 'effectiveMult:', effectiveMult);
+
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
         'platform': 'mobile',
@@ -6228,6 +6233,8 @@
         'movement_multiplier': scoreMultiplier,
         'effective_multiplier': effectiveMult
       });
+
+      console.log('[VICTORY] player_won event fired successfully');
 
       // game_complete fires on every session ending regardless of outcome.
       fireEvent('game_complete', {
