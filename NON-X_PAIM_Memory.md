@@ -202,6 +202,130 @@ git push -u origin feature/your-feature-name
 
 ---
 
+
+---
+
+## 📑 TABLE OF CONTENTS
+
+**Quick Navigation - Critical Sections:**
+
+1. [🚨 CRITICAL RULES](#-critical-rules---read-first) ← **START HERE** (Line 8)
+2. [Git Workflow Details](#git-workflow-protected-main-branch) (Line 85)
+3. [Active Issues](#2-active-issues) ← **MOVED UP** (Line ~210)
+4. [Next Actions](#3-next-actions) ← **MOVED UP** (Line ~240)
+5. [Workflow Rules](#4-workflow-rules) ← **MOVED UP** (Line ~280)
+6. [Session History](./NON-X_PAIM_SessionHistory.md) ← Separate file
+
+**Full Sections:**
+- [Project Overview](#1-project-overview)
+- [Planned Features & Roadmap](#1b-planned-features--roadmap)
+- [Analytics Impact Summary](#1c-analytics-impact-summary)
+- [Repository & Git Workflow](#5-repository--git-workflow)
+- [Active A/B Tests](#6-active-ab-tests)
+- [Analytics Infrastructure](#7-analytics-infrastructure)
+- [GA4 Custom Dimensions](#8-ga4-custom-dimensions)
+- [GA4 Explorations Built](#9-ga4-explorations-built)
+- [Data Baselines](#10-qa-data-baseline-feb-10--mar-9-2026)
+- [Gameplay Changes](#12-gameplay-changes-mar-13-2026)
+- [Mobile-Specific Features](#13-mobile-specific-features)
+- [Sensitive Code](#14-sensitive-code--do-not-modify-without-full-trace)
+- [Dashboard & Tooling](#15-dashboard--tooling)
+- [Known History & Post-Mortems](#16-known-history--post-mortems)
+- [Implementation Plans](#18-ai-agent-dashboard-implementation-plan)
+
+---
+
+## 2. ACTIVE ISSUES
+
+### ✅ Resolved
+| ID | Issue | Resolution |
+|---|---|---|
+| F1 | Platform values fragmented (`computer`, `desktop`, `mobile`, `not_set`) | ✅ Fixed Mar 12 — `computer` → `desktop` in index.html v3.0.1. Historical sessions pre-deploy still show `computer`. |
+| F2 | "Games Won" Looker scorecard showing 28/139 | ✅ Fixed Mar 12 — not a formula bug. Root cause: default "Last 28 days" date range included QA data (Feb 10–Mar 9). Fix: set Looker date range to Mar 10, 2026 → today → shows 6 (correct). |
+| F3 | Funnel step 10 uses `game_complete` not `player_won` | ✅ Non-issue Mar 12 — GA4 Explore funnel step 10 already reads `player_won` (6 users, 12.24%). No change needed. |
+| F4 | 4 custom dimensions unregistered: `death_phase`, `replay_tier`, `bonus_hp`, `continue` | ✅ Fixed Mar 2 — all registered in GA4 Admin. |
+| F5 | Mobile L4 V-formation: 2 enemies appearing after formation stops | ✅ Fixed Mar 13 — `flyingVExploded` spacing reduced from 0.5 → 0.34 in `game_mobile.html`. See Section 9 for details. |
+| F6 | Purple phase replay button showing "+25 HP" instead of "+50 HP" | ✅ Fixed Mar 13 — root cause: `redPhase` flag stays `true` through purple phase, so `redPhase` check fired before `purplePhase` check. Fixed in both files by switching button logic to use `deathPhase` string. Combined with replay incentive simplification (see Section 9). |
+| F7 | Desktop replay incentive system not ported | ✅ Fixed Mar 13 — full tier system ported to `game.html`, matching mobile. Both files now use identical simplified logic. |
+| F8 | Mobile spiral formation partially off-screen | ✅ Fixed Mar 14 (session 4) — `spawnSpiralFormation` `targetY` raised from 150 → 320 to align with main formations and barriers. |
+| F9 | Desktop formation snaps/jumps to collapsed position at first morph | ✅ Fixed Mar 13 (session 2) — `morphStartTime` and `lastMorphTime` now reset inside `formationEntered = true` block, matching existing mobile behaviour. See Section 9 Fix 4. |
+| F10 | Mobile barriers off-screen (levels 1, 6, 9, 11) | ✅ Fixed Mar 14 (session 4) — Barrier orbit center moved from y=160 → y=320. Affects circle and orbitingShield barrier types only. See Version History for full details. |
+
+### 🟡 Watch / Improve
+| ID | Issue | Notes |
+|---|---|---|
+| I1 | Menu bounce — 24.5% of sessions never start a game | 🔴 Now confirmed as #1 drop with real data (37/49 sessions). Cross-ref `menu_view` referrer to identify traffic source. |
+| I2 | L2 death spike — 34 deaths vs 8 at L3 | Unexpected. Investigate specific enemy pattern at L2. |
+| I3 | Mobile = 81% of all deaths | Platform gap confirmed with real data. Mobile controls are the friction point. |
+| I5 | Boss 2 funnel (50%) vs kill rate (83%) contradiction | Frustration accumulation, not first-attempt wall. Watch as data grows. |
+
+---
+---
+
+## 3. NEXT ACTIONS
+
+| Priority | Action | Owner |
+|---|---|---|
+| ✅ Done | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 19, 2026 — Completed |
+| ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
+| ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
+| ✅ Done | Wave drop-off: ALL / MOBILE / DESKTOP platform toggle | Mar 12 |
+| ✅ Done | "Games Won" Looker scorecard — date range fix, filter Mar 10+ | Mar 12 |
+| ✅ Done | Funnel step 10 — already `player_won`, no change needed | Mar 12 |
+| ✅ Done | Fix L4 mobile V-formation pop-in (flyingVExploded spacing 0.5→0.34) | Mar 13 |
+| ✅ Done | Fix purple replay button showing +25 instead of +50 | Mar 13 |
+| ✅ Done | Port + simplify replay incentive system to desktop | Mar 13 |
+| ✅ Done | Fix mobile spiral formation clipping top of screen (targetY 150→220) | Mar 13 session 2 |
+| ✅ Done | Fix desktop formation snap-to-position at first morph (morph clock reset) | Mar 13 session 2 |
+| ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
+| ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
+| 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
+| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
+| ✅ Done | **Review Mobile Shield Degradation** — Removed opacity fade AND flash effect for performance/visual clarity | Mar 19, 2026 — Completed |
+| ✅ Done | **Power-Up Cleanup Optimization** — Reduced validation frequency from 60fps to every 15 seconds (900x reduction) | Mar 19, 2026 — Completed |
+| 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
+| 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
+| 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
+| 🟡 P2 | Build Ctrl+S session persistence for dashboard | Claude |
+| 🟢 P3 | Build Smart Signal System — Report Card tab + benchmark tooltips | Claude (after ~Mar 24 data) |
+| 🟢 P3 | Build music A/B comparison once v3.0 organic data accumulates (~Mar 24+) | — |
+| 🟢 P3 | Build 6-page Looker Studio portfolio dashboard | After platform CSV loaded |
+| 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
+| 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
+| 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
+| ✅ Done | **Leaderboard expansion: Top 25 with modal** — Implemented modal overlay instead of dropdown. Includes platform selector (index.html), 2-button footer (game files) | Mar 19, 2026 — Completed (branch: feature/top25_leaderboard_modal) |
+
+---
+
+## 4. WORKFLOW RULES
+
+1. **Data-first:** Confirm capture before building any visual. Audit: Good / Improve / Fix.
+2. **Every metric gets a G/I/F audit** before being added to the dashboard.
+3. **Share updated files after each commit** — AI applies fixes to the new version.
+4. **Dashboard:** Weekly GA4 CSV → drag-and-drop → Ctrl+S.
+5. **Looker = real-time ops. HTML dashboard = polished weekly + portfolio.**
+6. **Data sharing:** Screenshots + CSV exports (no direct GA4/Looker access possible).
+7. **Claude rule:** Never recommend destructive operations without full dependency trace.
+8. **Claude rule:** Never diagnose game over bugs without asking level + score + context first.
+9. **Claude rule:** When fixing positioning bugs, ALWAYS clarify which enemy/entity type needs adjustment:
+   - **Main Formation** (slot rotation formations: grid, diamond, V, circle) - levels 1-12, targetY in `spawnMorphingFormation()`
+   - **Barriers** (circle, orbitingShield, horizontalLine, arrow, dualLines) - separate positioning per type
+   - **Legacy Formations** (spiral, pincer, sine wave) - reserved for pink levels, separate positioning
+   - **Boss/Kamikazes/Boss Minions** - separate positioning systems
+   - Do NOT assume "formation" means main formation - verify which entity type from screenshots/context
+10. **Claude rule:** Investigate and report findings before making any code changes.
+11. **Practice runs:** QA data is valid for workflow practice — builds readiness for real data launch.
+12. **🚨 CRITICAL — Formation mechanics:** The morphing + slot rotation system is NON-X's signature visual identity. When adjusting enemy positioning, timing, or movement:
+    - **READ Section 9 (Formation Morphing + Slot Rotation System) FIRST** — understand both systems before ANY changes
+    - **CHECK debug console logs** — verify `timeSinceStart`, `newShapeIndex`, `morphCount`, and `targetPos` values
+    - **REPORT to user BEFORE implementing** — explain how changes will interact with morphing/carousel
+    - **TEST thoroughly** — formations must morph smoothly, enemies must carousel through slots
+    - **NEVER reset `formationEnteredTime` mid-wave** — breaks morph progression
+    - **NEVER modify slot assignment without preserving `(idx + morphCount) % length` pattern** — breaks carousel
+
+---
+---
+
 ## 1b. PLANNED FEATURES & ROADMAP
 
 ### P1 — High Priority (Next Sprint)
@@ -446,7 +570,7 @@ git push -u origin feature/your-feature-name
 
 ---
 
-## 2. REPOSITORY & GIT WORKFLOW
+## 5. REPOSITORY & GIT WORKFLOW
 
 - **Branches:** `main` (production) → feature branches → PR → merge. **Never use `develop`.**
 - **CI/CD:** GitHub Actions integrity checks on every PR
@@ -660,7 +784,7 @@ print('draw function:', 'function draw(' in c)
 
 ---
 
-## 3. ACTIVE A/B TESTS
+## 6. ACTIVE A/B TESTS
 
 | Test | Group A | Group B | Primary Metrics |
 |---|---|---|---|
@@ -672,7 +796,7 @@ print('draw function:', 'function draw(' in c)
 
 ---
 
-## 4. ANALYTICS INFRASTRUCTURE
+## 7. ANALYTICS INFRASTRUCTURE
 
 ### Event wrappers
 | File | Function | Behaviour |
@@ -724,7 +848,7 @@ print('draw function:', 'function draw(' in c)
 
 ---
 
-## 5. GA4 CUSTOM DIMENSIONS
+## 8. GA4 CUSTOM DIMENSIONS
 
 Register in: GA4 Admin → Property → Custom Definitions → Custom Dimensions
 
@@ -750,7 +874,7 @@ Register in: GA4 Admin → Property → Custom Definitions → Custom Dimensions
 
 ---
 
-## 6. GA4 EXPLORATIONS BUILT
+## 9. GA4 EXPLORATIONS BUILT
 
 ### 1. NON-X Completion Funnel (Funnel exploration)
 10 steps: Session Start → Game Start → Level 1 → Level 4 → Boss 1 Attempt → Level 8 → Boss 2 Attempt → Level 12 → Boss Attempt 3 → Player Won
@@ -876,7 +1000,7 @@ ROWS Death Phase | COLUMNS Is Replay | FILTER player_death
 
 ---
 
-## 7. QA DATA BASELINE (Feb 10 – Mar 9, 2026)
+## 10. QA DATA BASELINE (Feb 10 – Mar 9, 2026)
 
 > ⚠️ **This dataset is QA/self-testing only.** ~38 "unique users" were primarily the developer testing across incognito sessions and cache clears. Do NOT calibrate benchmarks or draw product conclusions from this data. Use for pipeline validation only.
 > **Real player baseline: Mar 10, 2026 onward.**
@@ -898,7 +1022,7 @@ Boss 1: 46/63 = 73% | Boss 2: 23/26 = 88.5% | Boss 3: 19/19 = 100%
 
 ---
 
-## 7b. REAL PLAYER BASELINE (Mar 10 – Mar 12, 2026)
+## 11. REAL PLAYER BASELINE (Mar 10 – Mar 12, 2026)
 
 > ✅ **This is the first real player dataset.** 49 sessions from organic users. Small sample — do not over-index on individual metrics, but use for directional signals and pipeline validation. Benchmarks will sharpen as data accumulates.
 
@@ -938,33 +1062,8 @@ L1=0, L2=34, L3=8, L4=45, L5=12, L6=11, L7=0, L8=9, L9=2, L10=5, L11=2, L12=5
 
 ---
 
-## 8. ACTIVE ISSUES
 
-### ✅ Resolved
-| ID | Issue | Resolution |
-|---|---|---|
-| F1 | Platform values fragmented (`computer`, `desktop`, `mobile`, `not_set`) | ✅ Fixed Mar 12 — `computer` → `desktop` in index.html v3.0.1. Historical sessions pre-deploy still show `computer`. |
-| F2 | "Games Won" Looker scorecard showing 28/139 | ✅ Fixed Mar 12 — not a formula bug. Root cause: default "Last 28 days" date range included QA data (Feb 10–Mar 9). Fix: set Looker date range to Mar 10, 2026 → today → shows 6 (correct). |
-| F3 | Funnel step 10 uses `game_complete` not `player_won` | ✅ Non-issue Mar 12 — GA4 Explore funnel step 10 already reads `player_won` (6 users, 12.24%). No change needed. |
-| F4 | 4 custom dimensions unregistered: `death_phase`, `replay_tier`, `bonus_hp`, `continue` | ✅ Fixed Mar 2 — all registered in GA4 Admin. |
-| F5 | Mobile L4 V-formation: 2 enemies appearing after formation stops | ✅ Fixed Mar 13 — `flyingVExploded` spacing reduced from 0.5 → 0.34 in `game_mobile.html`. See Section 9 for details. |
-| F6 | Purple phase replay button showing "+25 HP" instead of "+50 HP" | ✅ Fixed Mar 13 — root cause: `redPhase` flag stays `true` through purple phase, so `redPhase` check fired before `purplePhase` check. Fixed in both files by switching button logic to use `deathPhase` string. Combined with replay incentive simplification (see Section 9). |
-| F7 | Desktop replay incentive system not ported | ✅ Fixed Mar 13 — full tier system ported to `game.html`, matching mobile. Both files now use identical simplified logic. |
-| F8 | Mobile spiral formation partially off-screen | ✅ Fixed Mar 14 (session 4) — `spawnSpiralFormation` `targetY` raised from 150 → 320 to align with main formations and barriers. |
-| F9 | Desktop formation snaps/jumps to collapsed position at first morph | ✅ Fixed Mar 13 (session 2) — `morphStartTime` and `lastMorphTime` now reset inside `formationEntered = true` block, matching existing mobile behaviour. See Section 9 Fix 4. |
-| F10 | Mobile barriers off-screen (levels 1, 6, 9, 11) | ✅ Fixed Mar 14 (session 4) — Barrier orbit center moved from y=160 → y=320. Affects circle and orbitingShield barrier types only. See Version History for full details. |
-
-### 🟡 Watch / Improve
-| ID | Issue | Notes |
-|---|---|---|
-| I1 | Menu bounce — 24.5% of sessions never start a game | 🔴 Now confirmed as #1 drop with real data (37/49 sessions). Cross-ref `menu_view` referrer to identify traffic source. |
-| I2 | L2 death spike — 34 deaths vs 8 at L3 | Unexpected. Investigate specific enemy pattern at L2. |
-| I3 | Mobile = 81% of all deaths | Platform gap confirmed with real data. Mobile controls are the friction point. |
-| I5 | Boss 2 funnel (50%) vs kill rate (83%) contradiction | Frustration accumulation, not first-attempt wall. Watch as data grows. |
-
----
-
-## 9. GAMEPLAY CHANGES (Mar 13, 2026)
+## 12. GAMEPLAY CHANGES (Mar 13, 2026)
 
 ### Fix 1 — Mobile L4 V-formation pop-in (`game_mobile.html` only)
 **Problem:** In `flyingVExploded`, the outermost arm enemies (index 4 and 8) had natural X positions of -65px and 495px on the 480px-wide mobile canvas — fully off-screen during the entire descent. When the formation stopped and X-clamping activated, they snapped visibly to the screen edges, appearing to "pop in." Player saw 7 enemies enter, 2 appear suddenly.
@@ -1107,7 +1206,7 @@ Both files include debug logs for troubleshooting (currently active):
 
 ---
 
-## 10. MOBILE-SPECIFIC FEATURES
+## 13. MOBILE-SPECIFIC FEATURES
 
 ### Difficulty tuning (affects analytics comparisons)
 | Phase | Desktop bullet × | Mobile bullet × |
@@ -1136,7 +1235,7 @@ Enemy counts per level:
 
 ---
 
-## 11. SENSITIVE CODE — DO NOT MODIFY WITHOUT FULL TRACE
+## 14. SENSITIVE CODE — DO NOT MODIFY WITHOUT FULL TRACE
 
 ### ⚠️ Leaderboard Submit (`buildLeaderboardSubmitHTML`)
 - `submittedScore` MUST be captured BEFORE `addHighScore()` runs — timing bug caused a 2.5 hr regression
@@ -1162,7 +1261,7 @@ Enemy counts per level:
 
 ---
 
-## 12. DASHBOARD & TOOLING
+## 15. DASHBOARD & TOOLING
 
 ### HTML Analytics Dashboard (`nonx-analytics-dashboard.html`)
 - 6 tabs: Overview, Funnel, Boss Analysis, A/B Tests, Platform, Looker Guide
@@ -1254,35 +1353,8 @@ Delta: ↑ green = improving | ↓ red = worsening | → grey = stable | ~ yello
 
 ---
 
-## 13. WORKFLOW RULES
 
-1. **Data-first:** Confirm capture before building any visual. Audit: Good / Improve / Fix.
-2. **Every metric gets a G/I/F audit** before being added to the dashboard.
-3. **Share updated files after each commit** — AI applies fixes to the new version.
-4. **Dashboard:** Weekly GA4 CSV → drag-and-drop → Ctrl+S.
-5. **Looker = real-time ops. HTML dashboard = polished weekly + portfolio.**
-6. **Data sharing:** Screenshots + CSV exports (no direct GA4/Looker access possible).
-7. **Claude rule:** Never recommend destructive operations without full dependency trace.
-8. **Claude rule:** Never diagnose game over bugs without asking level + score + context first.
-9. **Claude rule:** When fixing positioning bugs, ALWAYS clarify which enemy/entity type needs adjustment:
-   - **Main Formation** (slot rotation formations: grid, diamond, V, circle) - levels 1-12, targetY in `spawnMorphingFormation()`
-   - **Barriers** (circle, orbitingShield, horizontalLine, arrow, dualLines) - separate positioning per type
-   - **Legacy Formations** (spiral, pincer, sine wave) - reserved for pink levels, separate positioning
-   - **Boss/Kamikazes/Boss Minions** - separate positioning systems
-   - Do NOT assume "formation" means main formation - verify which entity type from screenshots/context
-10. **Claude rule:** Investigate and report findings before making any code changes.
-11. **Practice runs:** QA data is valid for workflow practice — builds readiness for real data launch.
-12. **🚨 CRITICAL — Formation mechanics:** The morphing + slot rotation system is NON-X's signature visual identity. When adjusting enemy positioning, timing, or movement:
-    - **READ Section 9 (Formation Morphing + Slot Rotation System) FIRST** — understand both systems before ANY changes
-    - **CHECK debug console logs** — verify `timeSinceStart`, `newShapeIndex`, `morphCount`, and `targetPos` values
-    - **REPORT to user BEFORE implementing** — explain how changes will interact with morphing/carousel
-    - **TEST thoroughly** — formations must morph smoothly, enemies must carousel through slots
-    - **NEVER reset `formationEnteredTime` mid-wave** — breaks morph progression
-    - **NEVER modify slot assignment without preserving `(idx + morphCount) % length` pattern** — breaks carousel
-
----
-
-## 14. KNOWN HISTORY & POST-MORTEMS
+## 16. KNOWN HISTORY & POST-MORTEMS
 
 ### Leaderboard Submission Bug (~2.5 hrs lost, March 2026)
 Deleting Firebase collection → submit form stopped appearing. Root cause: `addHighScore(score)` ran before `buildLeaderboardSubmitHTML()`. Fix: capture `submittedScore` before `addHighScore()` runs. Claude incorrectly diagnosed the `level >= 2` gate and made 3 bad fixes in a row.
@@ -2648,42 +2720,9 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 
 ---
 
-## 15. NEXT ACTIONS
-
-| Priority | Action | Owner |
-|---|---|---|
-| ✅ Done | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 19, 2026 — Completed |
-| ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
-| ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
-| ✅ Done | Wave drop-off: ALL / MOBILE / DESKTOP platform toggle | Mar 12 |
-| ✅ Done | "Games Won" Looker scorecard — date range fix, filter Mar 10+ | Mar 12 |
-| ✅ Done | Funnel step 10 — already `player_won`, no change needed | Mar 12 |
-| ✅ Done | Fix L4 mobile V-formation pop-in (flyingVExploded spacing 0.5→0.34) | Mar 13 |
-| ✅ Done | Fix purple replay button showing +25 instead of +50 | Mar 13 |
-| ✅ Done | Port + simplify replay incentive system to desktop | Mar 13 |
-| ✅ Done | Fix mobile spiral formation clipping top of screen (targetY 150→220) | Mar 13 session 2 |
-| ✅ Done | Fix desktop formation snap-to-position at first morph (morph clock reset) | Mar 13 session 2 |
-| ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
-| ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
-| 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
-| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
-| ✅ Done | **Review Mobile Shield Degradation** — Removed opacity fade AND flash effect for performance/visual clarity | Mar 19, 2026 — Completed |
-| ✅ Done | **Power-Up Cleanup Optimization** — Reduced validation frequency from 60fps to every 15 seconds (900x reduction) | Mar 19, 2026 — Completed |
-| 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
-| 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
-| 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
-| 🟡 P2 | Build Ctrl+S session persistence for dashboard | Claude |
-| 🟢 P3 | Build Smart Signal System — Report Card tab + benchmark tooltips | Claude (after ~Mar 24 data) |
-| 🟢 P3 | Build music A/B comparison once v3.0 organic data accumulates (~Mar 24+) | — |
-| 🟢 P3 | Build 6-page Looker Studio portfolio dashboard | After platform CSV loaded |
-| 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
-| 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
-| 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
-| ✅ Done | **Leaderboard expansion: Top 25 with modal** — Implemented modal overlay instead of dropdown. Includes platform selector (index.html), 2-button footer (game files) | Mar 19, 2026 — Completed (branch: feature/top25_leaderboard_modal) |
-
 ---
 
-## 15b. AI AGENT DASHBOARD IMPLEMENTATION PLAN
+## 17. AI AGENT DASHBOARD IMPLEMENTATION PLAN
 
 ### Overview
 The analytics dashboard (`non-x_analytics/index.html`) has a complete AI Agent tab with 6 charts and data placeholders, but lacks CSV parser functions to populate the data from GA4 explorations. This section documents the implementation plan for building the 3 required CSV parsers.
@@ -3145,7 +3184,7 @@ Then create a pull request on GitHub.
 
 ---
 
-## 16. GITHUB TOKEN ROTATION (Next Session - Mar 19, 2026)
+## 18. GITHUB TOKEN ROTATION (Next Session - Mar 19, 2026)
 
 ### Task: Create new Classic Personal Access Token with 365-day expiration
 
@@ -3195,7 +3234,7 @@ Then create a pull request on GitHub.
 
 ---
 
-## 17. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
+## 19. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
 
 ### Problem
 **Performance:** Mobile devices experience stuttering when many enemies and bullets are on-screen simultaneously (especially levels 9-12 with 16-22 enemies).
@@ -3326,7 +3365,7 @@ After testing, green levels felt too easy due to cascading making bullets more p
 
 ---
 
-## 18. LEADERBOARD EXPANSION: TOP 25 WITH MODAL (Implemented - Mar 19, 2026)
+## 20. LEADERBOARD EXPANSION: TOP 25 WITH MODAL (Implemented - Mar 19, 2026)
 
 ### Implementation Overview
 **Expanded leaderboard from top 10 to top 25, with entries 11-25 shown via modal overlay instead of dropdown.**
@@ -3590,7 +3629,7 @@ html += "<button onclick='startGameFromModal()'...>🎮 START GAME</button>";
 
 ---
 
-## 19. RED BOSS REBALANCING + PERFORMANCE OPTIMIZATIONS (Mar 30, 2026)
+## 21. RED BOSS REBALANCING + PERFORMANCE OPTIMIZATIONS (Mar 30, 2026)
 
 ### Overview
 Performance optimization sprint focused on reducing stuttering during powerup collection and boss fights, especially in red/purple phases on mobile. Combined bullet count reduction with code-level performance improvements.
