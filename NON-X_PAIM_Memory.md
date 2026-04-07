@@ -1,9 +1,59 @@
 # NON-X — PAIM Master Memory
 ### Project AI Model Reference Document
-_Last updated: April 1, 2026 (AI Agent v1.0 + Tier-Based Scoring implemented)_
+_Last updated: April 6, 2026 (Optimized for AI context windows - Session History split)_
 _Merged from: Game Dev Memory + Analytics Memory_
 
 ---
+
+## 🚨 CRITICAL RULES - READ FIRST
+
+**These rules MUST be followed by every AI model working on this project:**
+
+### 1. GIT WORKFLOW 🔴 NEVER PUSH TO MAIN BRANCH
+
+**CRITICAL:** The `main` branch is protected and requires pull requests.
+
+**Correct workflow:**
+```bash
+# Always use feature branches
+git checkout -b feature/your-feature-name  # or fix/, perf/, docs/
+git add <files>
+git commit -m "feat: description"
+git push -u origin feature/your-feature-name
+# Then create PR on GitHub
+```
+
+**If you accidentally commit to main:**
+```bash
+git branch feature/recovery-branch    # Save your commit
+git checkout feature/recovery-branch
+git checkout main
+git reset --hard origin/main          # Reset main to remote
+git checkout feature/recovery-branch
+git push -u origin feature/recovery-branch
+```
+
+### 2. ANALYTICS VERSION: 4.3
+- Filter ALL GA4 explorations and reports to `analytics_version = 4.3`
+- Bump version ONLY when gameplay mechanics change
+
+### 3. DATA-FIRST WORKFLOW
+- Confirm data is being captured correctly BEFORE building visuals
+- Audit as: 🟢 Good / 🟡 Improve / 🔴 Fix
+
+### 4. INVESTIGATE BEFORE CHANGING
+- Always trace root cause first
+- Report findings before implementing
+- Include comments and revert instructions
+
+### 5. SESSION SUMMARIES REQUIRED
+- Add 3-bullet summary to SESSION HISTORY at end of each session
+- Include: (1) What was implemented/fixed, (2) Files modified, (3) Next steps
+
+**Full details in sections below ↓**
+
+---
+
 
 ## HOW TO USE THIS DOCUMENT
 
@@ -150,6 +200,130 @@ git push -u origin feature/your-feature-name
 
 ✅ All levels now have barriers (added to levels 3, 5, 7 in Mar 2026 session 5)
 
+---
+
+
+---
+
+## 📑 TABLE OF CONTENTS
+
+**Quick Navigation - Critical Sections:**
+
+1. [🚨 CRITICAL RULES](#-critical-rules---read-first) ← **START HERE** (Line 8)
+2. [Git Workflow Details](#git-workflow-protected-main-branch) (Line 85)
+3. [Active Issues](#2-active-issues) ← **MOVED UP** (Line ~210)
+4. [Next Actions](#3-next-actions) ← **MOVED UP** (Line ~240)
+5. [Workflow Rules](#4-workflow-rules) ← **MOVED UP** (Line ~280)
+6. [Session History](./NON-X_PAIM_SessionHistory.md) ← Separate file
+
+**Full Sections:**
+- [Project Overview](#1-project-overview)
+- [Planned Features & Roadmap](#1b-planned-features--roadmap)
+- [Analytics Impact Summary](#1c-analytics-impact-summary)
+- [Repository & Git Workflow](#5-repository--git-workflow)
+- [Active A/B Tests](#6-active-ab-tests)
+- [Analytics Infrastructure](#7-analytics-infrastructure)
+- [GA4 Custom Dimensions](#8-ga4-custom-dimensions)
+- [GA4 Explorations Built](#9-ga4-explorations-built)
+- [Data Baselines](#10-qa-data-baseline-feb-10--mar-9-2026)
+- [Gameplay Changes](#12-gameplay-changes-mar-13-2026)
+- [Mobile-Specific Features](#13-mobile-specific-features)
+- [Sensitive Code](#14-sensitive-code--do-not-modify-without-full-trace)
+- [Dashboard & Tooling](#15-dashboard--tooling)
+- [Known History & Post-Mortems](#16-known-history--post-mortems)
+- [Implementation Plans](#18-ai-agent-dashboard-implementation-plan)
+
+---
+
+## 2. ACTIVE ISSUES
+
+### ✅ Resolved
+| ID | Issue | Resolution |
+|---|---|---|
+| F1 | Platform values fragmented (`computer`, `desktop`, `mobile`, `not_set`) | ✅ Fixed Mar 12 — `computer` → `desktop` in index.html v3.0.1. Historical sessions pre-deploy still show `computer`. |
+| F2 | "Games Won" Looker scorecard showing 28/139 | ✅ Fixed Mar 12 — not a formula bug. Root cause: default "Last 28 days" date range included QA data (Feb 10–Mar 9). Fix: set Looker date range to Mar 10, 2026 → today → shows 6 (correct). |
+| F3 | Funnel step 10 uses `game_complete` not `player_won` | ✅ Non-issue Mar 12 — GA4 Explore funnel step 10 already reads `player_won` (6 users, 12.24%). No change needed. |
+| F4 | 4 custom dimensions unregistered: `death_phase`, `replay_tier`, `bonus_hp`, `continue` | ✅ Fixed Mar 2 — all registered in GA4 Admin. |
+| F5 | Mobile L4 V-formation: 2 enemies appearing after formation stops | ✅ Fixed Mar 13 — `flyingVExploded` spacing reduced from 0.5 → 0.34 in `game_mobile.html`. See Section 9 for details. |
+| F6 | Purple phase replay button showing "+25 HP" instead of "+50 HP" | ✅ Fixed Mar 13 — root cause: `redPhase` flag stays `true` through purple phase, so `redPhase` check fired before `purplePhase` check. Fixed in both files by switching button logic to use `deathPhase` string. Combined with replay incentive simplification (see Section 9). |
+| F7 | Desktop replay incentive system not ported | ✅ Fixed Mar 13 — full tier system ported to `game.html`, matching mobile. Both files now use identical simplified logic. |
+| F8 | Mobile spiral formation partially off-screen | ✅ Fixed Mar 14 (session 4) — `spawnSpiralFormation` `targetY` raised from 150 → 320 to align with main formations and barriers. |
+| F9 | Desktop formation snaps/jumps to collapsed position at first morph | ✅ Fixed Mar 13 (session 2) — `morphStartTime` and `lastMorphTime` now reset inside `formationEntered = true` block, matching existing mobile behaviour. See Section 9 Fix 4. |
+| F10 | Mobile barriers off-screen (levels 1, 6, 9, 11) | ✅ Fixed Mar 14 (session 4) — Barrier orbit center moved from y=160 → y=320. Affects circle and orbitingShield barrier types only. See Version History for full details. |
+
+### 🟡 Watch / Improve
+| ID | Issue | Notes |
+|---|---|---|
+| I1 | Menu bounce — 24.5% of sessions never start a game | 🔴 Now confirmed as #1 drop with real data (37/49 sessions). Cross-ref `menu_view` referrer to identify traffic source. |
+| I2 | L2 death spike — 34 deaths vs 8 at L3 | Unexpected. Investigate specific enemy pattern at L2. |
+| I3 | Mobile = 81% of all deaths | Platform gap confirmed with real data. Mobile controls are the friction point. |
+| I5 | Boss 2 funnel (50%) vs kill rate (83%) contradiction | Frustration accumulation, not first-attempt wall. Watch as data grows. |
+
+---
+---
+
+## 3. NEXT ACTIONS
+
+| Priority | Action | Owner |
+|---|---|---|
+| ✅ Done | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 19, 2026 — Completed |
+| ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
+| ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
+| ✅ Done | Wave drop-off: ALL / MOBILE / DESKTOP platform toggle | Mar 12 |
+| ✅ Done | "Games Won" Looker scorecard — date range fix, filter Mar 10+ | Mar 12 |
+| ✅ Done | Funnel step 10 — already `player_won`, no change needed | Mar 12 |
+| ✅ Done | Fix L4 mobile V-formation pop-in (flyingVExploded spacing 0.5→0.34) | Mar 13 |
+| ✅ Done | Fix purple replay button showing +25 instead of +50 | Mar 13 |
+| ✅ Done | Port + simplify replay incentive system to desktop | Mar 13 |
+| ✅ Done | Fix mobile spiral formation clipping top of screen (targetY 150→220) | Mar 13 session 2 |
+| ✅ Done | Fix desktop formation snap-to-position at first morph (morph clock reset) | Mar 13 session 2 |
+| ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
+| ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
+| 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
+| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
+| ✅ Done | **Review Mobile Shield Degradation** — Removed opacity fade AND flash effect for performance/visual clarity | Mar 19, 2026 — Completed |
+| ✅ Done | **Power-Up Cleanup Optimization** — Reduced validation frequency from 60fps to every 15 seconds (900x reduction) | Mar 19, 2026 — Completed |
+| 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
+| 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
+| 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
+| 🟡 P2 | Build Ctrl+S session persistence for dashboard | Claude |
+| 🟢 P3 | Build Smart Signal System — Report Card tab + benchmark tooltips | Claude (after ~Mar 24 data) |
+| 🟢 P3 | Build music A/B comparison once v3.0 organic data accumulates (~Mar 24+) | — |
+| 🟢 P3 | Build 6-page Looker Studio portfolio dashboard | After platform CSV loaded |
+| 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
+| 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
+| 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
+| ✅ Done | **Leaderboard expansion: Top 25 with modal** — Implemented modal overlay instead of dropdown. Includes platform selector (index.html), 2-button footer (game files) | Mar 19, 2026 — Completed (branch: feature/top25_leaderboard_modal) |
+
+---
+
+## 4. WORKFLOW RULES
+
+1. **Data-first:** Confirm capture before building any visual. Audit: Good / Improve / Fix.
+2. **Every metric gets a G/I/F audit** before being added to the dashboard.
+3. **Share updated files after each commit** — AI applies fixes to the new version.
+4. **Dashboard:** Weekly GA4 CSV → drag-and-drop → Ctrl+S.
+5. **Looker = real-time ops. HTML dashboard = polished weekly + portfolio.**
+6. **Data sharing:** Screenshots + CSV exports (no direct GA4/Looker access possible).
+7. **Claude rule:** Never recommend destructive operations without full dependency trace.
+8. **Claude rule:** Never diagnose game over bugs without asking level + score + context first.
+9. **Claude rule:** When fixing positioning bugs, ALWAYS clarify which enemy/entity type needs adjustment:
+   - **Main Formation** (slot rotation formations: grid, diamond, V, circle) - levels 1-12, targetY in `spawnMorphingFormation()`
+   - **Barriers** (circle, orbitingShield, horizontalLine, arrow, dualLines) - separate positioning per type
+   - **Legacy Formations** (spiral, pincer, sine wave) - reserved for pink levels, separate positioning
+   - **Boss/Kamikazes/Boss Minions** - separate positioning systems
+   - Do NOT assume "formation" means main formation - verify which entity type from screenshots/context
+10. **Claude rule:** Investigate and report findings before making any code changes.
+11. **Practice runs:** QA data is valid for workflow practice — builds readiness for real data launch.
+12. **🚨 CRITICAL — Formation mechanics:** The morphing + slot rotation system is NON-X's signature visual identity. When adjusting enemy positioning, timing, or movement:
+    - **READ Section 9 (Formation Morphing + Slot Rotation System) FIRST** — understand both systems before ANY changes
+    - **CHECK debug console logs** — verify `timeSinceStart`, `newShapeIndex`, `morphCount`, and `targetPos` values
+    - **REPORT to user BEFORE implementing** — explain how changes will interact with morphing/carousel
+    - **TEST thoroughly** — formations must morph smoothly, enemies must carousel through slots
+    - **NEVER reset `formationEnteredTime` mid-wave** — breaks morph progression
+    - **NEVER modify slot assignment without preserving `(idx + morphCount) % length` pattern** — breaks carousel
+
+---
 ---
 
 ## 1b. PLANNED FEATURES & ROADMAP
@@ -396,7 +570,7 @@ git push -u origin feature/your-feature-name
 
 ---
 
-## 2. REPOSITORY & GIT WORKFLOW
+## 5. REPOSITORY & GIT WORKFLOW
 
 - **Branches:** `main` (production) → feature branches → PR → merge. **Never use `develop`.**
 - **CI/CD:** GitHub Actions integrity checks on every PR
@@ -610,7 +784,7 @@ print('draw function:', 'function draw(' in c)
 
 ---
 
-## 3. ACTIVE A/B TESTS
+## 6. ACTIVE A/B TESTS
 
 | Test | Group A | Group B | Primary Metrics |
 |---|---|---|---|
@@ -622,7 +796,7 @@ print('draw function:', 'function draw(' in c)
 
 ---
 
-## 4. ANALYTICS INFRASTRUCTURE
+## 7. ANALYTICS INFRASTRUCTURE
 
 ### Event wrappers
 | File | Function | Behaviour |
@@ -674,7 +848,7 @@ print('draw function:', 'function draw(' in c)
 
 ---
 
-## 5. GA4 CUSTOM DIMENSIONS
+## 8. GA4 CUSTOM DIMENSIONS
 
 Register in: GA4 Admin → Property → Custom Definitions → Custom Dimensions
 
@@ -700,7 +874,7 @@ Register in: GA4 Admin → Property → Custom Definitions → Custom Dimensions
 
 ---
 
-## 6. GA4 EXPLORATIONS BUILT
+## 9. GA4 EXPLORATIONS BUILT
 
 ### 1. NON-X Completion Funnel (Funnel exploration)
 10 steps: Session Start → Game Start → Level 1 → Level 4 → Boss 1 Attempt → Level 8 → Boss 2 Attempt → Level 12 → Boss Attempt 3 → Player Won
@@ -826,7 +1000,7 @@ ROWS Death Phase | COLUMNS Is Replay | FILTER player_death
 
 ---
 
-## 7. QA DATA BASELINE (Feb 10 – Mar 9, 2026)
+## 10. QA DATA BASELINE (Feb 10 – Mar 9, 2026)
 
 > ⚠️ **This dataset is QA/self-testing only.** ~38 "unique users" were primarily the developer testing across incognito sessions and cache clears. Do NOT calibrate benchmarks or draw product conclusions from this data. Use for pipeline validation only.
 > **Real player baseline: Mar 10, 2026 onward.**
@@ -848,7 +1022,7 @@ Boss 1: 46/63 = 73% | Boss 2: 23/26 = 88.5% | Boss 3: 19/19 = 100%
 
 ---
 
-## 7b. REAL PLAYER BASELINE (Mar 10 – Mar 12, 2026)
+## 11. REAL PLAYER BASELINE (Mar 10 – Mar 12, 2026)
 
 > ✅ **This is the first real player dataset.** 49 sessions from organic users. Small sample — do not over-index on individual metrics, but use for directional signals and pipeline validation. Benchmarks will sharpen as data accumulates.
 
@@ -888,33 +1062,8 @@ L1=0, L2=34, L3=8, L4=45, L5=12, L6=11, L7=0, L8=9, L9=2, L10=5, L11=2, L12=5
 
 ---
 
-## 8. ACTIVE ISSUES
 
-### ✅ Resolved
-| ID | Issue | Resolution |
-|---|---|---|
-| F1 | Platform values fragmented (`computer`, `desktop`, `mobile`, `not_set`) | ✅ Fixed Mar 12 — `computer` → `desktop` in index.html v3.0.1. Historical sessions pre-deploy still show `computer`. |
-| F2 | "Games Won" Looker scorecard showing 28/139 | ✅ Fixed Mar 12 — not a formula bug. Root cause: default "Last 28 days" date range included QA data (Feb 10–Mar 9). Fix: set Looker date range to Mar 10, 2026 → today → shows 6 (correct). |
-| F3 | Funnel step 10 uses `game_complete` not `player_won` | ✅ Non-issue Mar 12 — GA4 Explore funnel step 10 already reads `player_won` (6 users, 12.24%). No change needed. |
-| F4 | 4 custom dimensions unregistered: `death_phase`, `replay_tier`, `bonus_hp`, `continue` | ✅ Fixed Mar 2 — all registered in GA4 Admin. |
-| F5 | Mobile L4 V-formation: 2 enemies appearing after formation stops | ✅ Fixed Mar 13 — `flyingVExploded` spacing reduced from 0.5 → 0.34 in `game_mobile.html`. See Section 9 for details. |
-| F6 | Purple phase replay button showing "+25 HP" instead of "+50 HP" | ✅ Fixed Mar 13 — root cause: `redPhase` flag stays `true` through purple phase, so `redPhase` check fired before `purplePhase` check. Fixed in both files by switching button logic to use `deathPhase` string. Combined with replay incentive simplification (see Section 9). |
-| F7 | Desktop replay incentive system not ported | ✅ Fixed Mar 13 — full tier system ported to `game.html`, matching mobile. Both files now use identical simplified logic. |
-| F8 | Mobile spiral formation partially off-screen | ✅ Fixed Mar 14 (session 4) — `spawnSpiralFormation` `targetY` raised from 150 → 320 to align with main formations and barriers. |
-| F9 | Desktop formation snaps/jumps to collapsed position at first morph | ✅ Fixed Mar 13 (session 2) — `morphStartTime` and `lastMorphTime` now reset inside `formationEntered = true` block, matching existing mobile behaviour. See Section 9 Fix 4. |
-| F10 | Mobile barriers off-screen (levels 1, 6, 9, 11) | ✅ Fixed Mar 14 (session 4) — Barrier orbit center moved from y=160 → y=320. Affects circle and orbitingShield barrier types only. See Version History for full details. |
-
-### 🟡 Watch / Improve
-| ID | Issue | Notes |
-|---|---|---|
-| I1 | Menu bounce — 24.5% of sessions never start a game | 🔴 Now confirmed as #1 drop with real data (37/49 sessions). Cross-ref `menu_view` referrer to identify traffic source. |
-| I2 | L2 death spike — 34 deaths vs 8 at L3 | Unexpected. Investigate specific enemy pattern at L2. |
-| I3 | Mobile = 81% of all deaths | Platform gap confirmed with real data. Mobile controls are the friction point. |
-| I5 | Boss 2 funnel (50%) vs kill rate (83%) contradiction | Frustration accumulation, not first-attempt wall. Watch as data grows. |
-
----
-
-## 9. GAMEPLAY CHANGES (Mar 13, 2026)
+## 12. GAMEPLAY CHANGES (Mar 13, 2026)
 
 ### Fix 1 — Mobile L4 V-formation pop-in (`game_mobile.html` only)
 **Problem:** In `flyingVExploded`, the outermost arm enemies (index 4 and 8) had natural X positions of -65px and 495px on the 480px-wide mobile canvas — fully off-screen during the entire descent. When the formation stopped and X-clamping activated, they snapped visibly to the screen edges, appearing to "pop in." Player saw 7 enemies enter, 2 appear suddenly.
@@ -1057,7 +1206,7 @@ Both files include debug logs for troubleshooting (currently active):
 
 ---
 
-## 10. MOBILE-SPECIFIC FEATURES
+## 13. MOBILE-SPECIFIC FEATURES
 
 ### Difficulty tuning (affects analytics comparisons)
 | Phase | Desktop bullet × | Mobile bullet × |
@@ -1086,7 +1235,7 @@ Enemy counts per level:
 
 ---
 
-## 11. SENSITIVE CODE — DO NOT MODIFY WITHOUT FULL TRACE
+## 14. SENSITIVE CODE — DO NOT MODIFY WITHOUT FULL TRACE
 
 ### ⚠️ Leaderboard Submit (`buildLeaderboardSubmitHTML`)
 - `submittedScore` MUST be captured BEFORE `addHighScore()` runs — timing bug caused a 2.5 hr regression
@@ -1112,7 +1261,7 @@ Enemy counts per level:
 
 ---
 
-## 12. DASHBOARD & TOOLING
+## 15. DASHBOARD & TOOLING
 
 ### HTML Analytics Dashboard (`nonx-analytics-dashboard.html`)
 - 6 tabs: Overview, Funnel, Boss Analysis, A/B Tests, Platform, Looker Guide
@@ -1204,35 +1353,8 @@ Delta: ↑ green = improving | ↓ red = worsening | → grey = stable | ~ yello
 
 ---
 
-## 13. WORKFLOW RULES
 
-1. **Data-first:** Confirm capture before building any visual. Audit: Good / Improve / Fix.
-2. **Every metric gets a G/I/F audit** before being added to the dashboard.
-3. **Share updated files after each commit** — AI applies fixes to the new version.
-4. **Dashboard:** Weekly GA4 CSV → drag-and-drop → Ctrl+S.
-5. **Looker = real-time ops. HTML dashboard = polished weekly + portfolio.**
-6. **Data sharing:** Screenshots + CSV exports (no direct GA4/Looker access possible).
-7. **Claude rule:** Never recommend destructive operations without full dependency trace.
-8. **Claude rule:** Never diagnose game over bugs without asking level + score + context first.
-9. **Claude rule:** When fixing positioning bugs, ALWAYS clarify which enemy/entity type needs adjustment:
-   - **Main Formation** (slot rotation formations: grid, diamond, V, circle) - levels 1-12, targetY in `spawnMorphingFormation()`
-   - **Barriers** (circle, orbitingShield, horizontalLine, arrow, dualLines) - separate positioning per type
-   - **Legacy Formations** (spiral, pincer, sine wave) - reserved for pink levels, separate positioning
-   - **Boss/Kamikazes/Boss Minions** - separate positioning systems
-   - Do NOT assume "formation" means main formation - verify which entity type from screenshots/context
-10. **Claude rule:** Investigate and report findings before making any code changes.
-11. **Practice runs:** QA data is valid for workflow practice — builds readiness for real data launch.
-12. **🚨 CRITICAL — Formation mechanics:** The morphing + slot rotation system is NON-X's signature visual identity. When adjusting enemy positioning, timing, or movement:
-    - **READ Section 9 (Formation Morphing + Slot Rotation System) FIRST** — understand both systems before ANY changes
-    - **CHECK debug console logs** — verify `timeSinceStart`, `newShapeIndex`, `morphCount`, and `targetPos` values
-    - **REPORT to user BEFORE implementing** — explain how changes will interact with morphing/carousel
-    - **TEST thoroughly** — formations must morph smoothly, enemies must carousel through slots
-    - **NEVER reset `formationEnteredTime` mid-wave** — breaks morph progression
-    - **NEVER modify slot assignment without preserving `(idx + morphCount) % length` pattern** — breaks carousel
-
----
-
-## 14. KNOWN HISTORY & POST-MORTEMS
+## 16. KNOWN HISTORY & POST-MORTEMS
 
 ### Leaderboard Submission Bug (~2.5 hrs lost, March 2026)
 Deleting Firebase collection → submit form stopped appearing. Root cause: `addHighScore(score)` ran before `buildLeaderboardSubmitHTML()`. Fix: capture `submittedScore` before `addHighScore()` runs. Claude incorrectly diagnosed the `level >= 2` gate and made 3 bad fixes in a row.
@@ -2598,42 +2720,9 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 
 ---
 
-## 15. NEXT ACTIONS
-
-| Priority | Action | Owner |
-|---|---|---|
-| ✅ Done | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 19, 2026 — Completed |
-| ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
-| ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
-| ✅ Done | Wave drop-off: ALL / MOBILE / DESKTOP platform toggle | Mar 12 |
-| ✅ Done | "Games Won" Looker scorecard — date range fix, filter Mar 10+ | Mar 12 |
-| ✅ Done | Funnel step 10 — already `player_won`, no change needed | Mar 12 |
-| ✅ Done | Fix L4 mobile V-formation pop-in (flyingVExploded spacing 0.5→0.34) | Mar 13 |
-| ✅ Done | Fix purple replay button showing +25 instead of +50 | Mar 13 |
-| ✅ Done | Port + simplify replay incentive system to desktop | Mar 13 |
-| ✅ Done | Fix mobile spiral formation clipping top of screen (targetY 150→220) | Mar 13 session 2 |
-| ✅ Done | Fix desktop formation snap-to-position at first morph (morph clock reset) | Mar 13 session 2 |
-| ✅ Done | Implement slot rotation carousel + fix formation entry snap bug (both files) | Mar 13 session 3 |
-| ✅ Done | Document critical formation mechanics in PAIM + inline comments (both files) | Mar 13 session 3 |
-| 🟡 P1 | Formation angular rotation — confirm design choice (continuous spin vs beat-snapped) | NOT NEEDED — slot rotation sufficient |
-| 🔴 P1 | **Enemy Bullet Logic Optimization** — Investigate cascading fire + rhythm-synced volleys | See section 17 below |
-| ✅ Done | **Review Mobile Shield Degradation** — Removed opacity fade AND flash effect for performance/visual clarity | Mar 19, 2026 — Completed |
-| ✅ Done | **Power-Up Cleanup Optimization** — Reduced validation frequency from 60fps to every 15 seconds (900x reduction) | Mar 19, 2026 — Completed |
-| 🟡 P2 | Load Platform CSV once `computer` → `desktop` propagates in GA4 (~1–2 days post Mar 12 deploy) | User |
-| 🟡 P2 | Investigate L2 death spike — specific enemy pattern? | User |
-| 🟡 P2 | Cross-ref `menu_view` referrer vs 24.5% menu bounce rate | — |
-| 🟡 P2 | Build Ctrl+S session persistence for dashboard | Claude |
-| 🟢 P3 | Build Smart Signal System — Report Card tab + benchmark tooltips | Claude (after ~Mar 24 data) |
-| 🟢 P3 | Build music A/B comparison once v3.0 organic data accumulates (~Mar 24+) | — |
-| 🟢 P3 | Build 6-page Looker Studio portfolio dashboard | After platform CSV loaded |
-| 🟢 P3 | Song choice feature on victory screen | Pending audio assets |
-| 🟢 P3 | Pink levels 13–15 + impossible boss / forever play mode | Future session |
-| 🟢 P3 | Increase difficulty: Red boss, Purple boss, Red level 7 | Future session |
-| ✅ Done | **Leaderboard expansion: Top 25 with modal** — Implemented modal overlay instead of dropdown. Includes platform selector (index.html), 2-button footer (game files) | Mar 19, 2026 — Completed (branch: feature/top25_leaderboard_modal) |
-
 ---
 
-## 15b. AI AGENT DASHBOARD IMPLEMENTATION PLAN
+## 17. AI AGENT DASHBOARD IMPLEMENTATION PLAN
 
 ### Overview
 The analytics dashboard (`non-x_analytics/index.html`) has a complete AI Agent tab with 6 charts and data placeholders, but lacks CSV parser functions to populate the data from GA4 explorations. This section documents the implementation plan for building the 3 required CSV parsers.
@@ -3095,7 +3184,7 @@ Then create a pull request on GitHub.
 
 ---
 
-## 16. GITHUB TOKEN ROTATION (Next Session - Mar 19, 2026)
+## 18. GITHUB TOKEN ROTATION (Next Session - Mar 19, 2026)
 
 ### Task: Create new Classic Personal Access Token with 365-day expiration
 
@@ -3145,7 +3234,7 @@ Then create a pull request on GitHub.
 
 ---
 
-## 17. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
+## 19. ENEMY BULLET LOGIC OPTIMIZATION (Mar 14, 2026 session 5) — P1 Priority
 
 ### Problem
 **Performance:** Mobile devices experience stuttering when many enemies and bullets are on-screen simultaneously (especially levels 9-12 with 16-22 enemies).
@@ -3276,7 +3365,7 @@ After testing, green levels felt too easy due to cascading making bullets more p
 
 ---
 
-## 18. LEADERBOARD EXPANSION: TOP 25 WITH MODAL (Implemented - Mar 19, 2026)
+## 20. LEADERBOARD EXPANSION: TOP 25 WITH MODAL (Implemented - Mar 19, 2026)
 
 ### Implementation Overview
 **Expanded leaderboard from top 10 to top 25, with entries 11-25 shown via modal overlay instead of dropdown.**
@@ -3540,7 +3629,7 @@ html += "<button onclick='startGameFromModal()'...>🎮 START GAME</button>";
 
 ---
 
-## 19. RED BOSS REBALANCING + PERFORMANCE OPTIMIZATIONS (Mar 30, 2026)
+## 21. RED BOSS REBALANCING + PERFORMANCE OPTIMIZATIONS (Mar 30, 2026)
 
 ### Overview
 Performance optimization sprint focused on reducing stuttering during powerup collection and boss fights, especially in red/purple phases on mobile. Combined bullet count reduction with code-level performance improvements.
@@ -3725,96 +3814,34 @@ git revert <commit-hash>
 
 ---
 
+
+---
+
 ## SESSION HISTORY
 
-**Purpose:** Track work done in each AI session for continuity across models. Each model should add a 3-bullet summary at the end of their session.
+**Full session history has been moved to:** [`NON-X_PAIM_SessionHistory.md`](./NON-X_PAIM_SessionHistory.md)
 
-**Format:**
-```
-### [Date] — [Model Name] — [Project: Xenon_3 or non-x_analytics]
-- **Implemented/Fixed:** Brief description of main work completed
-- **Files Modified:** List of changed files with line numbers if relevant
-- **Next Steps:** What needs to happen next or any blockers discovered
-```
+**Latest 3 sessions (for quick reference):**
 
 ---
 
-### April 2, 2026 — Claude Sonnet 4.5 — Project: Xenon_3 + non-x_analytics
+### April 5, 2026 — Claude Sonnet 4.5 — Project: GA4 AI Agent Explorations
 
-- **Implemented/Fixed:** (1) Added tier_multiplier, movement_multiplier, effective_multiplier parameters to player_won event in both game files for AI Agent analytics tracking. (2) Built complete AI Agent Performance tab in analytics dashboard with 6 charts (tier distribution, progression flow, score multipliers, tier vs score correlation, death triggers, performance metrics table). (3) Updated CSV_VERSION_FILTER from 3.0 to 4.3. (4) Created symlink between projects so both share same NON-X_PAIM_Memory.md master file.
-
-- **Files Modified:**
-  - `Xenon_3/game.html` (line ~5589): player_won event parameters
-  - `Xenon_3/game_mobile.html` (line ~6216): player_won event parameters
-  - `non-x_analytics/index.html` (+783 lines): AI Agent tab, DATA.aiAgent object, 6 chart functions, CSV version filter
-  - `non-x_analytics/docs/NON-X_PAIM_Memory.md`: Converted to symlink → `../../Xenon_3/NON-X_PAIM_Memory.md`
-  - `Xenon_3/NON-X_PAIM_Memory.md`: Added Rule #9 (session summaries), updated analytics_version to 4.3, added Session History section
-
-- **Next Steps:** (1) Push non-x_analytics changes to main (user paused the push). (2) Build CSV parser for ai_difficulty_adjusted event data when GA4 exports become available. (3) Test AI Agent tab with real player data once analytics v4.3 events start flowing. (4) Add CSV import handler in detectReportType() and processCSVFile() for AI Agent reports. (5) Consider adding tier-progression timeline chart (shows how individual players move through tiers over time).
+✅ Created "AI Tier Distribution" and "Tier Adjustment Events" explorations (2 of 3 complete)
 
 ---
 
-### April 3, 2026 — Claude Sonnet 4.5 — Project: GA4 Setup for AI Agent (Step 1 Complete)
+### April 6, 2026 — Claude Sonnet 4.5 — Project: GA4 Explorations Complete + Dashboard Plan
 
-- **Implemented/Fixed:** (1) ✅ STEP 1 COMPLETE: User successfully created 10 custom event-scoped dimensions in GA4 for AI Agent tracking. Core AI Agent dimensions: tier, tier_multiplier, movement_multiplier, effective_multiplier, old_tier, new_tier, direction, speed_locked, cycles_completed, level. (2) Updated Analytics Version dimension description to "Analytics Version 4.3 - AI Agent tracking enabled". (3) Verified Game Phase dimension uses `phase` parameter (correct for explorations). (4) Strategic decision confirmed: Prioritize GA4 setup and data validation before adding new game features (Pink levels, bomb powerup).
-
-- **Files Modified:**
-  - GA4 Console: Created 10 new custom dimensions (Apr 3, 2026)
-  - GA4 Console: Updated Analytics Version dimension description
-  - `Xenon_3/NON-X_PAIM_Memory.md`: Updated with Step 1 completion status
-
-- **Next Steps:** (1) ✅ READY: Create 3 GA4 Explorations for CSV export (AI Tier Distribution, Tier Adjustment Events, Score Multiplier Impact). (2) Test data flow in GA4 DebugView after playing game. (3) Build CSV parser in analytics dashboard for ai_difficulty_adjusted event type. (4) Export real GA4 data and populate AI Agent dashboard tab. (5) Monitor player behavior for 1 week to validate tier progression and score multipliers. (6) Optional: Update Rank dimension description to clarify "Global leaderboard position (1-25)".
+✅ Created "Score Multiplier Impact" exploration (all 3 explorations complete - 10 tabs total)
+✅ Created Section 15b: AI Agent Dashboard Implementation Plan
 
 ---
 
-### April 3, 2026 (Continued) — Claude Sonnet 4.5 — Project: player_won Event Diagnostic
+### April 6, 2026 (Continued) — Claude Sonnet 4.5 — Project: CSV Parsers Implementation
 
-- **Implemented/Fixed:** (1) ❌ ISSUE FOUND: player_won event not appearing in GA4 DebugView despite user completing full game cycle (beat all 3 bosses). ai_difficulty_adjusted and game_complete events fire correctly, but player_won is missing. (2) Added diagnostic console logging around player_won fireEvent call to capture parameter values and identify if JavaScript error occurs. (3) Created PLAYER_WON_DIAGNOSTIC.md with comprehensive troubleshooting guide for user. (4) Committed diagnostic changes to feature/ai_agent_v1 branch (commit 0673e65).
+✅ Implemented all 3 CSV parser functions for AI Agent analytics dashboard
+✅ Dashboard is production-ready to receive AI Agent data
 
-- **Files Modified:**
-  - `game_mobile.html`: Added console.log statements before/after player_won fireEvent (lines 6220-6222, 6232)
-  - `game.html`: Added console.log statements before/after player_won fireEvent (lines 5595-5597, 5605)
-  - `PLAYER_WON_DIAGNOSTIC.md`: Created comprehensive diagnostic guide (new file)
-  - `NON-X_PAIM_Memory.md`: Updated with session summary
-
-- **Next Steps:** (1) 🔴 BLOCKER: User needs to test game with browser console open to check diagnostic logs. (2) Check if tierMult/scoreMultiplier/effectiveMult values are valid (not NaN or undefined). (3) Verify dev mode is OFF (localStorage.nonx_dev_mode). (4) If logs show valid values but event still missing, consider renaming event (e.g., "victory_complete") or investigating GA4 event filtering. (5) Once player_won issue resolved, resume Step 2: Create GA4 Explorations.
-
----
-
-### April 5, 2026 — Claude Sonnet 4.5 — Project: GA4 AI Agent Explorations (Step 2 - 2 of 3 Complete)
-
-- **Implemented/Fixed:** (1) ✅ CONFIRMED: player_won event now firing in GA4 (53 events, 14 users, 33.33%) - blocker resolved. (2) ✅ Created "AI Tier Distribution" exploration - Free Form line chart tracking tier distribution over time with breakdown by tier values (0, 1, 2, 3, not set). (3) ✅ Created "Tier Adjustment Events" exploration - Free Form with 4 tabs: Adjustment Flow (table showing Old Tier → New Tier transitions), Adjustment Timeline (line chart of adjustments over time by direction), Level-Based Adjustments (table showing which levels trigger tier changes by direction), Tier Movement Detail (comprehensive breakdown table). (4) Discovered GA4 limitation: Bar charts don't support COLUMNS dimension - resolved by using table visualization instead. (5) Updated PAIM documentation with new exploration configurations and key insights.
-
-- **Files Modified:**
-  - GA4 Console: Created "AI Tier Distribution" exploration (Apr 5, 2026)
-  - GA4 Console: Created "Tier Adjustment Events" exploration with 4 tabs (Apr 5, 2026)
-  - `Xenon_3/NON-X_PAIM_Memory.md`: Added explorations #6 and #7 documentation, updated session history
-
-- **Next Steps:** (1) Create "Score Multiplier Impact" exploration (third and final AI Agent exploration). (2) Export CSV data from all 3 AI Agent explorations once sufficient data accumulates. (3) Build CSV parsers in analytics dashboard for ai_difficulty_adjusted event type. (4) Test AI Agent dashboard tab with real exported GA4 data. (5) Monitor for 1 week to validate tier progression patterns and score multiplier impact on player success rates.
-
-
----
-
-### April 6, 2026 — Claude Sonnet 4.5 — Project: GA4 AI Agent Explorations Complete + Dashboard Implementation Plan
-
-- **Implemented/Fixed:** (1) ✅ Created "Score Multiplier Impact" exploration - Free Form with 5 tabs: Victory Rate by Multiplier (table showing event breakdown by effective_multiplier), Tier Multiplier Distribution (bar chart of multiplier distribution among winners), Multiplier Timeline (line chart showing multiplier trends over time), Platform vs Multiplier (table comparing mobile vs desktop performance by tier), Tier Progression to Victory (table showing outcomes by tier). (2) ✅ ALL 3 AI AGENT EXPLORATIONS COMPLETE: AI Tier Distribution, Tier Adjustment Events (4 tabs), Score Multiplier Impact (5 tabs). (3) Analyzed analytics dashboard requirements - dashboard already has complete UI and data structure for AI Agent tab, but lacks CSV parser functions. (4) Created comprehensive implementation plan (Section 15b) with step-by-step instructions for building 3 CSV parsers, including code templates, testing checklist, and validation steps. (5) Documented timeline estimate: 4-6 hours total implementation time once GA4 data is available.
-
-- **Files Modified:**
-  - GA4 Console: Created "Score Multiplier Impact" exploration with 5 tabs (Apr 6, 2026)
-  - `Xenon_3/NON-X_PAIM_Memory.md`: Added exploration #8 documentation, added Section 15b (AI Agent Dashboard Implementation Plan), updated session history
-
-- **Next Steps:** (1) ⏳ Wait 1-2 weeks for real player data to accumulate in GA4 (ai_difficulty_adjusted events, player_won with tier/multiplier parameters). (2) Export CSVs from all 3 AI Agent explorations following Step 1 of implementation plan. (3) Inspect CSV structure to identify actual column names (Step 2). (4) Implement 3 CSV parser functions in analytics dashboard: applyAITierDistCSV(), applyAITierAdjustmentCSV(), applyAIScoreMultCSV() (Steps 3-7). (5) Test parsers with real GA4 data and validate against GA4 exploration totals (Steps 8-10). (6) Commit to feature branch and create pull request (Step 11). (7) Optional: Build additional parsers for Death Triggers chart and Tier Metrics table once core parsers are working.
-
-
----
-
-### April 6, 2026 (Continued) — Claude Sonnet 4.5 — Project: AI Agent Dashboard CSV Parsers Implementation
-
-- **Implemented/Fixed:** (1) ✅ COMPLETE: Implemented all 3 CSV parser functions for AI Agent analytics dashboard. Built applyAITierDistCSV() to parse tier distribution data with flexible column name matching and tier value mapping (0-3 or -3 to +3 scales). Built applyAITierAdjustmentCSV() to parse tier adjustment events with increase/decrease tracking and user counting. Built applyAIScoreMultCSV() to parse score multiplier impact with smart bucketing for 8 multiplier ranges and final tier calculation. (2) Updated detectReportType() with AI Agent CSV detection using case-insensitive matching, checked before existing types to avoid conflicts. (3) Updated processCSVFile() to route ai_tier_dist, ai_tier_adjust, ai_score_mult types to correct parsers. (4) Updated markChipLoaded() to support AI Agent chip IDs (ai-tier, ai-adjust, ai-mult). (5) Updated reinitAllCharts() to call all AI Agent chart functions on CSV load. (6) Added 3 CSV loading chips to HTML: AI TIER, TIER ADJUST, SCORE MULT. (7) Parsers include robust error handling: flexible column name variations (spaces, capitalization), "(not set)" filtering, smart multiplier bucketing, fallback user counting, data type coercion.
-
-- **Files Modified:**
-  - `non-x_analytics/index.html`: Added 3 CSV parser functions (~190 lines), updated detectReportType(), processCSVFile(), markChipLoaded(), reinitAllCharts(), added 3 CSV chips to HTML
-  - `Xenon_3/NON-X_PAIM_Memory.md`: Updated session history
-
-- **Next Steps:** (1) ✅ PARSERS READY: Dashboard is production-ready to receive AI Agent data. (2) Wait 1-2 weeks for real player data to accumulate in GA4 (until ~Apr 20, 2026). (3) Export 3 CSVs from GA4 explorations (AI Tier Distribution, Tier Adjustment Events, Score Multiplier Impact). (4) Test parsers by dropping CSVs on dashboard - verify chips turn green, KPIs populate, charts render. (5) Validate dashboard metrics match GA4 exploration totals. (6) Debug any column name mismatches if needed (parsers support many variations but GA4 exports can be unpredictable). (7) Optional: Build Death Triggers parser and Tier Metrics table parser once core functionality is validated.
+**→ For complete session details, see [`NON-X_PAIM_SessionHistory.md`](./NON-X_PAIM_SessionHistory.md)**
 
