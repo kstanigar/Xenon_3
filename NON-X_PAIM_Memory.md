@@ -84,10 +84,10 @@ This is the single source of truth for the NON-X project. It is shared with ever
 
 ### Current Work (April 7, 2026)
 
-**Stats Modal + Analytics Cleanup - Two-Phase Approach**
+**📋 NEXT PRIORITY: Scorecard Modal Implementation**
 
 **Phase 1: Analytics Cleanup (✅ COMPLETE - April 7, 2026)**
-- ✅ **Status:** Complete
+- ✅ **Status:** Complete, merged to main (PR #93)
 - **Tasks completed:**
   1. ✅ Fixed `ai_difficulty_adjusted` event to use `fireEvent()` wrapper (game.html lines 1688, 1736)
      - Changed from direct `gtag('event', ...)` to `fireEvent('ai_difficulty_adjusted', {...})`
@@ -103,24 +103,37 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - **Duration:** 10 minutes
 - **Result:** Analytics events now consistent across both files, dev mode properly supported
 
-**Phase 2: Stats Modal Feature (Planned - Awaiting Design Approval)**
-- 📋 **Status:** Awaiting EnterPlanMode for design approval
-- **Purpose:** In-game statistics display for players
-- **Trigger:** "Show Stats" button on victory/game-over screens + Shift+S hotkey
-- **Data to display:**
-  - **Session stats:** Level, score, health, duration, multipliers breakdown
-  - **AI Agent status:** Current tier, speed locked, cycles completed, deaths remaining
-  - **Lifetime stats:** Games played, best score, A/B group, movement preference
-- **Design:** 3-panel modal layout (modeled after non-x_analytics dashboard)
-- **Integration:** Link to full analytics dashboard (https://kstanigar.github.io/non-x_analytics/)
-- **Files to modify:** `game.html`, `game_mobile.html`
-- **Expected duration:** 2-3 hours (requires planning + approval)
+**Phase 2: Player Scorecard Modal (📋 READY TO IMPLEMENT - April 7, 2026)**
+- 📋 **Status:** Plan approved, implementation ready to begin
+- **Plan file:** `/Users/keithstanigar/.claude/plans/scorecard-modal-design.md` (18KB, 482 lines)
+- **Design:** Modal overlay pattern (reuses existing leaderboard modal structure)
+- **Features:**
+  - **Button placement:** Replaces "Can you beat it?" text on game-over screen
+  - **Button text:** "📊 View Session Stats" (victory screen) / "📊 View Session Stats" (game-over)
+  - **Modal content:**
+    - Section 1: Difficulty tier (Tier -3 to +3, name mapping)
+    - Section 2: Score multipliers (tier × movement = total, with breakdown)
+    - Section 3: Session performance (level, phase, deaths G/R/P, duration MM:SS)
+    - Footer: Link to non-x_analytics dashboard
+  - **How-to Play update:** Add 2 bullets about adaptive difficulty system
+- **Files to modify:**
+  - `game.html` - Intro card + modal HTML + 3 functions
+  - `game_mobile.html` - Same as desktop
+- **Functions to add:**
+  - `buildScorecardHTML()` - Returns formatted scorecard HTML
+  - `showScorecardModal()` - Opens modal, populates content
+  - `closeScorecardModal()` - Hides modal
+- **New analytics event:** `scorecard_viewed` (tier, score, source)
+- **Estimated duration:** 2 hours
+- **Success criteria:** Modal opens on button click, shows accurate tier/multipliers, closes on X/backdrop
 
 **Research Completed (April 7, 2026):**
 - ✅ Analytics storage analysis (localStorage keys, fireEvent() calls inventory)
 - ✅ Console.log cleanup inventory (70+ statements categorized)
 - ✅ AI Agent event tracking audit (player_won, ai_difficulty_adjusted, game_complete)
 - ✅ Dashboard integration requirements (CSV loading system, KPIs)
+- ✅ Victory/game-over screen structure analysis (line numbers, data sources)
+- ✅ Modal overlay pattern research (leaderboard modal reuse)
 
 ### Git Workflow (Protected Main Branch)
 
