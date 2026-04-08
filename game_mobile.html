@@ -555,6 +555,12 @@
         <li>Tap Pause to pause</li>
       </ul>
 
+      <h3>Difficulty</h3>
+      <ul>
+        <li>Game adapts difficulty based on your performance</li>
+        <li>Higher difficulty = higher score multipliers</li>
+      </ul>
+
       <h3>Power-ups</h3>
       <div class="powerup-list">
         <div class="powerup-item">
@@ -949,7 +955,7 @@
     function startBossMusic() {
       playSound('bossIntro');
       bossIntroInterval = setInterval(function () {
-        if (bossActive && !gameOver) {
+        if (bossActive && !gameOver && !paused) {
           playSound('bossIntro');
         }
       }, 10000);
@@ -2168,6 +2174,10 @@
     var purplePhase = false;    // True after boss 2 is defeated (levels 9-12)
     var purplePhaseStartScore = 0;
 
+    // Session statistics for scorecard
+    var enemiesKilled = 0;      // Total enemies destroyed this session
+    var powerupsCollected = 0;  // Total powerups collected this session
+
     // Power-up types
     var POWERUP_TYPES = {
       HEALTH: 'health',       // Red diamond - restore health
@@ -2455,6 +2465,7 @@
      * @param {Object} powerup - The power-up object being collected.
      */
     function collectPowerup(powerup) {
+      powerupsCollected++; // Track for scorecard
       playSound('powerUp');
       addScore(5); // Power-up collection (tier + movement multipliers)
       if (powerup.type === POWERUP_TYPES.HEALTH) {
@@ -6168,6 +6179,189 @@
     }
 
     /**
+     * Build scorecard HTML showing tier, multipliers, and session performance
+     *
+     * @returns {string} HTML string with formatted scorecard sections
+     */
+    function buildScorecardHTML() {
+      // Get personal best from high scores
+      var prevBest = highScores.length > 0 ? highScores[0] : null;
+
+      // Gather tier data
+      var tierParams = TIER_CONFIG[currentTier.toString()];
+      var tierNames = {
+        '-3': 'Tutorial',
+        '-2': 'Beginner',
+        '-1': 'Easy',
+        '0': 'Normal',
+        '1': 'Challenge',
+        '2': 'Veteran',
+        '3': 'Expert'
+      };
+      var tierName = tierNames[currentTier.toString()] || 'Unknown';
+
+      // Calculate multipliers
+      var tierMult = getTierMultiplier();
+      var moveMult = scoreMultiplier;
+      var totalMult = (tierMult * moveMult).toFixed(2);
+      var moveType = moveMult === 1.25 ? 'Horizontal Only' : 'Full Movement';
+
+      // Get phase info
+      var currentPhase = getCurrentPhase();
+      var phaseDisplay = currentPhase.charAt(0).toUpperCase() + currentPhase.slice(1);
+
+      // Calculate session duration
+      var sessionDuration = gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : 0;
+      var durationMin = Math.floor(sessionDuration / 60);
+      var durationSec = (sessionDuration % 60).toString().padStart(2, '0');
+
+      // Build HTML sections
+      var html = '';
+
+      // Section 1: Difficulty Tier
+      html += '<div style="margin-bottom:24px; padding:16px; background:rgba(0,255,255,0.05); border-left:3px solid #00FFFF; border-radius:4px;">';
+      html += '<div style="color:#00FFFF; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Difficulty Tier</div>';
+      html += '<div style="font-size:24px; color:#fff; font-weight:bold;">Tier ' + currentTier + ' — ' + tierName + '</div>';
+      html += '<div style="color:#aaa; font-size:12px; margin-top:4px;">Base bullet speed: ' + tierParams.bulletSpeed + ' → ' + (tierParams.bulletSpeed * (purplePhase ? 1.5 : redPhase ? 1.25 : 1.0)).toFixed(1) + ' (' + phaseDisplay + ' phase)</div>';
+      html += '</div>';
+
+      // Section 2: Score Multipliers
+      html += '<div style="margin-bottom:24px; padding:16px; background:rgba(0,255,255,0.05); border-left:3px solid #00FFFF; border-radius:4px;">';
+      html += '<div style="color:#00FFFF; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">Score Multipliers</div>';
+
+      // Tier multiplier row
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Tier Multiplier:</span>';
+      html += '<span style="color:#fff; font-weight:bold;">×' + tierMult.toFixed(2) + '</span>';
+      html += '</div>';
+
+      // Movement multiplier row
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Movement Bonus:</span>';
+      html += '<span style="color:#fff; font-weight:bold;">×' + moveMult.toFixed(2) + ' (' + moveType + ')</span>';
+      html += '</div>';
+
+      // Divider
+      html += '<div style="border-top:1px solid rgba(0,255,255,0.2); margin:12px 0;"></div>';
+
+      // Total multiplier row (highlighted)
+      html += '<div style="display:flex; justify-content:space-between;">';
+      html += '<span style="color:#00FFFF; font-weight:bold;">Total Multiplier:</span>';
+      html += '<span style="color:#00FFFF; font-weight:bold; font-size:18px;">×' + totalMult + '</span>';
+      html += '</div>';
+
+      html += '</div>';
+
+      // Section 3: Session Performance
+      html += '<div style="padding:16px; background:rgba(0,255,255,0.05); border-left:3px solid #00FFFF; border-radius:4px;">';
+      html += '<div style="color:#00FFFF; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">Session Performance</div>';
+
+      // Score
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Final Score:</span>';
+      html += '<span style="color:#fff; font-weight:bold;">' + Math.floor(score) + '</span>';
+      html += '</div>';
+
+      // Personal best (if exists)
+      if (prevBest !== null) {
+        html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+        html += '<span style="color:#ccc;">Your Record:</span>';
+        html += '<span style="color:#FFD700; font-weight:bold;">' + Math.floor(prevBest) + '</span>';
+        html += '</div>';
+      }
+
+      // Level reached
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Level Reached:</span>';
+      html += '<span style="color:#fff;">Level ' + level + ' (' + phaseDisplay + ')</span>';
+      html += '</div>';
+
+      // Combat stats
+      var bossesDefeated = (boss1Defeated ? 1 : 0) + (boss2Defeated ? 1 : 0) + (boss3Defeated ? 1 : 0);
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Enemies Killed:</span>';
+      html += '<span style="color:#fff;">' + enemiesKilled + '</span>';
+      html += '</div>';
+
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Bosses Defeated:</span>';
+      html += '<span style="color:#fff;">' + bossesDefeated + ' / 3</span>';
+      html += '</div>';
+
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Powerups Collected:</span>';
+      html += '<span style="color:#fff;">' + powerupsCollected + '</span>';
+      html += '</div>';
+
+      // Deaths breakdown
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Deaths:</span>';
+      html += '<span style="color:#fff;">Green: ' + deathsInPhase.green + ' | Red: ' + deathsInPhase.red + ' | Purple: ' + deathsInPhase.purple + '</span>';
+      html += '</div>';
+
+      // Session duration
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+      html += '<span style="color:#ccc;">Duration:</span>';
+      html += '<span style="color:#fff;">' + durationMin + ':' + durationSec + '</span>';
+      html += '</div>';
+
+      // Cycles completed (if > 0)
+      if (cyclesCompleted > 0) {
+        html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+        html += '<span style="color:#ccc;">Cycles Completed:</span>';
+        html += '<span style="color:#fff;">' + cyclesCompleted + '</span>';
+        html += '</div>';
+      }
+
+      html += '</div>';
+
+      // Action buttons (Play Again + Top 25)
+      html += '<div style="margin-top:24px; display:flex; gap:12px; justify-content:center;">';
+      html += '<button onclick="closeScorecardModal(); playAgain()" style="flex:1; max-width:200px; padding:12px 24px; font-size:15px; font-weight:bold; background:rgba(0,255,255,0.3); color:#00FFFF; border:2px solid #00FFFF; border-radius:8px; cursor:pointer; letter-spacing:1px; transition:all 0.2s; box-shadow:0 0 15px rgba(0,255,255,0.3);" onmouseover="this.style.background=\'rgba(0,255,255,0.4)\'; this.style.transform=\'scale(1.05)\'" onmouseout="this.style.background=\'rgba(0,255,255,0.3)\'; this.style.transform=\'scale(1)\'">Play Again</button>';
+      html += '<button onclick="closeScorecardModal(); showFullLeaderboard()" style="flex:1; max-width:200px; padding:12px 24px; font-size:15px; font-weight:bold; background:rgba(0,255,255,0.3); color:#00FFFF; border:2px solid #00FFFF; border-radius:8px; cursor:pointer; letter-spacing:1px; transition:all 0.2s; box-shadow:0 0 15px rgba(0,255,255,0.3);" onmouseover="this.style.background=\'rgba(0,255,255,0.4)\'; this.style.transform=\'scale(1.05)\'" onmouseout="this.style.background=\'rgba(0,255,255,0.3)\'; this.style.transform=\'scale(1)\'">Top 25</button>';
+      html += '</div>';
+
+      // Optional: Link to analytics dashboard
+      html += '<div style="margin-top:20px; padding:16px; background:rgba(255,215,0,0.1); border:1px dashed rgba(255,215,0,0.3); border-radius:4px; text-align:center;">';
+      html += '<div style="color:#FFD700; font-size:12px; margin-bottom:8px;">Want more detailed analytics?</div>';
+      html += '<a href="https://kstanigar.github.io/non-x_analytics/" target="_blank" style="color:#00FFFF; text-decoration:underline; font-size:13px;">View Full Analytics Dashboard →</a>';
+      html += '</div>';
+
+      return html;
+    }
+
+    /**
+     * Display scorecard modal with session stats (tier, multipliers, performance)
+     * Shows AI Agent tier, score breakdown, and session details in overlay modal
+     */
+    function showScorecardModal() {
+      // Build scorecard HTML
+      var html = buildScorecardHTML();
+
+      // Populate modal content
+      document.getElementById('scorecardContent').innerHTML = html;
+
+      // Show modal
+      document.getElementById('scorecardModal').style.display = 'block';
+
+      // Fire analytics event
+      fireEvent('scorecard_viewed', {
+        'ab_music_group': userABGroup,
+        'platform': 'mobile',
+        'tier': currentTier,
+        'score': Math.floor(score),
+        'source': (document.getElementById('victory').style.display !== 'none') ? 'victory' : 'gameover'
+      });
+    }
+
+    /**
+     * Close scorecard modal
+     */
+    function closeScorecardModal() {
+      document.getElementById('scorecardModal').style.display = 'none';
+    }
+
+    /**
      * Ends the game in a victory state. Clears all game objects, checks for a
      * top-10 score, builds the victory HTML (score, optional rank badge, email
      * subscription form, return button), and displays the #victory overlay.
@@ -6265,7 +6459,6 @@
       html += "<div style='font-size: 20px; margin-bottom: 10px;'>Your Score: <strong>" + score + "</strong>";
       if (prevBest !== null && score < prevBest) {
         html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
-        html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
       }
       html += "</div>";
 
@@ -6273,6 +6466,11 @@
       if (prevBest === null || score > prevBest) {
         html += "<div style='font-size: 15px; color: #00FFFF; margin-bottom: 18px;'>🏆 New personal best!</div>";
       }
+
+      // Scorecard button (prominent placement on victory screen)
+      html += "<div style='margin: 20px 0;'>";
+      html += "<button onclick='showScorecardModal()' style='padding: 12px 24px; font-size: 15px; font-weight: bold; background: rgba(0,255,255,0.2); color: #00FFFF; border: 2px solid #00FFFF; border-radius: 8px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,255,255,0.3);' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"; this.style.boxShadow=\"0 0 25px rgba(0,255,255,0.5)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"; this.style.boxShadow=\"0 0 15px rgba(0,255,255,0.3)\"'>📊 VIEW SESSION STATS</button>";
+      html += "</div>";
 
       // Leaderboard submission — only if this beats player's previously submitted score
       var submittedScore = getEffectiveSubmittedScore();
@@ -6537,7 +6735,6 @@
         var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
         html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
         html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 4px;'>Submit to Global Leaderboard:</div>";
-        html += "<div style='font-size: 12px; color: #888; margin-bottom: 8px;'>Use your gamer tag, @social, or any name!</div>";
         html += "<div style='display:flex; justify-content:center; align-items:center; gap:8px;'>";
         html += "<input type='text' id='igInput' placeholder='Player name or handle (optional)' value='" + savedHandle + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; white-space:nowrap;'>Submit Score</button>";
@@ -6601,8 +6798,9 @@
       html += "<br><span style='font-size: 22px;'>Your Score: " + score + "</span>";
       if (prevBest !== null && score < prevBest) {
         html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
-        html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
       }
+      // Scorecard button (replaces "Can you beat it?")
+      html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>📊 View Session Stats</button>";
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
@@ -7384,8 +7582,9 @@
         html += "<br><span style='font-size: 22px;'>Your Score: " + score + "</span>";
         if (prevBest !== null && score < prevBest) {
           html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
-          html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
         }
+        // Scorecard button (always show, not conditional on prevBest)
+        html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>📊 View Session Stats</button>";
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
@@ -7581,8 +7780,9 @@
           var html = "Game Over!<br><br>Your Score: " + score;
           if (prevBest !== null && score < prevBest) {
             html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
-            html += "<br><span style='color: #00FFFF; font-size: 14px;'>Can you beat it?</span>";
           }
+          // Scorecard button (replaces "Can you beat it?")
+          html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>📊 View Session Stats</button>";
 
           // Personal best callout
           if (prevBest === null || score > prevBest) {
@@ -8372,6 +8572,7 @@
               if (realIndex > -1) {
                 EnemyPool.release(enemy);
                 enemies.splice(realIndex, 1);
+                enemiesKilled++; // Track for scorecard
               }
               addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
@@ -8486,6 +8687,7 @@
               (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
               continue;
             }
           } else {
@@ -8526,6 +8728,7 @@
           if (isCollidingPlayer(enemy)) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
             continue;
@@ -8535,6 +8738,7 @@
           if (enemy.y > canvas.height) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
             continue;
           }
 
@@ -8546,6 +8750,7 @@
               spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
               addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
               break;
@@ -8759,6 +8964,7 @@
               if (enemy.y > canvas.height || enemy.x < -enemy.width || enemy.x > canvas.width) {
                 EnemyPool.release(enemies[i]); // Release
                 enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
                 continue;
               }
             }
@@ -8772,6 +8978,7 @@
                 (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
                 EnemyPool.release(enemies[i]); // Release
                 enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
                 continue;
               }
             } else {
@@ -8812,6 +9019,7 @@
           if (isCollidingPlayer(enemy)) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
             continue;
@@ -8821,6 +9029,7 @@
           if (!enemy.formation && enemy.y > canvas.height) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
+                enemiesKilled++; // Track for scorecard
             continue;
           }
 
@@ -9247,6 +9456,28 @@
           Loading...
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Scorecard Modal (shows session stats: tier, multipliers, performance) -->
+  <div id="scorecardModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.9);">
+    <!-- Backdrop (click to close) -->
+    <div onclick="closeScorecardModal()" style="position:absolute; width:100%; height:100%;"></div>
+
+    <!-- Modal content box -->
+    <div style="position:relative; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,10,20,0.98); border:2px solid rgba(0,255,255,0.4); border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 0 40px rgba(0,255,255,0.3);">
+
+      <!-- Header with close button -->
+      <div style="padding:20px; border-bottom:1px solid rgba(0,255,255,0.2); display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0; color:#00FFFF; font-size:20px; letter-spacing:1px; text-shadow:0 0 10px #00FFFF;">📊 Your Session Stats</h2>
+        <button onclick="closeScorecardModal()" style="background:none; border:none; color:#00FFFF; font-size:28px; cursor:pointer; padding:0; width:32px; height:32px; line-height:32px; text-align:center;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#00FFFF'">×</button>
+      </div>
+
+      <!-- Scrollable body -->
+      <div style="padding:24px;">
+        <div id="scorecardContent">Loading...</div>
+      </div>
+
     </div>
   </div>
 
