@@ -1684,9 +1684,8 @@
         }
 
         // Analytics event
-        if (typeof gtag === 'function') {
-          gtag('event', 'ai_difficulty_adjusted', {
-            analytics_version: '4.3',
+        if (typeof fireEvent === 'function') {
+          fireEvent('ai_difficulty_adjusted', {
             old_tier: oldTier,
             new_tier: currentTier,
             direction: 'decrease',
@@ -1732,9 +1731,8 @@
         }
 
         // Analytics event
-        if (typeof gtag === 'function') {
-          gtag('event', 'ai_difficulty_adjusted', {
-            analytics_version: '4.3',
+        if (typeof fireEvent === 'function') {
+          fireEvent('ai_difficulty_adjusted', {
             old_tier: oldTier,
             new_tier: currentTier,
             direction: 'increase',
