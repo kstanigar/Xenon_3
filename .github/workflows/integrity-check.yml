@@ -86,6 +86,14 @@ jobs:
           check "var speedLocked"
           check "ai_difficulty_adjusted"
 
+          # Player Scorecard Modal (session stats - Apr 2026)
+          check "function buildScorecardHTML"
+          check "function showScorecardModal"
+          check "function closeScorecardModal"
+          check "var enemiesKilled"
+          check "var powerupsCollected"
+          check "scorecard_viewed"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -182,6 +190,14 @@ jobs:
           check "var cyclesCompleted"
           check "var speedLocked"
           check "ai_difficulty_adjusted"
+
+          # Player Scorecard Modal (session stats - Apr 2026)
+          check "function buildScorecardHTML"
+          check "function showScorecardModal"
+          check "function closeScorecardModal"
+          check "var enemiesKilled"
+          check "var powerupsCollected"
+          check "scorecard_viewed"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
