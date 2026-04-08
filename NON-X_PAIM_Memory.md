@@ -82,6 +82,46 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | GA4 Property | NON-X (Account: NON-X Game) — ID: G-9ECFZ9JBE5 |
 | Files | `index.html` (menu), `game.html` (desktop), `game_mobile.html` (mobile) |
 
+### Current Work (April 7, 2026)
+
+**Stats Modal + Analytics Cleanup - Two-Phase Approach**
+
+**Phase 1: Analytics Cleanup (✅ COMPLETE - April 7, 2026)**
+- ✅ **Status:** Complete
+- **Tasks completed:**
+  1. ✅ Fixed `ai_difficulty_adjusted` event to use `fireEvent()` wrapper (game.html lines 1688, 1736)
+     - Changed from direct `gtag('event', ...)` to `fireEvent('ai_difficulty_adjusted', {...})`
+     - Now consistent with game_mobile.html (which already used fireEvent)
+     - analytics_version: '4.3' now injected automatically by wrapper
+     - Properly respects dev mode suppression (events blocked when Shift+D active)
+  2. ✅ Verified console.log statements already properly wrapped
+     - Formation/position logs (lines 3628, 3660, 3680, 3745) already check dev mode
+     - Diagnostic logs ([VICTORY], [DAMAGE]) kept as intended
+     - All error/warn statements preserved
+     - No cleanup needed - code already production-ready
+- **Files modified:** `game.html`, `NON-X_PAIM_Memory.md`
+- **Duration:** 10 minutes
+- **Result:** Analytics events now consistent across both files, dev mode properly supported
+
+**Phase 2: Stats Modal Feature (Planned - Awaiting Design Approval)**
+- 📋 **Status:** Awaiting EnterPlanMode for design approval
+- **Purpose:** In-game statistics display for players
+- **Trigger:** "Show Stats" button on victory/game-over screens + Shift+S hotkey
+- **Data to display:**
+  - **Session stats:** Level, score, health, duration, multipliers breakdown
+  - **AI Agent status:** Current tier, speed locked, cycles completed, deaths remaining
+  - **Lifetime stats:** Games played, best score, A/B group, movement preference
+- **Design:** 3-panel modal layout (modeled after non-x_analytics dashboard)
+- **Integration:** Link to full analytics dashboard (https://kstanigar.github.io/non-x_analytics/)
+- **Files to modify:** `game.html`, `game_mobile.html`
+- **Expected duration:** 2-3 hours (requires planning + approval)
+
+**Research Completed (April 7, 2026):**
+- ✅ Analytics storage analysis (localStorage keys, fireEvent() calls inventory)
+- ✅ Console.log cleanup inventory (70+ statements categorized)
+- ✅ AI Agent event tracking audit (player_won, ai_difficulty_adjusted, game_complete)
+- ✅ Dashboard integration requirements (CSV loading system, KPIs)
+
 ### Git Workflow (Protected Main Branch)
 
 **CRITICAL: Never push directly to `main` branch. Always use feature branches + pull requests.**
