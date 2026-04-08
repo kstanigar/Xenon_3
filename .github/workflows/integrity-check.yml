@@ -75,7 +75,10 @@ jobs:
 
           # AI Agent v1.0 (adaptive difficulty - Apr 2026)
           check "var TIER_CONFIG"
+          check "scoreMultiplier"
           check "function getCurrentPhase"
+          check "function getTierMultiplier"
+          check "function addScore"
           check "function decreaseTier"
           check "function increaseTier"
           check "var currentTier"
@@ -169,7 +172,10 @@ jobs:
 
           # AI Agent v1.0 (adaptive difficulty - Apr 2026)
           check "var TIER_CONFIG"
+          check "scoreMultiplier"
           check "function getCurrentPhase"
+          check "function getTierMultiplier"
+          check "function addScore"
           check "function decreaseTier"
           check "function increaseTier"
           check "var currentTier"

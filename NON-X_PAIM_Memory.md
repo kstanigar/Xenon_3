@@ -82,7 +82,7 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | GA4 Property | NON-X (Account: NON-X Game) — ID: G-9ECFZ9JBE5 |
 | Files | `index.html` (menu), `game.html` (desktop), `game_mobile.html` (mobile) |
 
-### Current Work (April 7, 2026)
+### Current Work (April 8, 2026)
 
 **📋 NEXT PRIORITY: Scorecard Modal Implementation**
 
@@ -99,9 +99,13 @@ This is the single source of truth for the NON-X project. It is shared with ever
      - Diagnostic logs ([VICTORY], [DAMAGE]) kept as intended
      - All error/warn statements preserved
      - No cleanup needed - code already production-ready
+  3. ✅ **player_won Event Issue RESOLVED (April 8, 2026)**
+     - Event now firing correctly in GA4 DebugView
+     - GA4 Explorations (Step 2) unblocked
+     - player_won data now available for analytics
 - **Files modified:** `game.html`, `NON-X_PAIM_Memory.md`
 - **Duration:** 10 minutes
-- **Result:** Analytics events now consistent across both files, dev mode properly supported
+- **Result:** Analytics events now consistent across both files, dev mode properly supported, player_won tracking functional
 
 **Phase 2: Player Scorecard Modal (📋 READY TO IMPLEMENT - April 7, 2026)**
 - 📋 **Status:** Plan approved, implementation ready to begin
@@ -2633,6 +2637,17 @@ if (localStorage.getItem('nonx_dev_mode') === 'true') {
 **File:** `.github/workflows/integrity-check.yml`
 
 **Result:** CI now validates 43 required functions per file (was 39), ensuring leaderboard modal UI/UX functions are present on every PR.
+
+#### Apr 8, 2026
+**Purpose:** Validate AI Agent v1.0 adaptive difficulty system functions.
+
+**New checks added (3 total):**
+- **AI Agent v1.0:** `getTierMultiplier`, `addScore`, `scoreMultiplier` (tier-based scoring system)
+- Previously added: `TIER_CONFIG`, `getCurrentPhase`, `decreaseTier`, `increaseTier`, `currentTier`, `cyclesCompleted`, `speedLocked`, `ai_difficulty_adjusted`
+
+**File:** `.github/workflows/integrity-check.yml`
+
+**Result:** CI now validates 46 required functions per file (was 43), ensuring all AI Agent scoring and difficulty adjustment functions are tested on every PR. Completes AI Agent v1.0 CI coverage.
 
 ---
 
