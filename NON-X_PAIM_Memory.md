@@ -82,9 +82,49 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | GA4 Property | NON-X (Account: NON-X Game) — ID: G-9ECFZ9JBE5 |
 | Files | `index.html` (menu), `game.html` (desktop), `game_mobile.html` (mobile) |
 
-### Current Work (April 8, 2026)
+### Current Work (April 10, 2026)
 
-**📋 NEXT PRIORITY: Scorecard Modal Implementation**
+**📋 CURRENT PRIORITY: AWS Migration & Monetization (Ko-fi + Stripe)**
+
+**Phase 1: Code Polish - Ko-fi Button Migration (✅ COMPLETE - April 10, 2026)**
+- ✅ **Status:** Complete
+- **Goal:** Remove Ko-fi button from index.html main menu and inject it into Game Over and Victory overlays
+- **Implementation completed:**
+  1. ✅ Removed Ko-fi button CSS and HTML from `index.html` (lines 376-402 CSS, lines 581-584 HTML)
+  2. ✅ Created `buildKofiButtonHTML(source)` function in both game files (returns inline button, no wrapper div)
+  3. ✅ Modified `buildBugButtonHTML(source)` to remove wrapper div (enables inline layout)
+  4. ✅ Added both buttons inline (side-by-side) using flexbox container to all 8 locations:
+     - game.html: Victory screen + 3 game over screen variants
+     - game_mobile.html: Victory screen + 3 game over screen variants
+  5. ✅ Updated copyright from "© Modmotif 2026" to "© Raginats 2026" (links to https://www.thomaskeithdev.com/)
+- **Layout:** Buttons displayed side-by-side in flex container (`display: flex; gap: 12px; justify-content: center; flex-wrap: wrap`)
+- **Rationale:** Players more likely to tip after completing/losing game; inline placement ensures visibility without scrolling
+- **Analytics:** Ko-fi button tracks clicks with `location: 'victory'` or `location: 'game_over'` (replaced `location: 'main_menu'`)
+
+**Phase 2: AWS Domain Registration (⏳ PENDING - April 10, 2026)**
+- ⏳ **Status:** Pending user action
+- **Action required:** Log into AWS Console, navigate to Route 53, purchase custom domain name
+- **Dependencies:** None - can be done independently of code changes
+
+**Phase 3: AWS S3 Static Website Hosting (⏳ PENDING - April 10, 2026)**
+- ⏳ **Status:** Pending domain purchase
+- **Action required:** Create S3 bucket, enable "Static Website Hosting" feature
+- **Purpose:** Host game files on AWS infrastructure (migration from GitHub Pages)
+
+**Phase 4: Security & SSL Certificate (⏳ PENDING - April 10, 2026)**
+- ⏳ **Status:** Pending S3 setup
+- **Action required:** Generate free SSL Certificate via AWS Certificate Manager
+- **Purpose:** Ensure site runs securely on HTTPS
+
+**Phase 5: CloudFront CDN Setup (⏳ PENDING - April 10, 2026)**
+- ⏳ **Status:** Pending SSL certificate
+- **Action required:** Set up CloudFront CDN distribution
+- **Purpose:** Serve game ultra-fast worldwide via edge locations
+- **See:** `AWS_MIGRATION_PLAN.md` for complete 5-phase migration plan
+
+---
+
+**📋 COMPLETED: Scorecard Modal Implementation (✅ April 8, 2026)**
 
 **Phase 1: Analytics Cleanup (✅ COMPLETE - April 7, 2026)**
 - ✅ **Status:** Complete, merged to main (PR #93)
@@ -107,8 +147,8 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - **Duration:** 10 minutes
 - **Result:** Analytics events now consistent across both files, dev mode properly supported, player_won tracking functional
 
-**Phase 2: Player Scorecard Modal (📋 READY TO IMPLEMENT - April 7, 2026)**
-- 📋 **Status:** Plan approved, implementation ready to begin
+**Phase 2: Player Scorecard Modal (✅ COMPLETE - April 8, 2026)**
+- ✅ **Status:** Complete, merged to main (PR #96)
 - **Plan file:** `/Users/keithstanigar/.claude/plans/scorecard-modal-design.md` (18KB, 482 lines)
 - **Design:** Modal overlay pattern (reuses existing leaderboard modal structure)
 - **Features:**
@@ -323,6 +363,11 @@ git push -u origin feature/your-feature-name
 
 | Priority | Action | Owner |
 |---|---|---|
+| ✅ Done | **Ko-fi Button Migration** — Remove from index.html, inject into Game Over/Victory overlays (both files) | April 10, 2026 — Completed |
+| 🔴 P0 | **AWS Domain Purchase** — Log into Route 53, purchase custom domain | User |
+| 🔴 P0 | **AWS S3 Setup** — Create S3 bucket, enable static website hosting | User + Claude |
+| 🔴 P0 | **AWS SSL Certificate** — Generate free SSL cert via AWS Certificate Manager | User + Claude |
+| 🔴 P0 | **AWS CloudFront CDN** — Set up CDN distribution for worldwide delivery | User + Claude |
 | ✅ Done | **Rotate GitHub Token** — Create new Classic PAT with 365-day expiration, update osxkeychain | Mar 19, 2026 — Completed |
 | ✅ Done | Normalise platform: `computer` → `desktop` in index.html | Deployed Mar 12 |
 | ✅ Done | Wave drop-off: ATTEMPTS CSV support + death rate % table | Mar 12 |
@@ -384,6 +429,40 @@ git push -u origin feature/your-feature-name
 ---
 
 ## 1b. PLANNED FEATURES & ROADMAP
+
+### P0 — Critical Priority (Active Sprint - April 10, 2026)
+
+**1. AWS Migration & Monetization Infrastructure** 🔴 **IN PROGRESS**
+- **Status:** Active development (April 10, 2026)
+- **Goal:** Migrate from GitHub Pages to AWS infrastructure and implement tipping monetization
+- **Monetization Strategy:**
+  - **Phase 1:** Ko-fi + Stripe tipping (non-intrusive, player-supported)
+  - **Future considerations:** Premium unlocks, cosmetics, or ads (TBD based on player feedback)
+- **Technical Implementation:**
+  - **Code Polish:**
+    - Remove Ko-fi button from `index.html` main menu
+    - Inject Ko-fi button into Game Over overlays (`game.html` and `game_mobile.html`)
+    - Inject Ko-fi button into Victory overlays (`game.html` and `game_mobile.html`)
+    - Button placement: Below game stats, above "Play Again" button
+    - Design: Subtle, non-intrusive, optional support mechanism
+  - **AWS Domain Check:**
+    - Log into AWS Console
+    - Navigate to Route 53
+    - Purchase custom domain name for NON-X game
+  - **AWS S3 Storage:**
+    - Create S3 bucket for game files
+    - Enable "Static Website Hosting" feature
+    - Configure bucket policies for public read access
+  - **Security & CDN:**
+    - Generate free SSL Certificate via AWS Certificate Manager
+    - Ensure HTTPS-only access for security and GA4 compliance
+    - Set up CloudFront CDN distribution
+    - Configure edge locations for ultra-fast worldwide delivery
+- **Migration Plan:** See `AWS_MIGRATION_PLAN.md` for complete 5-phase migration strategy
+- **Timeline:** 1-2 weeks for full AWS migration
+- **Cost Estimate:** $10-30/month (domain + CloudFront + S3 hosting)
+- **Analytics Impact:** None (infrastructure change only, all GA4 tracking preserved)
+- **Rollback Plan:** GitHub Pages remains active until AWS fully tested and verified
 
 ### P1 — High Priority (Next Sprint)
 

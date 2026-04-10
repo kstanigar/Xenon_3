@@ -94,6 +94,9 @@ jobs:
           check "var powerupsCollected"
           check "scorecard_viewed"
 
+          # Ko-fi Monetization (tipping support - Apr 2026)
+          check "function buildKofiButtonHTML"
+
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
       - name: Check banned patterns are absent
@@ -198,6 +201,9 @@ jobs:
           check "var enemiesKilled"
           check "var powerupsCollected"
           check "scorecard_viewed"
+
+          # Ko-fi Monetization (tipping support - Apr 2026)
+          check "function buildKofiButtonHTML"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
