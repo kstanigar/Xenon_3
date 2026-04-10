@@ -6494,8 +6494,11 @@
       html += "<button onclick='leaveGame(\"victory\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
 
-      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+      html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
       html += buildBugButtonHTML('victory');
+      html += buildKofiButtonHTML('victory');
+      html += "</div>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
@@ -6760,10 +6763,14 @@
      * @param {string} source - Screen context ('game_over' or 'victory')
      * @returns {string} HTML string with bug report button
      */
+    /** Builds the bug report button HTML (inline, no wrapper). */
     function buildBugButtonHTML(source) {
-      return "<div style='margin-top: 10px;'>" +
-        "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>" +
-        "</div>";
+      return "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>";
+    }
+
+    /** Builds the Ko-fi support button HTML (inline, no wrapper). */
+    function buildKofiButtonHTML(source) {
+      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #FF5E5B; background: transparent; color: #FF5E5B; cursor: pointer; text-decoration: none; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(255,94,91,0.1)\"' onmouseout='this.style.background=\"transparent\"'>☕ Support the Dev</a>";
     }
 
     /**
@@ -6827,8 +6834,11 @@
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
+      html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
       html += buildBugButtonHTML('game_over');
-      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+      html += buildKofiButtonHTML('game_over');
+      html += "</div>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
       gameOverEl.innerHTML = html;
       showLeaderboard();
     }
@@ -7614,8 +7624,11 @@
 
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
+        html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
         html += buildBugButtonHTML('game_over');
-        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+        html += buildKofiButtonHTML('game_over');
+        html += "</div>";
+        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
@@ -7808,7 +7821,11 @@
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
           html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
-          html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://modmotif.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Modmotif</a> 2026</div>";
+          html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
+          html += buildBugButtonHTML('game_over');
+          html += buildKofiButtonHTML('game_over');
+          html += "</div>";
+          html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
