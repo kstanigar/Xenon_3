@@ -54,6 +54,44 @@ git push -u origin feature/recovery-branch
 
 ---
 
+## ✅ RESOLVED - Dev Mode Leaderboard Bug (April 12, 2026)
+
+**STATUS:** ✅ FIXED - Leaderboard now displays correctly in dev mode game over screens
+
+**ISSUE (RESOLVED):**
+- **Affected screens:** Dev mode Shift+G game over screens ONLY (desktop + mobile)
+- **Working correctly:** Normal game deaths ✅, Victory screens ✅
+- **Symptom:** No leaderboard visible in dev mode game over screens triggered by Shift+G shortcut
+- **Discovered:** User reported issue only occurred when using dev mode to skip to game over
+
+**ROOT CAUSE IDENTIFIED (Apr 12, 2026):**
+- Dev mode Shift+G game over code was missing `buildLeaderboardDisplayHTML()` call
+- Code location: game.html line 7276, game_mobile.html line 7846
+- Only called `buildLeaderboardSubmitHTML()`, which doesn't create the leaderboard display container
+- Without the `<div id='leaderboardDisplay'>` element, `showLeaderboard()` function exits silently (line 1352: `if (!display) return;`)
+- Normal game deaths (lines 6932-6933) correctly call BOTH functions - only dev mode shortcut was incomplete
+
+**FIX APPLIED (Apr 12, 2026):**
+1. **game.html line 7279:** Added `buildLeaderboardDisplayHTML()` before `buildLeaderboardSubmitHTML()` in Shift+G handler
+2. **game_mobile.html line 7849:** Added `buildLeaderboardDisplayHTML()` before `buildLeaderboardSubmitHTML()` in Shift+G handler
+3. Added critical 4-line comments explaining the fix and why both function calls are required
+4. Comments reference specific line numbers where `showLeaderboard()` fails if div doesn't exist
+
+**FILES MODIFIED:**
+- `game.html` - Dev mode Shift+G game over (lines 7274-7280)
+- `game_mobile.html` - Dev mode Shift+G game over (lines 7844-7850)
+- `docs/memory/NON-X_PAIM_Memory.md` - Documented resolution
+- `~/.claude/projects/.../memory/MEMORY.md` - Documented resolution
+
+**RESOLUTION:**
+- Leaderboard now displays correctly in ALL contexts:
+  - ✅ Normal game deaths (desktop + mobile)
+  - ✅ Dev mode Shift+G game over (desktop + mobile)
+  - ✅ Victory screens (desktop + mobile)
+- **Note:** Issue was pre-existing in dev mode code, NOT caused by button consolidation
+- Button consolidation implementation is verified working correctly
+
+---
 
 ## HOW TO USE THIS DOCUMENT
 
