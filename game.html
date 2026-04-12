@@ -907,22 +907,22 @@
     // Sound effects dictionary for one-shot gameplay audio events.
     // Each sound is a separate Audio element to allow overlapping playback.
     var sounds = {
-      playerBullet: new Audio("/Xenon_3/sfx/playerBullet.mp3"),
-      playerHit: new Audio("/Xenon_3/sfx/playerHit.mp3"),
-      playerDead: new Audio("/Xenon_3/sfx/playerDead.mp3"),
-      enemyDead: new Audio("/Xenon_3/sfx/enemyDead.mp3"),
-      bossIntro: new Audio("/Xenon_3/sfx/bossIntro.mp3"),
-      powerUp: new Audio("/Xenon_3/sfx/powerUp.mp3")
+      playerBullet: new Audio("/Xenon_3/assets/audio/sfx/playerBullet.mp3"),
+      playerHit: new Audio("/Xenon_3/assets/audio/sfx/playerHit.mp3"),
+      playerDead: new Audio("/Xenon_3/assets/audio/sfx/playerDead.mp3"),
+      enemyDead: new Audio("/Xenon_3/assets/audio/sfx/enemyDead.mp3"),
+      bossIntro: new Audio("/Xenon_3/assets/audio/sfx/bossIntro.mp3"),
+      powerUp: new Audio("/Xenon_3/assets/audio/sfx/powerUp.mp3")
     };
 
     // Background music track (looped continuously during gameplay).
     // Volume set to 0.79 for balanced mix with sound effects.
-    var bgMusic = new Audio("/Xenon_3/sfx/NonexFullSong.mp3");
+    var bgMusic = new Audio("/Xenon_3/assets/audio/music/NonexFullSong.mp3");
     bgMusic.loop = true;
     bgMusic.volume = 0.79;
 
     // Credits music track (plays on victory screen, same track as background).
-    var creditsMusic = new Audio("/Xenon_3/sfx/NonexFullSong.mp3");
+    var creditsMusic = new Audio("/Xenon_3/assets/audio/music/NonexFullSong.mp3");
     creditsMusic.volume = 0.79;
 
     // Set sound effect volumes to 0.4 for clear audio without overpowering music.
