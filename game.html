@@ -5722,6 +5722,13 @@
       html += '<a href="https://kstanigar.github.io/non-x_analytics/" target="_blank" style="color:#00FFFF; text-decoration:underline; font-size:13px;">View Full Analytics Dashboard →</a>';
       html += '</div>';
 
+      // Support buttons (Bug report + Ko-fi) at bottom of scorecard
+      // ROLLBACK: Remove lines below to restore buttons to end screens only
+      html += '<div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
+      html += buildBugButtonHTML('scorecard');
+      html += buildKofiButtonHTML('scorecard');
+      html += '</div>';
+
       return html;
     }
 
@@ -5836,7 +5843,7 @@
 
       // Scorecard button (prominent placement on victory screen)
       html += "<div style='margin: 20px 0;'>";
-      html += "<button onclick='showScorecardModal()' style='padding: 12px 24px; font-size: 15px; font-weight: bold; background: rgba(0,255,255,0.2); color: #00FFFF; border: 2px solid #00FFFF; border-radius: 8px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,255,255,0.3);' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"; this.style.boxShadow=\"0 0 25px rgba(0,255,255,0.5)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"; this.style.boxShadow=\"0 0 15px rgba(0,255,255,0.3)\"'>📊 VIEW SESSION STATS</button>";
+      html += "<button onclick='showScorecardModal()' style='padding: 12px 24px; font-size: 15px; font-weight: bold; background: rgba(0,255,255,0.2); color: #00FFFF; border: 2px solid #00FFFF; border-radius: 8px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,255,255,0.3);' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"; this.style.boxShadow=\"0 0 25px rgba(0,255,255,0.5)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"; this.style.boxShadow=\"0 0 15px rgba(0,255,255,0.3)\"'>View Stats &amp; Support</button>";
       html += "</div>";
 
       // Leaderboard submission — only if this beats player's previously submitted score
@@ -5861,10 +5868,12 @@
       html += "<button onclick='leaveGame(\"victory\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
 
-      html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-      html += buildBugButtonHTML('victory');
-      html += buildKofiButtonHTML('victory');
-      html += "</div>";
+      // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
+      // ROLLBACK: Restore lines 5864-5867 to re-add buttons here
+      // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
+      // html += buildBugButtonHTML('victory');
+      // html += buildKofiButtonHTML('victory');
+      // html += "</div>";
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
 
       victoryEl.innerHTML = html;
@@ -6050,14 +6059,24 @@
       collapseSurveyBanner();
     }
 
-    /** Builds the bug report button HTML (inline, no wrapper). */
+    /**
+     * Builds the bug report button HTML (inline, no wrapper).
+     * Updated Apr 12, 2026: Solid red background (#FF5E5B), removed emoji
+     * Used only in scorecard modal (consolidated from end screens)
+     * Rollback: git show backup-before-button-consolidation:game.html | grep -A 2 "buildBugButtonHTML"
+     */
     function buildBugButtonHTML(source) {
-      return "<button onclick='openBugReport(\"" + source + "\")' style='padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #555; background: transparent; color: #555; cursor: pointer;'>🐛 Report a Bug</button>";
+      return "<button onclick='openBugReport(\"" + source + "\")' style='padding: 10px 20px; font-size: 14px; border-radius: 4px; border: none; background: #FF5E5B; color: #fff; cursor: pointer; font-weight: bold;'>Report a Bug</button>";
     }
 
-    /** Builds the Ko-fi support button HTML (inline, no wrapper). */
+    /**
+     * Builds the Ko-fi support button HTML (inline, no wrapper).
+     * Updated Apr 12, 2026: Solid cyan background (#00FFFF), black text
+     * Used only in scorecard modal (consolidated from end screens)
+     * Rollback: git show backup-before-button-consolidation:game.html | grep -A 2 "buildKofiButtonHTML"
+     */
     function buildKofiButtonHTML(source) {
-      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 6px 14px; font-size: 12px; border-radius: 4px; border: 1px solid #FF5E5B; background: transparent; color: #FF5E5B; cursor: pointer; text-decoration: none; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(255,94,91,0.1)\"' onmouseout='this.style.background=\"transparent\"'>☕ Support the Dev</a>";
+      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; text-decoration: none; font-weight: bold;'>☕ Support the Dev</a>";
     }
 
     /**
@@ -6147,7 +6166,7 @@
         html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
       }
       // Scorecard button (replaces "Can you beat it?")
-      html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>📊 View Session Stats</button>";
+      html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
@@ -6175,10 +6194,12 @@
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
-      html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-      html += buildBugButtonHTML('game_over');
-      html += buildKofiButtonHTML('game_over');
-      html += "</div>";
+      // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
+      // ROLLBACK: Restore lines 6190-6193 to re-add buttons here
+      // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
+      // html += buildBugButtonHTML('game_over');
+      // html += buildKofiButtonHTML('game_over');
+      // html += "</div>";
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
       gameOverEl.innerHTML = html;
       showLeaderboard();
@@ -6906,7 +6927,7 @@
           html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
         }
         // Scorecard button (replaces "Can you beat it?")
-        html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>📊 View Session Stats</button>";
+        html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
@@ -6935,10 +6956,12 @@
         }
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
-        html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-        html += buildBugButtonHTML('game_over');
-        html += buildKofiButtonHTML('game_over');
-        html += "</div>";
+        // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
+        // ROLLBACK: Restore lines 6952-6955 to re-add buttons here
+        // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
+        // html += buildBugButtonHTML('game_over');
+        // html += buildKofiButtonHTML('game_over');
+        // html += "</div>";
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
@@ -7233,7 +7256,7 @@
             html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
           }
           // Scorecard button (replaces "Can you beat it?")
-          html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>📊 View Session Stats</button>";
+          html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
           html += "<br><br>";
           html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
           // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
@@ -7250,11 +7273,18 @@
           }
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
+          // CRITICAL FIX (Apr 12, 2026): Dev mode game over was missing buildLeaderboardDisplayHTML() call
+          // This caused leaderboard to not display because the <div id='leaderboardDisplay'> was never created
+          // When showLeaderboard() ran (line 7287), it couldn't find the div and exited silently (line 1352)
+          // MUST call buildLeaderboardDisplayHTML() BEFORE buildLeaderboardSubmitHTML() to create the container div
+          html += buildLeaderboardDisplayHTML();
           html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
-          html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-          html += buildBugButtonHTML('game_over');
-          html += buildKofiButtonHTML('game_over');
-          html += "</div>";
+          // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
+          // ROLLBACK: Restore lines 7270-7273 to re-add buttons here
+          // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
+          // html += buildBugButtonHTML('game_over');
+          // html += buildKofiButtonHTML('game_over');
+          // html += "</div>";
           html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
