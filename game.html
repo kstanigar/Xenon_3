@@ -350,6 +350,11 @@
       text-shadow: 0 0 10px #00FFFF;
       text-align: center;
       line-height: 1.6;
+      /* Black background overlay (Apr 12, 2026) - improves readability */
+      background: rgba(0, 0, 0, 0.92);  /* Semi-transparent black (92% opacity) */
+      padding: 40px;                     /* Breathing room around content */
+      border-radius: 12px;               /* Rounded corners for modern look */
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);  /* Subtle cyan glow */
     }
 
     #levelDisplay {
@@ -461,7 +466,11 @@
       line-height: 1.4;
       max-width: 90%;
       width: 90%;
-      padding: 20px;
+      /* Black background overlay (Apr 12, 2026) - matches game over styling */
+      background: rgba(0, 0, 0, 0.92);  /* Semi-transparent black (92% opacity) */
+      padding: 40px;                     /* Breathing room around content */
+      border-radius: 12px;               /* Rounded corners for modern look */
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);  /* Subtle cyan glow */
     }
   </style>
   <!-- ═════════════════════════════════════════════════════════════════════════
