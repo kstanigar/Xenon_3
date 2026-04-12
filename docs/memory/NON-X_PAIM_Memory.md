@@ -81,6 +81,8 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | Local path | /Users/keithstanigar/Documents/Projects/Xenon_3/ |
 | GA4 Property | NON-X (Account: NON-X Game) — ID: G-9ECFZ9JBE5 |
 | Files | `index.html` (menu), `game.html` (desktop), `game_mobile.html` (mobile) |
+| Assets | `assets/audio/music/` (6 tracks), `assets/audio/sfx/` (6 files), 48 sprite files (root) |
+| Docs | `docs/design/`, `docs/guides/`, `docs/summaries/`, `docs/memory/` (not publicly accessible) |
 
 ### Current Work (April 10, 2026)
 
