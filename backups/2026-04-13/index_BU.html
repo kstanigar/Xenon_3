@@ -1,0 +1,1004 @@
+<!--
+  ============================================================
+  index.html — NON-X Main Menu
+  ============================================================
+  Entry point for the NON-X web game. Presents the player with
+  platform selection (Computer / Mobile), settings toggles, and
+  a Play button that navigates to the appropriate game file.
+
+  Navigation targets:
+    • game.html        — Desktop build (800×600, keyboard controls)
+    • game_mobile.html — Mobile build (480×1040, touch controls)
+
+  Persistent state (localStorage keys):
+    • nonex_platform   — Last selected platform ('desktop' | 'mobile')
+                         Note: legacy sessions may have stored 'computer'
+                         (pre v3.0.1). selectPlatform() handles both.
+    • nonex_music      — Background music preference ('on' | 'off')
+    • nonex_analytics  — Analytics consent ('on' | 'off')
+    • nonex_event_queue — Buffered analytics events (JSON array, max 200)
+
+  Session state (sessionStorage keys):
+    • nonex_session    — Unique ID for the current browser tab session
+
+  Analytics:
+    Set ANALYTICS_ENDPOINT to a POST-accepting URL to stream events.
+    Leave as '' to buffer locally only (useful for debugging via
+    localStorage.getItem('nonex_event_queue')).
+
+  ============================================================
+  ANALYTICS DOCUMENTATION
+  ============================================================
+  GA4 Property : G-9ECFZ9JBE5
+  Version      : analytics_version: '3.0'
+                 Injected automatically by trackEvent() wrapper.
+
+  trackEvent(name, data)
+    Central wrapper for all GA4 events in this file.
+    Respects user consent — events suppressed if user has opted
+    out (nonex_analytics = 'off'), EXCEPT analytics_toggled which
+    always fires so consent changes are always recorded.
+    Automatically merges { analytics_version: '3.0' } into every
+    event payload via Object.assign.
+
+  Events fired from this file (7 total):
+  ┌─────────────────────┬──────────────────────────────────────────┐
+  │ Event               │ Key Parameters                           │
+  ├─────────────────────┼──────────────────────────────────────────┤
+  │ menu_view           │ referrer, music_variant, ab_music_group, │
+  │                     │ platform, analytics_version              │
+  │ play_clicked        │ platform, music_variant, ab_music_group, │
+  │                     │ analytics_version                        │
+  │ platform_selected   │ platform                                 │
+  │ music_toggled       │ value ('on'/'off')                       │
+  │ movement_toggled    │ value, movement_group ('A'/'B')          │
+  │ analytics_toggled   │ value ('on'/'off') — always fires        │
+  └─────────────────────┴──────────────────────────────────────────┘
+
+  Note: platform_selected, music_toggled, movement_toggled, and
+  analytics_toggled do not carry ab_music_group or other session
+  context — they fire on user action, before game launch.
+
+  A/B Test assignment (happens in this file):
+    ab_music_group : Assigned on first visit if not in localStorage.
+                     50/50 split: 'A' (music on) or 'B' (music off).
+                     Stored in localStorage.nonx_ab_music_group.
+                     Passed to game files via URL or localStorage.
+
+  Known data quality issue (RESOLVED):
+    platform_selected fires 'computer' for desktop users.
+    game.html and game_mobile.html send 'desktop' or 'mobile'.
+    This creates a fragmented platform dimension in GA4.
+    Fix applied: 'computer' normalised → 'desktop' in this release.
+    ⚠ Historical data before this fix (pre Mar 2026) will still show
+    'computer' in GA4. Filter by deploy date when analysing platform
+    data to avoid mixing old and new values.
+
+  Dependencies: None (no external libraries or frameworks).
+  ============================================================
+  CHANGELOG
+  ============================================================
+  v3.0 — Mar 10, 2026
+    • analytics_version: '3.0' injected into all trackEvent() calls
+      via Object.assign in the wrapper. Bump version for gameplay
+      mechanic changes only; use deploy date for instrumentation changes.
+    • Discard analytics data from v2.0 and earlier:
+      - (none)  : Pre-analytics / QA period
+      - v2.0    : Broken boss spawn, indestructible mobile minions,
+                  random movement A/B test active
+      - v3.0+   : Current — all gameplay fixes applied
+
+  v3.0.1 — Mar 12, 2026
+    • FIX: platform dimension normalised — 'computer' → 'desktop'
+      Affected: selectedPlatform default (line ~641),
+                selectPlatform() button onclick (line ~435),
+                classList.toggle comparison in selectPlatform() (line ~790)
+      Reason: GA4 was recording desktop sessions as 'computer' while
+              game.html / game_mobile.html were sending 'desktop' / 'mobile',
+              fragmenting the platform custom dimension.
+      Data impact: All desktop sessions from this deploy forward will
+                   correctly record platform: 'desktop'. Sessions before
+                   this deploy remain as 'computer' in GA4 — do not mix
+                   date ranges when comparing platform metrics.
+    • DOCS: Updated stale inline comments referencing 'computer' default
+    • DOCS: localStorage key docs updated: 'computer' → 'desktop'
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-9ECFZ9JBE5');
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NON-X</title>
+  <style>
+    /* Reset — consistent box model across all elements */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
+    html,
+    body {
+      overscroll-behavior: none;
+      touch-action: pan-y;
+    }
+
+    /* Full-screen layout; scrollable so leaderboard expansion never clips content */
+    body {
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      overflow-y: auto;
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 36px;
+    }
+
+    /* ── Starfield ──────────────────────────────────────────────────────────
+       Full-screen canvas rendered behind all menu content.
+       Animated via requestAnimationFrame in the Starfield IIFE below.       */
+    #starfield {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      /* Behind menu content */
+      pointer-events: none;
+      /* Never intercepts clicks */
+    }
+
+    /* ── Content wrapper ────────────────────────────────────────────────────
+       Sits above the starfield canvas via z-index.
+       min-height + justify-content keeps items centred when content is short;
+       padding ensures breathing room when the page needs to scroll.         */
+    .menu-wrap {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 36px;
+      min-height: 100vh;
+      justify-content: center;
+      padding: 48px 20px;
+      box-sizing: border-box;
+    }
+
+    /* ── Title ──────────────────────────────────────────────────────────────
+       Fluid font size: clamp ensures readability from mobile to large screens.
+       Cyan glow pulses via CSS animation for visual depth.                  */
+    .title {
+      font-size: clamp(52px, 12vw, 96px);
+      font-weight: bold;
+      letter-spacing: 14px;
+      text-transform: uppercase;
+      color: #00FFFF;
+      text-shadow:
+        0 0 18px #00FFFF,
+        0 0 40px #00FFFF,
+        0 0 80px rgba(0, 255, 255, 0.4);
+      animation: titlePulse 3s ease-in-out infinite;
+    }
+
+    /* Subtle pulsing glow — breathes between two intensity levels */
+    @keyframes titlePulse {
+
+      0%,
+      100% {
+        text-shadow: 0 0 18px #00FFFF, 0 0 40px #00FFFF, 0 0 80px rgba(0, 255, 255, 0.4);
+      }
+
+      50% {
+        text-shadow: 0 0 28px #00FFFF, 0 0 60px #00FFFF, 0 0 110px rgba(0, 255, 255, 0.6);
+      }
+    }
+
+    /* ── Platform buttons ───────────────────────────────────────────────────
+       Two-button group for selecting Computer vs Mobile build.
+       Active selection indicated by the .selected class.                    */
+    .platform-group {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .platform-btn {
+      width: 200px;
+      padding: 18px 0;
+      font-size: 17px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      letter-spacing: 1px;
+      border: 2px solid #444;
+      background: transparent;
+      color: #aaa;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      line-height: 1.4;
+    }
+
+    /* Sub-label text inside each platform button */
+    .platform-btn span {
+      display: block;
+      font-size: 12px;
+      font-weight: normal;
+      letter-spacing: 0;
+      color: #666;
+      margin-top: 4px;
+      transition: color 0.2s;
+    }
+
+    /* Hover and selected state share the same cyan highlight style */
+    .platform-btn:hover,
+    .platform-btn.selected {
+      border-color: #00FFFF;
+      color: #00FFFF;
+      background: rgba(0, 255, 255, 0.08);
+      text-shadow: 0 0 8px #00FFFF;
+      box-shadow: 0 0 16px rgba(0, 255, 255, 0.25);
+    }
+
+    .platform-btn.selected span,
+    .platform-btn:hover span {
+      color: rgba(0, 255, 255, 0.7);
+    }
+
+    /* ── Settings bar ────────────────────────────────────────────────────────
+       Single compact row housing all three toggle switches.                  */
+    .settings-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 12px 20px;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      flex-wrap: wrap;
+    }
+
+    /* Each toggle item: label on top, pill switch below */
+    .toggle-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-item-label {
+      font-size: 13px;
+      color: #aaa;
+      white-space: nowrap;
+    }
+
+    /* ── Pill switch ────────────────────────────────────────────────────────
+       Custom checkbox styled as a sliding pill toggle.
+       The hidden <input> drives state; the .slider is the visual element.   */
+    .switch {
+      position: relative;
+      width: 46px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    /* Hide the native checkbox — interaction handled by the parent <label> */
+    .switch input {
+      display: none;
+    }
+
+    /* The pill track */
+    .slider {
+      position: absolute;
+      inset: 0;
+      border-radius: 26px;
+      background: #333;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    /* The sliding knob inside the pill */
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: #888;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    /* Checked state: track turns translucent green */
+    input:checked+.slider {
+      background: rgba(0, 255, 136, 0.25);
+    }
+
+    /* Checked state: knob slides right and glows green */
+    input:checked+.slider::before {
+      transform: translateX(20px);
+      background: #00FF88;
+      box-shadow: 0 0 8px #00FF88;
+    }
+
+    /* ── Play button ────────────────────────────────────────────────────────
+       Primary CTA. Navigates to the selected game file on click.            */
+    #playBtn {
+      padding: 18px 80px;
+      font-size: 20px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      background: #00FFFF;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 0 24px rgba(0, 255, 255, 0.5);
+      transition: all 0.2s;
+    }
+
+    #playBtn:hover {
+      background: #fff;
+      box-shadow: 0 0 40px rgba(0, 255, 255, 0.9);
+      transform: scale(1.04);
+    }
+
+    #playBtn:active {
+      transform: scale(0.98);
+      /* Tactile press feedback */
+    }
+  </style>
+
+  <!-- ═════════════════════════════════════════════════════════════════════════
+       Firebase SDK Integration — Read-Only Leaderboard Access
+       ═══════════════════════════════════════════════════════════════════════════
+       Loaded as an ES6 module to import Firebase Firestore functions.
+       Initializes the Firebase app and exposes a global firebaseGetTopScores()
+       function for fetching the top 10 scores from the "leaderboard" collection.
+
+       Important: This is an async module, so firebaseGetTopScores() may not
+       be available immediately on page load. Callers should check if the
+       function exists and implement a retry strategy if needed (see
+       toggleLeaderboard() and page init code for examples). -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, query, orderBy, limit }
+      from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Firebase project configuration (read-only API key safe for client-side use)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDumeBRk__-lcKFJA2WLD7Wi-0y6OuFZlo",
+      authDomain: "nonx---game.firebaseapp.com",
+      projectId: "nonx---game",
+      storageBucket: "nonx---game.firebasestorage.app",
+      messagingSenderId: "404220834268",
+      appId: "1:404220834268:web:6cb71367bf62569ad5df19"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    /**
+     * Queries the Firestore "leaderboard" collection for the top 10 scores,
+     * ordered by score descending. Returns an empty array on error.
+     *
+     * Shared function signature with game.html and game_mobile.html:
+     * - index.html uses it to populate the main menu leaderboard dropdown
+     * - game files use it to display leaderboard on victory/game-over screens
+     *
+     * Error handling:
+     * - Returns [] on network errors, permission errors, or collection not found
+     * - Logs error to console for debugging
+     *
+     * @returns {Promise<Array<{score:number, instagram:string, platform:string}>>} Top 10 leaderboard entries
+     */
+    window.firebaseGetTopScores = async function () {
+      try {
+        const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(function (doc) { return doc.data(); });
+      } catch (e) {
+        console.error("Firebase fetch error:", e);
+        return [];
+      }
+    };
+  </script>
+</head>
+
+<body>
+
+  <!-- Starfield background canvas — drawn behind all menu elements -->
+  <canvas id="starfield"></canvas>
+
+  <!-- Main menu content — layered above the starfield via z-index -->
+  <div class="menu-wrap">
+
+    <!-- Game title -->
+    <div class="title">NON-X</div>
+
+    <!-- Global Leaderboard dropdown -->
+    <div id="leaderboardDropdown" style="width:420px;max-width:96vw;">
+      <div id="leaderboardTeaser" onclick="toggleLeaderboard()" style="background:rgba(0,255,255,0.05);border:1px solid #1e3a3a;border-radius:8px;
+               padding:13px 18px;display:flex;align-items:center;justify-content:space-between;
+               cursor:pointer;user-select:none;transition:border-color 0.2s,background 0.2s;"
+        onmouseover="this.style.borderColor='#00FFFF';this.style.background='rgba(0,255,255,0.08)'"
+        onmouseout="this.style.borderColor='#1e3a3a';this.style.background='rgba(0,255,255,0.05)'">
+        <span style="color:#00FFFF;font-size:14px;font-weight:bold;letter-spacing:0.3px;">
+          🏆 Global Leaderboard
+        </span>
+        <span id="leaderboardChevron" style="color:#00FFFF;font-size:20px;margin-left:12px;
+                 transition:transform 0.35s;display:inline-block;transform:rotate(180deg);">&#8964;</span>
+      </div>
+      <div id="leaderboardPanel" style="background:#0a1515;border:1px solid #1e3a3a;border-top:none;
+               border-radius:0 0 8px 8px;overflow:hidden;
+               max-height:480px;transition:max-height 0.45s cubic-bezier(0.4,0,0.2,1);">
+        <div id="leaderboardContent" style="padding:14px 20px 18px;text-align:center;color:#aaa;font-size:13px;">
+          Loading...
+        </div>
+      </div>
+    </div>
+    <!-- Platform selector: determines which game file is loaded on Play -->
+    <div class="platform-group">
+      <button class="platform-btn selected" id="btnComputer" onclick="selectPlatform('desktop')">
+        Computer
+      </button>
+      <button class="platform-btn" id="btnMobile" onclick="selectPlatform('mobile')">
+        Mobile
+      </button>
+    </div>
+
+    <!-- Settings bar: compact single-row toggles -->
+    <div class="settings-bar">
+
+      <label class="toggle-item" for="musicSwitch" title="Background music during gameplay">
+        <span class="toggle-item-label">Music</span>
+        <div class="switch">
+          <input type="checkbox" id="musicSwitch" checked onchange="onMusicToggle()" />
+          <div class="slider"></div>
+        </div>
+      </label>
+
+      <label class="toggle-item" for="movementSwitch" title="Enable up/down controls in addition to left/right">
+        <span class="toggle-item-label">Full Movement</span>
+        <div class="switch">
+          <input type="checkbox" id="movementSwitch" checked onchange="onMovementToggle()" />
+          <div class="slider"></div>
+        </div>
+      </label>
+
+      <label class="toggle-item" for="analyticsSwitch" title="Help improve the game — no personal info collected">
+        <span class="toggle-item-label">Analytics</span>
+        <div class="switch">
+          <input type="checkbox" id="analyticsSwitch" onchange="onAnalyticsToggle()" />
+          <div class="slider"></div>
+        </div>
+      </label>
+
+    </div>
+
+
+    <!-- Play button -->
+    <button id="playBtn" onclick="launchGame()">Play</button>
+
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STARFIELD ANIMATION SYSTEM
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Self-contained IIFE so starfield variables don't pollute the global scope.
+    // Runs its own requestAnimationFrame loop independently of the game loop.
+    // Stars continuously fall downward and recycle to the top when they exit the
+    // bottom edge, creating an infinite scrolling starfield effect.
+    (function () {
+      var c = document.getElementById('starfield');
+      var ctx = c.getContext('2d');
+      var stars = [];
+
+      // Total number of star particles in the field.
+      // 160 provides good density without excessive draw overhead.
+      var NUM_STARS = 160;
+
+      /**
+       * Resizes the canvas to fill the viewport.
+       * Called on init and whenever the window is resized.
+       */
+      function resize() {
+        c.width = window.innerWidth;
+        c.height = window.innerHeight;
+      }
+
+      /**
+       * Populates the stars array with randomly distributed particles.
+       * Each star has:
+       * - Position (x, y) — random placement across viewport
+       * - Radius (r) — varies star size for depth perception
+       * - Fall speed — varied to create parallax effect
+       * - Opacity (alpha) — varied to create depth and visual interest
+       *
+       * Called on initial load and whenever the window is resized.
+       */
+      function initStars() {
+        stars = [];
+        for (var i = 0; i < NUM_STARS; i++) {
+          stars.push({
+            x: Math.random() * c.width,
+            y: Math.random() * c.height,
+            r: Math.random() * 1.5 + 0.3,      // Radius: 0.3–1.8px for varied star sizes
+            speed: Math.random() * 0.4 + 0.1,  // Fall speed: 0.1–0.5px per frame (parallax)
+            alpha: Math.random() * 0.6 + 0.3   // Opacity: 0.3–0.9 for depth perception
+          });
+        }
+      }
+
+      /**
+       * Main animation loop. Clears the canvas and redraws all stars each frame.
+       * Stars that fall off the bottom are recycled to a random position at the top,
+       * creating an infinite scrolling effect. Runs continuously via requestAnimationFrame.
+       */
+      function tick() {
+        ctx.clearRect(0, 0, c.width, c.height);
+        for (var i = 0; i < stars.length; i++) {
+          var s = stars[i];
+          // Move star downward by its speed
+          s.y += s.speed;
+
+          // Recycle star to the top when it exits the bottom edge.
+          // Random x-position prevents predictable column patterns.
+          if (s.y > c.height) {
+            s.y = 0;
+            s.x = Math.random() * c.width;
+          }
+
+          // Draw star as a filled circle
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,' + s.alpha + ')';
+          ctx.fill();
+        }
+        requestAnimationFrame(tick);
+      }
+
+      // Re-init on resize to avoid stretched/clipped stars and maintain proper density
+      window.addEventListener('resize', function () { resize(); initStars(); });
+
+      // Initialize starfield immediately on page load
+      resize();
+      initStars();
+      tick();
+    })();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ANALYTICS & TRACKING
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Lightweight consent-based event tracking system. Uses Google Analytics (gtag.js)
+    // to record user interactions and preferences. All tracking respects user consent
+    // via the Analytics toggle (opt-out model: default ON for first-time visitors).
+    //
+    // Events are only sent when:
+    // 1. User has consented (nonex_analytics === 'on' or null for first visit)
+    // 2. Exception: 'analytics_toggled' event always fires to capture opt-in moment
+    //
+    // Legacy ANALYTICS_ENDPOINT preserved for potential future custom endpoint.
+    // Currently unused (set to empty string). If populated with a POST URL,
+    // events would be buffered to localStorage and sent to that endpoint.
+    var ANALYTICS_ENDPOINT = ''; // e.g. 'https://your-server.com/events' (not currently used)
+
+    /**
+     * Generates a unique ID from the current timestamp and random entropy.
+     * Used for session IDs. Format: base36(timestamp) + 6-char random suffix.
+     *
+     * Example output: "l8x9k2abc123"
+     *
+     * @returns {string} A short unique identifier string (~14 characters).
+     */
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    // Unique session ID scoped to the current browser tab (stored in sessionStorage).
+    // Persists across page reloads within the tab but resets on tab close.
+    // Used to group analytics events from the same play session.
+    var sessionId = sessionStorage.getItem('nonex_session');
+    if (!sessionId) {
+      sessionId = generateId();
+      sessionStorage.setItem('nonex_session', sessionId);
+    }
+
+    /**
+     * Records a named analytics event with optional metadata via Google Analytics.
+     *
+     * Consent model:
+     * - Requires user consent (nonex_analytics === 'on' or null) for all events
+     * - Exception: 'analytics_toggled' event always fires to capture the opt-in/opt-out moment
+     * - null value means first visit (default ON, opt-out available via toggle)
+     *
+     * @param {string} name - The event name (e.g. 'play_clicked', 'platform_selected').
+     * @param {Object} [data] - Optional key/value metadata for the event (e.g. {platform: 'mobile'}).
+     */
+    function trackEvent(name, data) {
+      // Gate on consent — null means first visit (default ON, respects opt-out)
+      var analyticsValue = localStorage.getItem('nonex_analytics');
+      var hasConsent = (analyticsValue === 'on' || analyticsValue === null);
+
+      // Skip event if user has opted out, UNLESS it's the analytics toggle event itself
+      if (!hasConsent && name !== 'analytics_toggled') return;
+
+      // Send to Google Analytics if gtag is available
+      if (typeof gtag !== 'undefined') {
+        gtag('event', name, Object.assign({ analytics_version: '3.0' }, data || {}));
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // USER PREFERENCES
+    // ═══════════════════════════════════════════════════════════════════════════
+    // User preferences are persisted to localStorage so they are restored on the
+    // next visit. Defaults: Computer platform, music on, full movement on,
+    // analytics on (opt-out available).
+    //
+    // localStorage keys used:
+    // - nonex_platform   — 'desktop' | 'mobile'
+    // - nonex_music      — 'on' | 'off'
+    // - nonex_movement   — 'on' | 'off' (null = default ON)
+    // - nonex_analytics  — 'on' | 'off' (null = default ON)
+
+    // Currently selected platform ('desktop' | 'mobile').
+    // Determines which game file is loaded when Play is clicked.
+    var selectedPlatform = 'desktop';
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LEADERBOARD SYSTEM
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // State tracking for leaderboard dropdown panel.
+    // Default open on page load so users immediately see top scores.
+    var leaderboardOpen = true;
+
+    // Tracks whether scores have been fetched from Firebase yet.
+    // Prevents redundant fetches when toggling the panel open/closed.
+    var leaderboardLoaded = false;
+
+    /**
+     * Renders the top 10 Firebase scores into the #leaderboardContent element
+     * as a two-column flex grid. Highlights the player's own score (if present)
+     * and displays Instagram handles or "Anonymous" for each entry.
+     *
+     * Layout algorithm:
+     * - Splits entries into two columns: left (1-5), right (6-10)
+     * - Uses Math.ceil to handle odd counts (e.g., 9 scores → 5 left, 4 right)
+     * - flex-wrap allows single-column fallback on narrow screens
+     *
+     * Player highlighting:
+     * - Compares each score to nonx_submitted_score in localStorage
+     * - Exact match gets cyan color + "← you" label
+     *
+     * @param {Array<{score:number, instagram:string, platform:string}>} top10 - Leaderboard entries from Firebase.
+     */
+    function renderLeaderboard(top10) {
+      var content = document.getElementById('leaderboardContent');
+      if (!content) return;
+
+      // Handle empty leaderboard
+      if (!top10 || top10.length === 0) {
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
+        return;
+      }
+
+      // Two-column grid: entries laid out left column (1-5) then right column (6-10).
+      // Math.ceil ensures odd counts distribute correctly (e.g., 9 → 5 left, 4 right).
+      var localBest = parseInt(localStorage.getItem('nonx_submitted_score') || '0', 10);
+      var half = Math.ceil(top10.length / 2); // Split point for two-column layout
+      var cols = ['', '']; // HTML strings for left and right columns
+
+      for (var i = 0; i < top10.length; i++) {
+        var entry = top10[i];
+        // Display player name/handle exactly as entered (no @ prefix)
+        // Accepts any identifier: gamer tags, social handles, real names, etc.
+        var playerName = entry.instagram && entry.instagram !== 'Anonymous'
+          ? entry.instagram : 'Anonymous';
+
+        // Highlight player's own score with cyan color + bold
+        // Visual identification via color only (no text label needed)
+        // Rationale: Text labels add variable width, breaking 2-column alignment
+        var isYours = localBest > 0 && entry.score === localBest;
+        var rowStyle = isYours ? "color:#00FFFF;font-weight:bold;" : "color:#ddd;";
+        // Username color: cyan for player's score, gray for others
+        var nameColor = isYours ? "#00FFFF" : "#888";
+
+        // Determine which column (0 = left, 1 = right)
+        var col = i < half ? 0 : 1;
+
+        // Build row HTML: rank, score, player name/handle
+        // Player's entry: cyan + bold (score AND username highlighted)
+        // Other entries: light gray, normal weight
+        cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
+        cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
+        cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + playerName + "</span>";
+        cols[col] += "</div>";
+      }
+
+      // Assemble final two-column layout (stays 2 columns even on mobile)
+      // Two-column layout on mobile (min-width:140px keeps 2 columns on ~360-414px phones)
+      // Rationale: Single column makes leaderboard too tall, pushing Play button off-screen
+      // 2 columns = compact layout, no scrolling needed to reach Play button
+      var html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0 24px;text-align:left;padding:4px 0;'>";
+      html += "<div style='min-width:140px;'>" + cols[0] + "</div>";
+      html += "<div style='min-width:140px;'>" + cols[1] + "</div>";
+      html += "</div>";
+      content.innerHTML = html;
+    }
+
+    /**
+     * Opens or closes the leaderboard dropdown panel with a CSS max-height transition.
+     * Fetches scores from Firebase on the first open (or on page load since the panel
+     * is open by default). Falls back gracefully if the Firebase module hasn't finished
+     * loading yet, with a 1200ms retry before showing "unavailable" message.
+     *
+     * Retry strategy rationale:
+     * - Firebase SDK loads asynchronously via ES6 module import
+     * - firebaseGetTopScores() is assigned to window once the module loads
+     * - 1200ms gives the SDK enough time to initialize on slow connections
+     * - Only retries once to avoid indefinite waiting
+     *
+     * Animation:
+     * - Panel expands/collapses via max-height transition (480px ↔ 0)
+     * - Chevron rotates 180° to indicate open/closed state
+     */
+    function toggleLeaderboard() {
+      leaderboardOpen = !leaderboardOpen;
+      var panel = document.getElementById('leaderboardPanel');
+      var chev = document.getElementById('leaderboardChevron');
+
+      // Animate panel expand/collapse via CSS transition
+      panel.style.maxHeight = leaderboardOpen ? '480px' : '0';
+      if (chev) chev.style.transform = leaderboardOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+
+      // Fetch scores on first open (or page load, since panel defaults to open)
+      if (leaderboardOpen && !leaderboardLoaded) {
+        leaderboardLoaded = true;
+
+        if (typeof window.firebaseGetTopScores === 'function') {
+          // Firebase SDK is ready — fetch immediately
+          window.firebaseGetTopScores().then(renderLeaderboard);
+        } else {
+          // Firebase module may still be loading — retry once after 1200ms delay.
+          // This handles the race condition where the page loads before the
+          // Firebase ES6 module finishes importing and assigning firebaseGetTopScores.
+          setTimeout(function () {
+            if (typeof window.firebaseGetTopScores === 'function') {
+              window.firebaseGetTopScores().then(renderLeaderboard);
+            } else {
+              // Give up after one retry and show unavailable message
+              var content = document.getElementById('leaderboardContent');
+              if (content) content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+            }
+          }, 1200);
+        }
+      }
+    }
+
+    /**
+     * Updates the active platform selection, persists the preference to
+     * localStorage, and fires a 'platform_selected' analytics event when
+     * the value actually changes.
+     *
+     * Visual feedback:
+     * - Toggles .selected class on platform buttons (cyan border/glow)
+     * - Only the selected button has the highlighted state
+     *
+     * @param {string} p - Platform identifier: 'desktop' or 'mobile'
+     *                     Note: legacy localStorage values of 'computer'
+     *                     are passed through here on restore — the classList
+     *                     toggle uses 'desktop' so old values won't highlight
+     *                     the button, but selectPlatform() still sets the var.
+     */
+    function selectPlatform(p) {
+      var prev = selectedPlatform;
+      selectedPlatform = p;
+
+      // Update visual selection state on both buttons
+      document.getElementById('btnComputer').classList.toggle('selected', p === 'desktop');
+      document.getElementById('btnMobile').classList.toggle('selected', p === 'mobile');
+
+      savePrefs(); // Persist to localStorage
+
+      // Only fire analytics event if the selection actually changed
+      if (prev !== p) {
+        trackEvent('platform_selected', { platform: p });
+      }
+    }
+
+    /**
+     * Writes all current preference values to localStorage.
+     * Called after any preference changes to ensure persistence across page loads.
+     * Reads checkbox states from the DOM to ensure values are always in sync.
+     */
+    function savePrefs() {
+      localStorage.setItem('nonex_music', document.getElementById('musicSwitch').checked ? 'on' : 'off');
+      localStorage.setItem('nonex_movement', document.getElementById('movementSwitch').checked ? 'on' : 'off');
+      localStorage.setItem('nonex_analytics', document.getElementById('analyticsSwitch').checked ? 'on' : 'off');
+      localStorage.setItem('nonex_platform', selectedPlatform);
+    }
+
+    /**
+     * Handles the Music toggle change event.
+     * Saves the updated preference and records an analytics event.
+     * Music preference is read by game.html and game_mobile.html on load.
+     */
+    function onMusicToggle() {
+      var val = document.getElementById('musicSwitch').checked ? 'on' : 'off';
+      savePrefs(); // Persist to localStorage
+      trackEvent('music_toggled', { value: val });
+    }
+
+    /**
+     * Handles the Full Movement toggle change event.
+     * Saves preference and fires analytics with A/B group designation.
+     *
+     * Movement groups:
+     * - 'A' = horizontal only (left/right on desktop, X-axis only on mobile)
+     * - 'B' = full movement (all arrow keys on desktop, X+Y on mobile)
+     */
+    function onMovementToggle() {
+      var val = document.getElementById('movementSwitch').checked ? 'on' : 'off';
+      savePrefs(); // Persist to localStorage
+      trackEvent('movement_toggled', { value: val, movement_group: val === 'on' ? 'B' : 'A' });
+    }
+
+    /**
+     * Handles the Analytics toggle change event.
+     * Saves consent to localStorage BEFORE calling trackEvent, so the
+     * consent status is already correct when trackEvent reads it.
+     *
+     * Special behavior: 'analytics_toggled' event always fires regardless
+     * of consent state, so we can capture opt-in/opt-out moments.
+     */
+    function onAnalyticsToggle() {
+      var val = document.getElementById('analyticsSwitch').checked ? 'on' : 'off';
+      savePrefs(); // Persist consent before tracking
+      trackEvent('analytics_toggled', { value: val });
+    }
+
+    /**
+     * Restores saved preferences from localStorage on page load.
+     * Falls back to defaults if no saved values exist.
+     *
+     * Default behavior for first-time visitors (null values):
+     * - Music: OFF (value is null → checkbox unchecked by default)
+     * - Full Movement: ON (null treated as 'on' for better UX)
+     * - Analytics: ON (opt-out model, null treated as 'on')
+     * - Platform: Desktop (no saved value → selectedPlatform stays 'desktop')
+     *             Note: returning visitors with 'computer' in localStorage
+     *             will have selectPlatform('computer') called, which sets
+     *             selectedPlatform = 'computer'. This is harmless — navigation
+     *             still routes to game.html correctly (any non-'mobile' value
+     *             falls through to the game.html branch in launchGame).
+     *
+     * Called once on page load before any user interaction.
+     */
+    function loadPrefs() {
+      var music = localStorage.getItem('nonex_music');
+      var analytics = localStorage.getItem('nonex_analytics');
+      var platform = localStorage.getItem('nonex_platform');
+
+      // Music: restore saved value, default OFF if null
+      if (music !== null) document.getElementById('musicSwitch').checked = (music === 'on');
+
+      // Full Movement: default ON for first-time visitors (null → on)
+      var movement = localStorage.getItem('nonex_movement');
+      document.getElementById('movementSwitch').checked = (movement === 'on' || movement === null);
+
+      // Analytics: default ON for first-time visitors (opt-out model, null → on)
+      document.getElementById('analyticsSwitch').checked = (analytics === 'on' || analytics === null);
+
+      // Platform: restore saved selection or keep default ('desktop')
+      // Legacy: users with 'computer' in localStorage will have it passed
+      // through here. trackEvent('platform_selected') will fire 'computer'
+      // once if they switch, but play_clicked always sends selectedPlatform
+      // which will be 'computer' until they manually toggle. Acceptable
+      // since legacy users are a small and shrinking cohort.
+      if (platform) selectPlatform(platform);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GAME LAUNCH
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Saves current preferences, fires the 'play_clicked' analytics event,
+     * and navigates to the appropriate game file based on the selected platform.
+     *
+     * Navigation targets:
+     * - 'desktop' → game.html (800×600, keyboard controls)  [was 'computer' pre v3.0.1]
+     * - 'mobile'  → game_mobile.html (480×1040, touch controls)
+     *
+     * Analytics delay:
+     * - 120ms delay added when ANALYTICS_ENDPOINT is set (currently unused)
+     * - Gives the analytics fetch request time to fire before page unload
+     * - No delay when ANALYTICS_ENDPOINT is empty (current state)
+     */
+    function launchGame() {
+      savePrefs(); // Persist all settings before navigation
+
+      trackEvent('play_clicked', {
+        platform: selectedPlatform,
+        music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+        ab_music_group: localStorage.getItem('nonx_ab_music_group') || 'unknown',
+        analytics_version: '3.0'
+      });
+
+      // Determine destination based on platform selection
+      var dest = selectedPlatform === 'mobile' ? 'game_mobile.html' : 'game.html';
+
+      // Delay navigation slightly so the analytics fetch can fire before unload
+      // (only when ANALYTICS_ENDPOINT is configured, currently unused)
+      setTimeout(function () { window.location.href = dest; }, ANALYTICS_ENDPOINT ? 120 : 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PAGE INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Sequence matters: preferences must be loaded before leaderboard fetch
+    // to ensure correct platform/settings state for analytics.
+
+    // 1. Restore saved preferences (or apply defaults for first visit)
+    loadPrefs();
+
+    // 2. Fetch leaderboard immediately on page load (panel is open by default).
+    //    Uses same retry strategy as toggleLeaderboard() to handle async Firebase SDK loading.
+    if (typeof window.firebaseGetTopScores === 'function') {
+      // Firebase SDK is ready — fetch immediately
+      window.firebaseGetTopScores().then(renderLeaderboard);
+      leaderboardLoaded = true;
+    } else {
+      // Firebase module may still be loading — retry once after 1200ms delay
+      setTimeout(function () {
+        if (typeof window.firebaseGetTopScores === 'function') {
+          window.firebaseGetTopScores().then(renderLeaderboard);
+        } else {
+          // Give up after one retry and show unavailable message
+          var content = document.getElementById('leaderboardContent');
+          if (content) content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+        }
+        leaderboardLoaded = true;
+      }, 1200);
+    }
+
+    // 3. Track menu view event with current settings state
+    trackEvent('menu_view', {
+      referrer: document.referrer || 'direct', // Track traffic source
+      music_variant: localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+      ab_music_group: localStorage.getItem('nonx_ab_music_group') || 'unknown',
+      platform: localStorage.getItem('nonex_platform') || 'not_set',
+      analytics_version: '3.0'
+    });
+  </script>
+</body>
+
+</html>

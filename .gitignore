@@ -3,3 +3,11 @@
 *.docx
 *.pdf
 *Claude_files/
+
+# File organization (added Apr 2026)
+.DS_Store
+*.tmp
+*.log
+
+# Note: docs/, scripts/, backups/ are tracked but won't deploy to GitHub Pages
+# because they're not linked from any HTML file
