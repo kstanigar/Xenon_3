@@ -472,6 +472,23 @@
       border-radius: 12px;               /* Rounded corners for modern look */
       box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);  /* Subtle cyan glow */
     }
+
+    /* Hazard Flicker Animation - "Power Failure" Effect (Apr 12, 2026) */
+    /* Mimics dying neon/brownout to create "Keep the Lights On" narrative */
+    /* Flickers irregularly for 1.5s, then stable for 6.5s */
+    @keyframes hazard-flicker {
+      0%, 100% { opacity: 1; }           /* Stable state */
+      12.5%, 14.5%, 16.5% { opacity: 0.4; }  /* Brownout drops (at 1s, 1.16s, 1.32s) */
+      13%, 15%, 17% { opacity: 1; }      /* Quick recovery snaps */
+    }
+
+    /* Disable flicker for users with motion sensitivity */
+    @media (prefers-reduced-motion: reduce) {
+      .hazard-flicker {
+        animation: none !important;
+        opacity: 1 !important;
+      }
+    }
   </style>
   <!-- ═════════════════════════════════════════════════════════════════════════
        Firebase SDK Integration — Leaderboard Read/Write
@@ -5851,8 +5868,9 @@
       html += "</div>";
 
       // Scorecard button (prominent placement on victory screen)
+      // Hazard yellow "dying neon" aesthetic - represents "Keep the Lights On" narrative
       html += "<div style='margin: 20px 0;'>";
-      html += "<button onclick='showScorecardModal()' style='padding: 12px 24px; font-size: 15px; font-weight: bold; background: rgba(0,255,255,0.2); color: #00FFFF; border: 2px solid #00FFFF; border-radius: 8px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,255,255,0.3);' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"; this.style.boxShadow=\"0 0 25px rgba(0,255,255,0.5)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"; this.style.boxShadow=\"0 0 15px rgba(0,255,255,0.3)\"'>View Stats &amp; Support</button>";
+      html += "<button onclick='showScorecardModal()' class='hazard-flicker' style='padding: 12px 28px; font-size: 15px; font-weight: bold; background: rgba(255,215,0,0.15); color: #FFD700; border: 2px solid #FFD700; border-radius: 8px; cursor: pointer; letter-spacing: 1px; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1); box-shadow: 0 0 15px rgba(255,215,0,0.3);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"; this.style.boxShadow=\"0 0 25px rgba(255,215,0,0.5)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"; this.style.boxShadow=\"0 0 15px rgba(255,215,0,0.3)\"'>⚡ Player Intel &amp; Power</button>";
       html += "</div>";
 
       // Leaderboard submission — only if this beats player's previously submitted score
@@ -6174,8 +6192,8 @@
       if (prevBest !== null && score < prevBest) {
         html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
       }
-      // Scorecard button (replaces "Can you beat it?")
-      html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
+      // Scorecard button - Hazard yellow "dying neon" aesthetic
+      html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
@@ -6935,8 +6953,8 @@
         if (prevBest !== null && score < prevBest) {
           html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
         }
-        // Scorecard button (replaces "Can you beat it?")
-        html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
+        // Scorecard button - Hazard yellow "dying neon" aesthetic
+        html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
@@ -7264,9 +7282,14 @@
           if (prevBest !== null && score < prevBest) {
             html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
           }
-          // Scorecard button (replaces "Can you beat it?")
-          html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
+          // Scorecard button - Hazard yellow "dying neon" aesthetic
+          html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
           html += "<br><br>";
+          // LAYOUT FIX (Apr 12, 2026): Moved leaderboard sections BEFORE buttons
+          // This ensures leaderboard displays above action buttons (matches normal game over behavior)
+          // Previous order had buttons first, causing poor UX (users couldn't see standings before deciding to replay)
+          html += buildLeaderboardDisplayHTML();
+          html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
           html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
           // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
           // Matches main death screen logic. Uses deathPhase, not redPhase/purplePhase flags.
@@ -7282,12 +7305,6 @@
           }
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
-          // CRITICAL FIX (Apr 12, 2026): Dev mode game over was missing buildLeaderboardDisplayHTML() call
-          // This caused leaderboard to not display because the <div id='leaderboardDisplay'> was never created
-          // When showLeaderboard() ran (line 7287), it couldn't find the div and exited silently (line 1352)
-          // MUST call buildLeaderboardDisplayHTML() BEFORE buildLeaderboardSubmitHTML() to create the container div
-          html += buildLeaderboardDisplayHTML();
-          html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
           // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
           // ROLLBACK: Restore lines 7270-7273 to re-add buttons here
           // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
