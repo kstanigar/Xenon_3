@@ -449,7 +449,7 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%,-50%);
+      transform: translate(-50%, -50%);
       font-size: 18px;
       color: #00FFFF;
       text-shadow: 0 0 15px #00FFFF;
@@ -463,6 +463,16 @@
       padding: 40px;                     /* Breathing room around content */
       border-radius: 12px;               /* Rounded corners for modern look */
       box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);  /* Subtle cyan glow */
+    }
+
+    /* Hazard Flicker Animation - "Power Failure" Effect (Apr 12, 2026) */
+    /* Mimics dying neon/brownout to create "Keep the Lights On" narrative */
+    /* Applied to "⚡ Player Intel & Power" buttons on victory/game-over screens */
+    /* Flickers irregularly for 1.5s, then stable for 6.5s */
+    @keyframes hazard-flicker {
+      0%, 100% { opacity: 1; }           /* Stable state */
+      12.5%, 14.5%, 16.5% { opacity: 0.4; }  /* Brownout drops (at 1s, 1.16s, 1.32s) */
+      13%, 15%, 17% { opacity: 1; }      /* Quick recovery snaps */
     }
   </style>
   <!-- Firebase SDK -->
@@ -706,13 +716,13 @@
      * @property {number} minionRate - Boss minion spawn rate multiplier (0x to 2.0x)
      */
     var TIER_CONFIG = {
-      '-3': { bulletSpeed: 3.5, shieldHits: 0,  bossOrbiters: [2,3,4], minionRate: 0,   scoreMultiplier: 0.50 }, // Tutorial
-      '-2': { bulletSpeed: 4.0, shieldHits: 5,  bossOrbiters: [3,4,5], minionRate: 0.5, scoreMultiplier: 0.70 }, // Beginner
-      '-1': { bulletSpeed: 4.5, shieldHits: 10, bossOrbiters: [3,4,5], minionRate: 1.0, scoreMultiplier: 0.85 }, // Easy
-      '0':  { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4,5,6], minionRate: 1.0, scoreMultiplier: 1.00 }, // Normal (baseline)
-      '1':  { bulletSpeed: 5.5, shieldHits: 18, bossOrbiters: [4,5,6], minionRate: 1.5, scoreMultiplier: 1.20 }, // Challenge
-      '2':  { bulletSpeed: 6.0, shieldHits: 20, bossOrbiters: [4,5,6], minionRate: 1.5, scoreMultiplier: 1.40 }, // Veteran
-      '3':  { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [4,5,6], minionRate: 2.0, scoreMultiplier: 1.75 }  // Expert
+      '-3': { bulletSpeed: 3.5, shieldHits: 0, bossOrbiters: [2, 3, 4], minionRate: 0, scoreMultiplier: 0.50 }, // Tutorial
+      '-2': { bulletSpeed: 4.0, shieldHits: 5, bossOrbiters: [3, 4, 5], minionRate: 0.5, scoreMultiplier: 0.70 }, // Beginner
+      '-1': { bulletSpeed: 4.5, shieldHits: 10, bossOrbiters: [3, 4, 5], minionRate: 1.0, scoreMultiplier: 0.85 }, // Easy
+      '0': { bulletSpeed: 5.0, shieldHits: 15, bossOrbiters: [4, 5, 6], minionRate: 1.0, scoreMultiplier: 1.00 }, // Normal (baseline)
+      '1': { bulletSpeed: 5.5, shieldHits: 18, bossOrbiters: [4, 5, 6], minionRate: 1.5, scoreMultiplier: 1.20 }, // Challenge
+      '2': { bulletSpeed: 6.0, shieldHits: 20, bossOrbiters: [4, 5, 6], minionRate: 1.5, scoreMultiplier: 1.40 }, // Veteran
+      '3': { bulletSpeed: 6.5, shieldHits: 25, bossOrbiters: [4, 5, 6], minionRate: 2.0, scoreMultiplier: 1.75 }  // Expert
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -768,7 +778,7 @@
      * @returns {string} UUID string
      */
     function generateUUID() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
         var r = Math.random() * 16 | 0;
         var v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
@@ -1487,7 +1497,7 @@
     function playAgainFromModal() {
       closeLeaderboardModal();
       // Small delay ensures modal closes before triggering game restart
-      setTimeout(function() {
+      setTimeout(function () {
         playAgain();
       }, 100);
     }
@@ -1805,7 +1815,7 @@
         // Update AI Mode indicator if active
         var aiIndicator = document.getElementById('aiModeIndicator');
         if (aiIndicator && aiIndicator.style.display !== 'none') {
-          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
           var tierName = tierNames[currentTier.toString()] || 'Unknown';
           var tierParams = TIER_CONFIG[currentTier.toString()];
           var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
@@ -1852,7 +1862,7 @@
         // Update AI Mode indicator if active
         var aiIndicator = document.getElementById('aiModeIndicator');
         if (aiIndicator && aiIndicator.style.display !== 'none') {
-          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
           var tierName = tierNames[currentTier.toString()] || 'Unknown';
           var tierParams = TIER_CONFIG[currentTier.toString()];
           var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
@@ -2517,7 +2527,7 @@
       // level_number and phase allow drop analysis — e.g. do players collect
       // shields more in red/purple phase? Does powerup collection correlate with survival?
       // OPTIMIZATION (Mar 30, 2026): Defer analytics to next frame to prevent stuttering
-      setTimeout(function() {
+      setTimeout(function () {
         fireEvent('powerup_collected', {
           'ab_music_group': userABGroup,
           'platform': 'mobile',
@@ -3914,8 +3924,8 @@
         // DEBUG: Log target positions when shape changes
         // Only logs when dev mode active (Shift+D) - zero performance impact in production
         if (localStorage.getItem('nonx_dev_mode') === 'true') {
-          console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function(e, i) {
-            return {idx: i, startPos: e.startPos, targetPos: e.targetPos};
+          console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function (e, i) {
+            return { idx: i, startPos: e.startPos, targetPos: e.targetPos };
           }));
         }
 
@@ -3961,8 +3971,8 @@
           positionLog.push({
             idx: idx,
             progress: easedProgress.toFixed(2),
-            currentPos: {x: enemy.currentPos.x.toFixed(2), y: enemy.currentPos.y.toFixed(2)},
-            screenXY: {x: Math.round(enemy.x), y: Math.round(enemy.y)}
+            currentPos: { x: enemy.currentPos.x.toFixed(2), y: enemy.currentPos.y.toFixed(2) },
+            screenXY: { x: Math.round(enemy.x), y: Math.round(enemy.y) }
           });
         }
 
@@ -5477,7 +5487,7 @@
 
       // Shooting filler system (Mar 18, 2026 - Performance optimized)
       // Maximum 1 shooting filler at a time, shoots every 2 seconds
-      var activeShooters = enemies.filter(function(e) { return e.shootingFiller; }).length;
+      var activeShooters = enemies.filter(function (e) { return e.shootingFiller; }).length;
       var isShootingFiller = fromSide && activeShooters === 0;
 
       var enemyType;
@@ -6159,7 +6169,7 @@
           showAnnouncement("levelDisplay", "Victory! You Win!", 3000);
 
           // Show health bonus announcement after victory message
-          setTimeout(function() {
+          setTimeout(function () {
             if (baseHealthBonus > 0) {
               var displayBonus = Math.round(baseHealthBonus * getTierMultiplier() * scoreMultiplier);
               showAnnouncement("powerupDisplay", "Health Bonus: +" + displayBonus + " pts!", 2500);
@@ -6338,10 +6348,10 @@
       html += '</div>';
 
       // Support buttons (Bug report + Ko-fi) at bottom of scorecard
-      // ROLLBACK: Remove lines below to restore buttons to end screens only
+      // Added Apr 12, 2026 to match desktop implementation
       html += '<div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
       html += buildBugButtonHTML('scorecard');
-      html += buildKofiButtonHTML('scorecard');
+      html += buildKofiButtonHTML('scorecard'); // SUPPORT THE DEV BUTTON - Style changes planned
       html += '</div>';
 
       return html;
@@ -6485,8 +6495,9 @@
       }
 
       // Scorecard button (prominent placement on victory screen)
+      // Hazard yellow "dying neon" aesthetic - represents "Keep the Lights On" narrative
       html += "<div style='margin: 20px 0;'>";
-      html += "<button onclick='showScorecardModal()' style='padding: 12px 24px; font-size: 15px; font-weight: bold; background: rgba(0,255,255,0.2); color: #00FFFF; border: 2px solid #00FFFF; border-radius: 8px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,255,255,0.3);' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"; this.style.boxShadow=\"0 0 25px rgba(0,255,255,0.5)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"; this.style.boxShadow=\"0 0 15px rgba(0,255,255,0.3)\"'>View Stats &amp; Support</button>";
+      html += "<button onclick='showScorecardModal()' class='hazard-flicker' style='padding: 12px 28px; font-size: 15px; font-weight: bold; background: rgba(255,215,0,0.15); color: #FFD700; border: 2px solid #FFD700; border-radius: 8px; cursor: pointer; letter-spacing: 1px; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1); box-shadow: 0 0 15px rgba(255,215,0,0.3);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"; this.style.boxShadow=\"0 0 25px rgba(255,215,0,0.5)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"; this.style.boxShadow=\"0 0 15px rgba(255,215,0,0.3)\"'>⚡ Player Intel &amp; Power</button>";
       html += "</div>";
 
       // Leaderboard submission — only if this beats player's previously submitted score
@@ -6511,13 +6522,9 @@
       html += "<button onclick='leaveGame(\"victory\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
 
-      // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
-      // ROLLBACK: Restore lines 6497-6500 to re-add buttons here
-      // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-      // html += buildBugButtonHTML('victory');
-      // html += buildKofiButtonHTML('victory');
-      // html += "</div>";
+      // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
+      // Bug/Ko-fi buttons removed Apr 12, 2026: Consolidated into "Player Intel & Power" button above
 
       victoryEl.innerHTML = html;
       victoryEl.style.display = "block";
@@ -6782,21 +6789,21 @@
      * @param {string} source - Screen context ('game_over' or 'victory')
      * @returns {string} HTML string with bug report button
      */
-    /**
-     * Builds the bug report button HTML (inline, no wrapper).
-     * Updated Apr 12, 2026: Solid red background (#FF5E5B), removed emoji
-     * Used only in scorecard modal (consolidated from end screens)
-     * Rollback: git show backup-before-button-consolidation:game_mobile.html | grep -A 2 "buildBugButtonHTML"
-     */
     function buildBugButtonHTML(source) {
-      return "<button onclick='openBugReport(\"" + source + "\")' style='padding: 10px 20px; font-size: 14px; border-radius: 4px; border: none; background: #FF5E5B; color: #fff; cursor: pointer; font-weight: bold;'>Report a Bug</button>";
+      // Updated Apr 12, 2026: Removed wrapper div, changed to red background to match desktop
+      return "<button onclick='openBugReport(\"" + source + "\")' style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: none; background: #FF5E5B; color: #fff; cursor: pointer; font-weight: bold;'>🐛 Report a Bug</button>";
     }
 
     /**
-     * Builds the Ko-fi support button HTML (inline, no wrapper).
-     * Updated Apr 12, 2026: Solid cyan background (#00FFFF), black text
-     * Used only in scorecard modal (consolidated from end screens)
-     * Rollback: git show backup-before-button-consolidation:game_mobile.html | grep -A 2 "buildKofiButtonHTML"
+     * SUPPORT THE DEV BUTTON - Style changes planned
+     * See: docs/design/SUPPORT_DEV_BUTTON_LOCATIONS.md for update instructions
+     *
+     * Builds HTML for the Ko-fi "Support the Dev" button.
+     * Links to Ko-fi donation page and tracks click analytics.
+     * Added Apr 12, 2026 to match desktop implementation.
+     *
+     * @param {string} source - Where button was clicked ('victory', 'game_over', 'scorecard')
+     * @returns {string} HTML anchor tag with Ko-fi link
      */
     function buildKofiButtonHTML(source) {
       return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; text-decoration: none; font-weight: bold;'>☕ Support the Dev</a>";
@@ -6836,7 +6843,7 @@
         html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
       }
       // Scorecard button (replaces "Can you beat it?")
-      html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
+      html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
@@ -6863,12 +6870,8 @@
       }
       html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
       html += "</div>";
-      // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
-      // ROLLBACK: Restore lines 6849-6852 to re-add buttons here
-      // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-      // html += buildBugButtonHTML('game_over');
-      // html += buildKofiButtonHTML('game_over');
-      // html += "</div>";
+      // Bug/Ko-fi buttons removed Apr 12, 2026: Consolidated into "Player Intel & Power" button above
+      // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
       html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
       gameOverEl.innerHTML = html;
       showLeaderboard();
@@ -7336,7 +7339,7 @@
       var aimedChance = purplePhase ? 0.25 : (redPhase ? 0.15 : 0);
 
       // Execute attack pattern
-      switch(attackType) {
+      switch (attackType) {
         case 'single':
           var useAimed = Math.random() < aimedChance;
           shootEnemyBullet(targetEnemies[0], useAimed);
@@ -7379,7 +7382,7 @@
       }
 
       // Process queued bullets (for rain effect)
-      bulletQueue = bulletQueue.filter(function(item) {
+      bulletQueue = bulletQueue.filter(function (item) {
         if (now >= item.fireTime) {
           shootEnemyBullet(item.enemy, item.useAimed);
           return false;  // Remove from queue
@@ -7625,7 +7628,7 @@
           html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
         }
         // Scorecard button (always show, not conditional on prevBest)
-        html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
+        html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
@@ -7655,12 +7658,8 @@
 
         html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
         html += "</div>";
-        // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
-        // ROLLBACK: Restore lines 7641-7644 to re-add buttons here
-        // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-        // html += buildBugButtonHTML('game_over');
-        // html += buildKofiButtonHTML('game_over');
-        // html += "</div>";
+        // Bug/Ko-fi buttons removed Apr 12, 2026: Consolidated into "Player Intel & Power" button above
+        // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
         html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
@@ -7737,7 +7736,7 @@
           document.body.appendChild(indicator);
         }
         // AI Agent v1.0: Show tier info in dev mode
-        var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+        var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
         var tierName = tierNames[currentTier.toString()] || 'Unknown';
         var lockStatus = speedLocked ? '🔒' : '🔓';
         var tierMult = getTierMultiplier();
@@ -7763,7 +7762,7 @@
           document.body.appendChild(aiIndicator);
         }
         if (aiMode) {
-          var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+          var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
           var tierName = tierNames[currentTier.toString()] || 'Unknown';
           var tierParams = TIER_CONFIG[currentTier.toString()];
           var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
@@ -7828,7 +7827,7 @@
             html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
           }
           // Scorecard button (replaces "Can you beat it?")
-          html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 20px; font-size: 14px; background: rgba(0,255,255,0.2); color: #00FFFF; border: 1px solid #00FFFF; border-radius: 6px; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background=\"rgba(0,255,255,0.3)\"' onmouseout='this.style.background=\"rgba(0,255,255,0.2)\"'>View Stats &amp; Support</button>";
+          html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
 
           // Personal best callout
           if (prevBest === null || score > prevBest) {
@@ -7836,6 +7835,11 @@
           }
 
           html += "<br><br>";
+          // LAYOUT FIX (Apr 12, 2026): Leaderboard sections BEFORE buttons for proper UX
+          // Players need to see their standing before deciding whether to replay
+          // CRITICAL: buildLeaderboardDisplayHTML() creates the <div> that showLeaderboard() populates
+          html += buildLeaderboardDisplayHTML();
+          html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
           html += "<div style='margin-top: 18px; margin-bottom: 18px; white-space: nowrap;'>";
 
           // REPLAY INCENTIVE BUTTONS — SIMPLIFIED (Mar 2026)
@@ -7853,18 +7857,7 @@
 
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
-          // CRITICAL FIX (Apr 12, 2026): Dev mode game over was missing buildLeaderboardDisplayHTML() call
-          // This caused leaderboard to not display because the <div id='leaderboardDisplay'> was never created
-          // When showLeaderboard() ran (line 7857), it couldn't find the div and exited silently (line 1351)
-          // MUST call buildLeaderboardDisplayHTML() BEFORE buildLeaderboardSubmitHTML() to create the container div
-          html += buildLeaderboardDisplayHTML();
-          html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
-          // REMOVED: Bug report and Ko-fi buttons (moved to scorecard modal)
-          // ROLLBACK: Restore lines 7840-7843 to re-add buttons here
-          // html += "<div style='margin-top: 10px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;'>";
-          // html += buildBugButtonHTML('game_over');
-          // html += buildKofiButtonHTML('game_over');
-          // html += "</div>";
+          // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
           html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
@@ -7900,7 +7893,7 @@
           currentTier = Math.max(-3, currentTier - 1);
           if (oldTier !== currentTier) {
             localStorage.setItem('nonx_ai_tier', currentTier.toString());
-            var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+            var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
             var oldName = tierNames[oldTier.toString()];
             var newName = tierNames[currentTier.toString()];
             var tierParams = TIER_CONFIG[currentTier.toString()];
@@ -7945,7 +7938,7 @@
           currentTier = Math.min(3, currentTier + 1);
           if (oldTier !== currentTier) {
             localStorage.setItem('nonx_ai_tier', currentTier.toString());
-            var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+            var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
             var oldName = tierNames[oldTier.toString()];
             var newName = tierNames[currentTier.toString()];
             var tierParams = TIER_CONFIG[currentTier.toString()];
@@ -8294,14 +8287,14 @@
 
           // Console log for confirmation
           console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢 (5-tap)' : 'DISABLED 🔴 (5-tap)'),
-                      'color:#FF0;font-weight:bold;font-size:14px;');
+            'color:#FF0;font-weight:bold;font-size:14px;');
 
           // Reset counter
           devModeTapCount = 0;
           devModeTapTimeout = null;
         } else {
           // Reset counter after 2 seconds if 5 taps not reached
-          devModeTapTimeout = setTimeout(function() {
+          devModeTapTimeout = setTimeout(function () {
             devModeTapCount = 0;
             devModeTapTimeout = null;
           }, 2000);
@@ -8425,12 +8418,12 @@
         if (fpsFrameTimes.length > 60) fpsFrameTimes.shift();
 
         // Calculate average FPS
-        var avgFrameTime = fpsFrameTimes.reduce(function(a, b) { return a + b; }, 0) / fpsFrameTimes.length;
+        var avgFrameTime = fpsFrameTimes.reduce(function (a, b) { return a + b; }, 0) / fpsFrameTimes.length;
         fps = Math.round(1000 / avgFrameTime);
 
         // Console warning for performance drops (throttled to once per second to prevent feedback loop)
         if (deltaTime > 33 && currentTime - lastWarningTime > 1000) {
-          console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000/deltaTime) + ' FPS)');
+          console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000 / deltaTime) + ' FPS)');
           lastWarningTime = currentTime;
         }
       }
@@ -8744,7 +8737,7 @@
               (enemy.horizontalDirection < 0 && enemy.x < -enemy.width)) {
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
-                enemiesKilled++; // Track for scorecard
+              enemiesKilled++; // Track for scorecard
               continue;
             }
           } else {
@@ -8785,7 +8778,7 @@
           if (isCollidingPlayer(enemy)) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
-                enemiesKilled++; // Track for scorecard
+            enemiesKilled++; // Track for scorecard
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
             continue;
@@ -8795,7 +8788,7 @@
           if (enemy.y > canvas.height) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
-                enemiesKilled++; // Track for scorecard
+            enemiesKilled++; // Track for scorecard
             continue;
           }
 
@@ -8807,7 +8800,7 @@
               spawnExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
               EnemyPool.release(enemies[i]); // Release
               enemies.splice(i, 1);
-                enemiesKilled++; // Track for scorecard
+              enemiesKilled++; // Track for scorecard
               addScore(10); // Enemy kill (tier + movement multipliers)
               playSound('enemyDead');
               break;
@@ -9076,7 +9069,7 @@
           if (isCollidingPlayer(enemy)) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
-                enemiesKilled++; // Track for scorecard
+            enemiesKilled++; // Track for scorecard
             playerTakeDamage(CONFIG.enemyCollisionDamage);
             if (gameOver) return;
             continue;
@@ -9086,7 +9079,7 @@
           if (!enemy.formation && enemy.y > canvas.height) {
             EnemyPool.release(enemies[i]); // Release
             enemies.splice(i, 1);
-                enemiesKilled++; // Track for scorecard
+            enemiesKilled++; // Track for scorecard
             continue;
           }
 
@@ -9503,8 +9496,7 @@
         </h2>
         <button onclick="closeLeaderboardModal()" style="background:none;border:none;color:#fff;
                  font-size:32px;cursor:pointer;padding:0;width:32px;height:32px;line-height:1;
-                 transition:color 0.2s;"
-          onmouseover="this.style.color='#00FFFF'"
+                 transition:color 0.2s;" onmouseover="this.style.color='#00FFFF'"
           onmouseout="this.style.color='#fff'">&times;</button>
       </div>
       <!-- Modal body (scrollable) -->
@@ -9517,17 +9509,23 @@
   </div>
 
   <!-- Scorecard Modal (shows session stats: tier, multipliers, performance) -->
-  <div id="scorecardModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.9);">
+  <div id="scorecardModal"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.9);">
     <!-- Backdrop (click to close) -->
     <div onclick="closeScorecardModal()" style="position:absolute; width:100%; height:100%;"></div>
 
     <!-- Modal content box -->
-    <div style="position:relative; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,10,20,0.98); border:2px solid rgba(0,255,255,0.4); border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 0 40px rgba(0,255,255,0.3);">
+    <div
+      style="position:relative; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,10,20,0.98); border:2px solid rgba(0,255,255,0.4); border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 0 40px rgba(0,255,255,0.3);">
 
       <!-- Header with close button -->
-      <div style="padding:20px; border-bottom:1px solid rgba(0,255,255,0.2); display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0; color:#00FFFF; font-size:20px; letter-spacing:1px; text-shadow:0 0 10px #00FFFF;">📊 Your Session Stats</h2>
-        <button onclick="closeScorecardModal()" style="background:none; border:none; color:#00FFFF; font-size:28px; cursor:pointer; padding:0; width:32px; height:32px; line-height:32px; text-align:center;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#00FFFF'">×</button>
+      <div
+        style="padding:20px; border-bottom:1px solid rgba(0,255,255,0.2); display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0; color:#00FFFF; font-size:20px; letter-spacing:1px; text-shadow:0 0 10px #00FFFF;">📊 Your
+          Session Stats</h2>
+        <button onclick="closeScorecardModal()"
+          style="background:none; border:none; color:#00FFFF; font-size:28px; cursor:pointer; padding:0; width:32px; height:32px; line-height:32px; text-align:center;"
+          onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#00FFFF'">×</button>
       </div>
 
       <!-- Scrollable body -->
