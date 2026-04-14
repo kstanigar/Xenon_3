@@ -476,10 +476,44 @@
     /* Hazard Flicker Animation - "Power Failure" Effect (Apr 12, 2026) */
     /* Mimics dying neon/brownout to create "Keep the Lights On" narrative */
     /* Flickers irregularly for 1.5s, then stable for 6.5s */
+    /* "Keep the Lights On" Animation - 4 aggressive flickers showing critical power failure */
     @keyframes hazard-flicker {
-      0%, 100% { opacity: 1; }           /* Stable state */
-      12.5%, 14.5%, 16.5% { opacity: 0.4; }  /* Brownout drops (at 1s, 1.16s, 1.32s) */
-      13%, 15%, 17% { opacity: 1; }      /* Quick recovery snaps */
+      0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      }
+      12.5% {  /* 1st flicker */
+        opacity: 0.3;
+        box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+      }
+      13% {
+        opacity: 1;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      }
+      14.5% {  /* 2nd flicker */
+        opacity: 0.3;
+        box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+      }
+      15% {
+        opacity: 1;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      }
+      16.5% {  /* 3rd flicker */
+        opacity: 0.3;
+        box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+      }
+      17% {
+        opacity: 1;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      }
+      18.5% {  /* 4th flicker */
+        opacity: 0.3;
+        box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+      }
+      19% {
+        opacity: 1;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      }
     }
 
     /* Disable flicker for users with motion sensitivity */
@@ -5870,7 +5904,7 @@
       // Scorecard button (prominent placement on victory screen)
       // Hazard yellow "dying neon" aesthetic - represents "Keep the Lights On" narrative
       html += "<div style='margin: 20px 0;'>";
-      html += "<button onclick='showScorecardModal()' class='hazard-flicker' style='padding: 12px 28px; font-size: 15px; font-weight: bold; background: rgba(255,215,0,0.15); color: #FFD700; border: 2px solid #FFD700; border-radius: 8px; cursor: pointer; letter-spacing: 1px; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1); box-shadow: 0 0 15px rgba(255,215,0,0.3);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"; this.style.boxShadow=\"0 0 25px rgba(255,215,0,0.5)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"; this.style.boxShadow=\"0 0 15px rgba(255,215,0,0.3)\"'>⚡ Player Intel &amp; Power</button>";
+      html += "<button onclick='showScorecardModal()' style='padding: 12px 28px; font-size: 15px; font-weight: bold; background: rgba(255,215,0,0.15); color: #FFD700; border: 2px solid #FFD700; border-radius: 8px; cursor: pointer; letter-spacing: 1px; text-shadow: 0 0 8px rgba(255,215,0,0.6); box-shadow: 0 0 15px rgba(255,215,0,0.3);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"; this.style.boxShadow=\"0 0 25px rgba(255,215,0,0.5)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"; this.style.boxShadow=\"0 0 15px rgba(255,215,0,0.3)\"'>⚡ Player Intel &amp; Power</button>";
       html += "</div>";
 
       // Leaderboard submission — only if this beats player's previously submitted score
@@ -6102,8 +6136,10 @@
      * Used only in scorecard modal (consolidated from end screens)
      * Rollback: git show backup-before-button-consolidation:game.html | grep -A 2 "buildKofiButtonHTML"
      */
+    // "KEEP THE LIGHTS ON" BUTTON - Narrative-driven support button with critical power failure animation
+    // See: docs/design/SUPPORT_DEV_BUTTON_LOCATIONS.md for design rationale and update locations
     function buildKofiButtonHTML(source) {
-      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; text-decoration: none; font-weight: bold;'>☕ Support the Dev</a>";
+      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: 2px solid #FFD700; background: rgba(255, 215, 0, 0.15); color: #FFD700; cursor: pointer; text-decoration: none; font-weight: bold; animation: hazard-flicker 8s infinite steps(1);' onmouseenter='this.style.animationPlayState=\"paused\"; this.style.boxShadow=\"0 0 20px rgba(255, 215, 0, 0.5)\";' onmouseleave='this.style.animationPlayState=\"running\"; this.style.boxShadow=\"\";'>⚡ Keep the Lights On</a>";
     }
 
     /**
@@ -6193,7 +6229,7 @@
         html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
       }
       // Scorecard button - Hazard yellow "dying neon" aesthetic
-      html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
+      html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
       html += "<br><br>";
       html += buildLeaderboardDisplayHTML();
       html += buildLeaderboardSubmitHTML(submittedScoreCapture, previousLocalBest);
@@ -6954,7 +6990,7 @@
           html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
         }
         // Scorecard button - Hazard yellow "dying neon" aesthetic
-        html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
+        html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
         html += "<br><br>";
         html += buildLeaderboardDisplayHTML();
         html += buildLeaderboardSubmitHTML(submittedScoreCapture, prevBest || 0);
@@ -7283,7 +7319,7 @@
             html += "<br><span style='color: #FFD700; font-size: 14px;'>Your record: " + prevBest + "</span>";
           }
           // Scorecard button - Hazard yellow "dying neon" aesthetic
-          html += "<br><button onclick='showScorecardModal()' class='hazard-flicker' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6); animation: hazard-flicker 8s infinite steps(1);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
+          html += "<br><button onclick='showScorecardModal()' style='margin-top: 16px; padding: 10px 24px; font-size: 14px; background: rgba(255,215,0,0.15); color: #FFD700; border: 1px solid #FFD700; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px rgba(255,215,0,0.6);' onmouseover='this.style.background=\"rgba(255,215,0,0.25)\"' onmouseout='this.style.background=\"rgba(255,215,0,0.15)\"'>⚡ Player Intel &amp; Power</button>";
           html += "<br><br>";
           // LAYOUT FIX (Apr 12, 2026): Moved leaderboard sections BEFORE buttons
           // This ensures leaderboard displays above action buttons (matches normal game over behavior)
