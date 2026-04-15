@@ -54,6 +54,54 @@ git push -u origin feature/recovery-branch
 
 ---
 
+## ✅ FIXED - Dev Mode Button Order (April 12, 2026)
+
+**STATUS:** ✅ RESOLVED - Dev mode game over screens now show leaderboard before action buttons
+
+**ISSUE (RESOLVED):**
+- Dev mode Shift+G game over screens had Play Again/Leave Game buttons ABOVE the leaderboard
+- Normal game deaths had correct order (leaderboard first, then buttons)
+- Poor UX: Players couldn't see their standing before deciding whether to replay
+
+**ROOT CAUSE IDENTIFIED:**
+- Dev mode Shift+G code built HTML in wrong order
+- Buttons div was added BEFORE `buildLeaderboardDisplayHTML()` and `buildLeaderboardSubmitHTML()`
+- Normal game over code had correct order (leaderboard sections before buttons)
+- Code locations:
+  - game.html: Lines 7270-7290 (dev mode Shift+G handler)
+  - game_mobile.html: Lines 7839-7861 (dev mode Shift+G handler)
+
+**FIX APPLIED (Apr 12, 2026):**
+- **game.html line ~7268-7284:** Moved leaderboard sections before buttons div
+- **game_mobile.html line ~7838-7861:** Moved leaderboard sections before buttons div
+- Added comments explaining the layout fix and UX rationale
+
+**NEW ORDER (Dev Mode):**
+1. View Stats & Support button
+2. Leaderboard display container (populated by `showLeaderboard()`)
+3. Leaderboard submission form (if score qualifies)
+4. Play Again/Leave Game buttons
+5. Copyright
+
+**FILES MODIFIED:**
+- `game.html` - Dev mode Shift+G game over (lines ~7268-7284)
+- `game_mobile.html` - Dev mode Shift+G game over (lines ~7838-7861)
+- `docs/memory/NON-X_PAIM_Memory.md` - Documented fix
+- `~/.claude/projects/.../memory/MEMORY.md` - Documented fix
+
+**RESOLUTION:**
+- Dev mode button order now matches normal game over behavior
+- Users see leaderboard standings BEFORE deciding to replay
+- Improves competitive motivation ("I want to be in top 10!")
+- ✅ Syntax validated (no diagnostics errors)
+- ⏳ Manual browser testing pending (2 scenarios: desktop/mobile dev mode Shift+G)
+
+**USER INSIGHT:**
+- "The game over screen has the buttons above the leaderboard. This doesn't allow for the player to view their standing and therefore has no incentive to play again, so they will press Leave Game. The leaderboard gives them a competitive feeling like, 'Oh I want to be in the top 10, let me try again.'"
+- Excellent UX observation - leaderboard visibility drives replay engagement
+
+---
+
 ## ✅ IMPLEMENTED - Black Background Overlay (April 12, 2026)
 
 **STATUS:** ✅ COMPLETE - Game over and victory screens now have semi-transparent black backgrounds
