@@ -9,7 +9,6 @@ on:
 jobs:
   check-game-html:
     runs-on: ubuntu-latest
-    name: Verify game.html functions
 
     steps:
       - uses: actions/checkout@v4
@@ -168,7 +167,6 @@ jobs:
 
   check-game-mobile-html:
     runs-on: ubuntu-latest
-    name: Verify game_mobile.html functions
 
     steps:
       - uses: actions/checkout@v4
