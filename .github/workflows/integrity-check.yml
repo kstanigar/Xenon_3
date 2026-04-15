@@ -2,14 +2,13 @@ name: Game Integrity Check
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 jobs:
   check-game-html:
     runs-on: ubuntu-latest
-    name: Verify game.html functions
 
     steps:
       - uses: actions/checkout@v4
@@ -115,9 +114,59 @@ jobs:
           banned "'phase'.*'standard'"
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
+      # ════════════════════════════════════════════════════════════════
+      # Production Code Quality Checks (Apr 2026 - Safeguards)
+      # ════════════════════════════════════════════════════════════════
+
+      - name: Check for console.log statements
+        run: |
+          CONSOLE_COUNT=$(grep -r "console\.log" game.html game_mobile.html index.html | wc -l)
+          if [ $CONSOLE_COUNT -gt 0 ]; then
+            echo "⚠️ WARNING: $CONSOLE_COUNT console.log statements found"
+            echo "ℹ️ Review for dev mode vs production code"
+            grep -r "console\.log" game.html game_mobile.html index.html | head -20
+          fi
+          echo "ℹ️ Console.log check complete (warning only)"
+
+      - name: Check for debugger statements
+        run: |
+          if grep -r "debugger" game.html game_mobile.html index.html; then
+            echo "❌ ERROR: debugger statement found in production code"
+            exit 1
+          fi
+          echo "✅ No debugger statements found"
+
+      - name: Check for unresolved TODO/FIXME
+        run: |
+          TODO_COUNT=$(grep -r "TODO\|FIXME" game.html game_mobile.html index.html | wc -l)
+          if [ $TODO_COUNT -gt 0 ]; then
+            echo "⚠️ WARNING: $TODO_COUNT TODO/FIXME comments found"
+            grep -r "TODO\|FIXME" game.html game_mobile.html index.html
+          fi
+          echo "ℹ️ TODO/FIXME check complete"
+
+      - name: Check large asset files
+        run: |
+          find assets/ -type f -size +5M -exec ls -lh {} \; | while read line; do
+            echo "⚠️ WARNING: Large file detected: $line"
+          done
+          echo "✅ File size check complete"
+
+      - name: Verify desktop/mobile function parity
+        run: |
+          DESKTOP_FUNCTIONS=$(grep -o "function [a-zA-Z_][a-zA-Z0-9_]*" game.html | sort | uniq | wc -l)
+          MOBILE_FUNCTIONS=$(grep -o "function [a-zA-Z_][a-zA-Z0-9_]*" game_mobile.html | sort | uniq | wc -l)
+          echo "Desktop functions: $DESKTOP_FUNCTIONS"
+          echo "Mobile functions: $MOBILE_FUNCTIONS"
+          DIFF=$((DESKTOP_FUNCTIONS - MOBILE_FUNCTIONS))
+          DIFF=${DIFF#-}  # absolute value
+          if [ $DIFF -gt 5 ]; then
+            echo "⚠️ WARNING: Desktop and mobile function counts differ by $DIFF"
+          fi
+          echo "✅ Desktop/mobile parity check complete"
+
   check-game-mobile-html:
     runs-on: ubuntu-latest
-    name: Verify game_mobile.html functions
 
     steps:
       - uses: actions/checkout@v4
