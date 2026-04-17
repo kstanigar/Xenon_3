@@ -6384,8 +6384,8 @@
       // Support buttons (Bug report + Ko-fi) at bottom of scorecard
       // Added Apr 12, 2026 to match desktop implementation
       html += '<div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
-      html += buildBugButtonHTML('scorecard');
-      html += buildKofiButtonHTML('scorecard'); // SUPPORT THE DEV BUTTON - Style changes planned
+      html += buildKofiButtonHTML('scorecard'); // Ko-fi FIRST (left on large screens, top on small) - SUPPORT THE DEV BUTTON
+      html += buildBugButtonHTML('scorecard');  // Bug SECOND (right on large screens, bottom on small)
       html += '</div>';
 
       return html;
