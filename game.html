@@ -23,12 +23,12 @@
       Quad Shot
     • High score leaderboard stored in localStorage (top 10)
 
-  Image Assets (all in project root, paths use /Xenon_3/ prefix):
+  Image Assets (all in project root, paths use  prefix):
     player.png, enemy.png, enemy2–4.png, Boss.png,
     enemy1–4_Red.png, boss_Red.png, boss_aRed.png,
     enemy1–4_purple.png, boss_purple.png
 
-  Audio Assets (in /Xenon_3/sfx/):
+  Audio Assets (in sfx/):
     background.mp3, boss.mp3, credits.mp3,
     shoot.mp3, enemyDead.mp3, playerDead.mp3,
     bossIntro.mp3, powerup.mp3, shieldHit.mp3
@@ -901,7 +901,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
     // IMAGE ASSETS
     // ═══════════════════════════════════════════════════════════════════════════
-    // All sprites loaded from /Xenon_3/ prefix (GitHub Pages deployment path).
+    // All sprites loaded from  prefix (GitHub Pages deployment path).
     // Images are drawn using ctx.drawImage() with no filtering for pixel-perfect
     // rendering (see CSS: image-rendering: pixelated).
     //
@@ -912,54 +912,54 @@
 
     // Player ship sprite (75×75px)
     var playerImg = new Image();
-    playerImg.src = "/Xenon_3/player.webp";
+    playerImg.src = "player.webp";
 
     var enemyImg1 = new Image();
-    enemyImg1.src = "/Xenon_3/enemy.webp";
+    enemyImg1.src = "enemy.webp";
 
     var enemyImg2 = new Image();
-    enemyImg2.src = "/Xenon_3/enemy2.webp";
+    enemyImg2.src = "enemy2.webp";
 
     var enemyImg3 = new Image();
-    enemyImg3.src = "/Xenon_3/enemy3.webp";
+    enemyImg3.src = "enemy3.webp";
 
     var enemyImg4 = new Image();
-    enemyImg4.src = "/Xenon_3/enemy4.webp";
+    enemyImg4.src = "enemy4.webp";
 
     var bossImg = new Image();
-    bossImg.src = "/Xenon_3/Boss.webp";
+    bossImg.src = "Boss.webp";
 
     // Red enemy images (levels 5-8)
     var enemyImg1Red = new Image();
-    enemyImg1Red.src = "/Xenon_3/enemy1_Red.webp";
+    enemyImg1Red.src = "enemy1_Red.webp";
 
     var enemyImg2Red = new Image();
-    enemyImg2Red.src = "/Xenon_3/enemy2_Red.webp";
+    enemyImg2Red.src = "enemy2_Red.webp";
 
     var enemyImg3Red = new Image();
-    enemyImg3Red.src = "/Xenon_3/enemy3_Red.webp";
+    enemyImg3Red.src = "enemy3_Red.webp";
 
     var enemyImg4Red = new Image();
-    enemyImg4Red.src = "/Xenon_3/enemy4_Red.webp";
+    enemyImg4Red.src = "enemy4_Red.webp";
 
     var bossImgRed = new Image();
-    bossImgRed.src = "/Xenon_3/boss_Red.webp";
+    bossImgRed.src = "boss_Red.webp";
 
     // Purple enemy images (levels 9-12)
     var enemyImg1Purple = new Image();
-    enemyImg1Purple.src = "/Xenon_3/enemy1_purple.webp";
+    enemyImg1Purple.src = "enemy1_purple.webp";
 
     var enemyImg2Purple = new Image();
-    enemyImg2Purple.src = "/Xenon_3/enemy2_purple.webp";
+    enemyImg2Purple.src = "enemy2_purple.webp";
 
     var enemyImg3Purple = new Image();
-    enemyImg3Purple.src = "/Xenon_3/enemy3_purple.webp";
+    enemyImg3Purple.src = "enemy3_purple.webp";
 
     var enemyImg4Purple = new Image();
-    enemyImg4Purple.src = "/Xenon_3/enemy4_purple.webp";
+    enemyImg4Purple.src = "enemy4_purple.webp";
 
     var bossImgPurple = new Image();
-    bossImgPurple.src = "/Xenon_3/boss_purple.webp";
+    bossImgPurple.src = "boss_purple.webp";
 
     // ═══════════════════════════════════════════════════════════════════════════
     // AUDIO ASSETS
@@ -967,22 +967,22 @@
     // Sound effects dictionary for one-shot gameplay audio events.
     // Each sound is a separate Audio element to allow overlapping playback.
     var sounds = {
-      playerBullet: new Audio("/Xenon_3/assets/audio/sfx/playerBullet.mp3"),
-      playerHit: new Audio("/Xenon_3/assets/audio/sfx/playerHit.mp3"),
-      playerDead: new Audio("/Xenon_3/assets/audio/sfx/playerDead.mp3"),
-      enemyDead: new Audio("/Xenon_3/assets/audio/sfx/enemyDead.mp3"),
-      bossIntro: new Audio("/Xenon_3/assets/audio/sfx/bossIntro.mp3"),
-      powerUp: new Audio("/Xenon_3/assets/audio/sfx/powerUp.mp3")
+      playerBullet: new Audio("assets/audio/sfx/playerBullet.mp3"),
+      playerHit: new Audio("assets/audio/sfx/playerHit.mp3"),
+      playerDead: new Audio("assets/audio/sfx/playerDead.mp3"),
+      enemyDead: new Audio("assets/audio/sfx/enemyDead.mp3"),
+      bossIntro: new Audio("assets/audio/sfx/bossIntro.mp3"),
+      powerUp: new Audio("assets/audio/sfx/powerUp.mp3")
     };
 
     // Background music track (looped continuously during gameplay).
     // Volume set to 0.79 for balanced mix with sound effects.
-    var bgMusic = new Audio("/Xenon_3/assets/audio/music/NonexFullSong.mp3");
+    var bgMusic = new Audio("assets/audio/music/NonexFullSong.mp3");
     bgMusic.loop = true;
     bgMusic.volume = 0.79;
 
     // Credits music track (plays on victory screen, same track as background).
-    var creditsMusic = new Audio("/Xenon_3/assets/audio/music/NonexFullSong.mp3");
+    var creditsMusic = new Audio("assets/audio/music/NonexFullSong.mp3");
     creditsMusic.volume = 0.79;
 
     // Set sound effect volumes to 0.4 for clear audio without overpowering music.
