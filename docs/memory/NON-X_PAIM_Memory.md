@@ -204,9 +204,24 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | Assets | `assets/audio/music/` (6 tracks), `assets/audio/sfx/` (6 files), 48 sprite files (root) |
 | Docs | `docs/design/`, `docs/guides/`, `docs/summaries/`, `docs/memory/` (not publicly accessible) |
 
-### Current Work (April 10, 2026)
+### Current Work (April 17, 2026)
 
-**📋 CURRENT PRIORITY: AWS Migration & Monetization (Ko-fi + Stripe)**
+**📋 CURRENT PRIORITY: Codebase Audits & AWS OIDC Migration**
+
+---
+
+### 🧹 COMPLETED: Housekeeping & Production Traces (✅ April 17, 2026)
+- **Issue:** The `.github/workflows/integrity-check.yml` CI runner flagged warnings for remaining `console.log()` statements left behind in `game.html` and `game_mobile.html`.
+- **Action Required:** Scrub the codebase of leftover debugging logs. Exposing game state logic (`ai_difficulty_adjusted`, `player_won`, scoring triggers) via the browser console to the public can invite tampering and clutters the production footprint.
+- **Resolution:** Authored a Python script that systematically parsed and replaced **101** `console.log` statements with safe `null;` terminators across both live files. Production client is now 100% silent.
+
+### 🧹 OUTSTANDING: File Architecture & Decoupling (Medium Priority)
+- **Issue:** As a long-term architectural risk, `game.html` and `game_mobile.html` are approaching 9,000 continuous lines each. An audit of the file structure indicates this monolithic design will become increasingly brittle for future multi-agent development.
+- **Action Required:** Break the JavaScript physics, AI behavior logic, Audio Management, and Canvas rendering out into isolated `.js` modules. This ensures the files do not become paralyzingly difficult for IDEs and AI to read as the project moves into Phase 6 (Stripe, Pink Levels, advanced analytics).
+
+---
+
+**📋 COMPLETED: AWS Migration & Monetization (✅ April 16, 2026)**
 
 **Phase 1: Code Polish - Ko-fi Button Migration (✅ COMPLETE - April 10, 2026)**
 - ✅ **Status:** Complete
