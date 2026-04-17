@@ -8,6 +8,7 @@ on:
 
 jobs:
   check-game-html:
+    name: Verify game.html functions
     runs-on: ubuntu-latest
 
     steps:
@@ -166,6 +167,7 @@ jobs:
           echo "✅ Desktop/mobile parity check complete"
 
   check-game-mobile-html:
+    name: Verify game_mobile.html functions
     runs-on: ubuntu-latest
 
     steps:
