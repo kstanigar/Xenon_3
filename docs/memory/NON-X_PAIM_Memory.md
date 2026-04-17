@@ -204,9 +204,29 @@ This is the single source of truth for the NON-X project. It is shared with ever
 | Assets | `assets/audio/music/` (6 tracks), `assets/audio/sfx/` (6 files), 48 sprite files (root) |
 | Docs | `docs/design/`, `docs/guides/`, `docs/summaries/`, `docs/memory/` (not publicly accessible) |
 
-### Current Work (April 10, 2026)
+### Current Work (April 16, 2026)
 
 **📋 CURRENT PRIORITY: AWS Migration & Monetization (Ko-fi + Stripe)**
+
+---
+
+### 🧹 Outstanding Bugs & Housekeeping Priorities (Code Audit Findings)
+
+Identified during the April 16th AWS CI/CD Pipeline integrity check. These should be addressed before building new features to maintain codebase health.
+
+**1. Production Traces & Warnings (Priority: High)**
+- **Issue:** The `.github/workflows/integrity-check.yml` CI runner flagged warnings for remaining `console.log()` statements left behind in `game.html` and `game_mobile.html`.
+- **Action Required:** Scrub the codebase of leftover debugging logs. Exposing game state logic (`ai_difficulty_adjusted`, `player_won`, scoring triggers) via the browser console to the public can invite tampering and clutters the production footprint.
+
+**2. File Architecture & Decoupling (Priority: Medium)**
+- **Issue:** As a long-term architectural risk, `game.html` and `game_mobile.html` are approaching 9,000 continuous lines each. An audit of the file structure indicates this monolithic design will become increasingly brittle for future multi-agent development.
+- **Action Required:** Break the JavaScript physics, AI behavior logic, Audio Management, and Canvas rendering out into isolated `.js` modules. This ensures the files do not become paralyzingly difficult for IDEs and AI to read as the project moves into Phase 6 (Stripe, Pink Levels, advanced analytics).
+
+**3. Unresolved TODO/FIXME comments (Priority: Low)**
+- **Issue:** The CI/CD pipeline triggered warnings for `TODO` and `FIXME` comments scattered throughout the codebase.
+- **Action Required:** Audit the identified lines from the CI runner, resolve the underlying technical debt, and delete the inline warnings.
+
+---
 
 **Phase 1: Code Polish - Ko-fi Button Migration (✅ COMPLETE - April 10, 2026)**
 - ✅ **Status:** Complete
