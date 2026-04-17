@@ -243,26 +243,26 @@ This is the single source of truth for the NON-X project. It is shared with ever
 - **Locations affected:** 10 total (8 existing + 2 new scorecard locations)
 - **User request:** Complete this before continuing with AWS migration
 
-**Phase 2: AWS Domain Registration (⏳ PENDING - April 10, 2026)**
-- ⏳ **Status:** Pending user action (after Phase 1b complete)
-- **Action required:** Log into AWS Console, navigate to Route 53, purchase custom domain name
-- **Dependencies:** Phase 1b (button styling) complete
+**Phase 2: AWS Domain Registration (✅ COMPLETE - April 16, 2026)**
+- ✅ **Status:** Complete. Registered `standingtiger.com` via Route 53.
+- **Action completed:** Purchased custom domain name and set up Route 53 DNS records.
+- **Dependencies:** None.
 
-**Phase 3: AWS S3 Static Website Hosting (⏳ PENDING - April 10, 2026)**
-- ⏳ **Status:** Pending domain purchase
-- **Action required:** Create S3 bucket, enable "Static Website Hosting" feature
-- **Purpose:** Host game files on AWS infrastructure (migration from GitHub Pages)
+**Phase 3: AWS S3 Static Website Hosting (✅ COMPLETE - April 16, 2026)**
+- ✅ **Status:** Complete. Deployed to `nonx.standingtiger.com`.
+- **Action completed:** Created S3 bucket, enabled Static Website Hosting, set public bucket policy, updated asset paths, and synced files.
+- **Purpose:** Host game files on AWS infrastructure.
 
-**Phase 4: Security & SSL Certificate (⏳ PENDING - April 10, 2026)**
-- ⏳ **Status:** Pending S3 setup
-- **Action required:** Generate free SSL Certificate via AWS Certificate Manager
-- **Purpose:** Ensure site runs securely on HTTPS
+**Phase 4: Security & SSL Certificate (✅ COMPLETE - April 16, 2026)**
+- ✅ **Status:** Complete. Generated wildcard `*.standingtiger.com` via ACM.
+- **Action completed:** Verified domain ownership via Route 53 DNS. Certificate officially Issued.
+- **Purpose:** Ensure site runs securely on HTTPS.
 
-**Phase 5: CloudFront CDN Setup (⏳ PENDING - April 10, 2026)**
-- ⏳ **Status:** Pending SSL certificate
-- **Action required:** Set up CloudFront CDN distribution
-- **Purpose:** Serve game ultra-fast worldwide via edge locations
-- **See:** `AWS_MIGRATION_PLAN.md` for complete 5-phase migration plan
+**Phase 5: CloudFront CDN Setup (✅ COMPLETE - April 16, 2026)**
+- ✅ **Status:** Complete. Deployed CloudFront distribution for `nonx.standingtiger.com`.
+- **Action completed:** Attached custom SSL certificate and mapped Route 53 A-Record to CloudFront Edge locations.
+- **Purpose:** Serve game ultra-fast worldwide via edge locations on HTTPS.
+- **See:** `AWS_MIGRATION_PLAN.md` for complete 5-phase migration plan overview.
 
 ---
 
