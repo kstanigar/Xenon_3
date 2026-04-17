@@ -1121,11 +1121,7 @@
      */
     function fireEvent(eventName, params) {
       if (devMode) {
-        console.log(
-          '%c[DEV MODE] Event suppressed: ' + eventName,
-          'color:#00FFFF;font-weight:bold;background:#111;padding:2px 6px;border-radius:3px;',
-          params
-        );
+        null;
         return;
       }
       gtag('event', eventName, Object.assign({ analytics_version: '4.3' }, params));
@@ -1835,7 +1831,7 @@
       // Speed ratchet: Can't go below Tier -1 (Easy) if speed is locked
       // Allows struggling players to access Easy mode, but protects Tutorial/Beginner for first-timers
       if (speedLocked && currentTier <= -1) {
-        console.log('[AI Agent] Tier decrease blocked - speed locked at Tier -1 (Easy minimum)');
+        null;
         return;
       }
 
@@ -1844,7 +1840,7 @@
 
       if (oldTier !== currentTier) {
         localStorage.setItem('nonx_ai_tier', currentTier);
-        console.log('[AI Agent] Tier decreased: ' + oldTier + ' → ' + currentTier);
+        null;
 
         // Update AI Mode indicator if active
         var aiIndicator = document.getElementById('aiModeIndicator');
@@ -1891,7 +1887,7 @@
 
       if (oldTier !== currentTier) {
         localStorage.setItem('nonx_ai_tier', currentTier);
-        console.log('[AI Agent] Tier increased: ' + oldTier + ' → ' + currentTier);
+        null;
 
         // Update AI Mode indicator if active
         var aiIndicator = document.getElementById('aiModeIndicator');
@@ -1934,7 +1930,7 @@
       if (cyclesCompleted === 1 && !speedLocked) {
         speedLocked = true;
         localStorage.setItem('nonx_ai_speed_locked', 'true');
-        console.log('[AI Agent] Speed ratchet engaged - speed locked at Tier ' + currentTier);
+        null;
       }
     }
 
@@ -3908,14 +3904,7 @@
       // DEBUG: Log morph state once per second (useful for timing issues)
       // Only logs when dev mode active (Shift+D) - zero performance impact in production
       if (localStorage.getItem('nonx_dev_mode') === 'true' && formationEnemies.length > 0 && Date.now() % 1000 < 16) {
-        console.log('Morph check:', {
-          timeSinceStart: timeSinceStart,
-          morphInterval: morphInterval,
-          rawIndex: Math.floor(timeSinceStart / morphInterval),
-          newShapeIndex: newShapeIndex,
-          currentMorphShape: currentMorphShape,
-          willChange: newShapeIndex !== currentMorphShape
-        });
+        null;
       }
 
       // If shape changed, update target positions
@@ -3958,9 +3947,7 @@
         // DEBUG: Log target positions when shape changes
         // Only logs when dev mode active (Shift+D) - zero performance impact in production
         if (localStorage.getItem('nonx_dev_mode') === 'true') {
-          console.log('Shape changed to', shapeName, '- New targets:', formationEnemies.slice(0, 3).map(function (e, i) {
-            return { idx: i, startPos: e.startPos, targetPos: e.targetPos };
-          }));
+          null;
         }
 
         // Launch kamikaze wave separately after formation has settled (morphCount 2)
@@ -4025,7 +4012,7 @@
       // DEBUG: Log enemy positions once per second
       // Only logs when dev mode active (Shift+D) - zero performance impact in production
       if (localStorage.getItem('nonx_dev_mode') === 'true' && positionLog.length > 0) {
-        console.log('Enemy positions:', positionLog);
+        null;
       }
     }
 
@@ -6177,7 +6164,7 @@
           // ═══════════════════════════════════════════════════════════════════════════
           // Cycle complete = beat all 3 bosses (green, red, purple)
           // Increase difficulty tier and set speed ratchet after 1st cycle
-          console.log('[AI Agent] Cycle complete - Boss 3 defeated');
+          null;
           increaseTier();
 
           // Track boss 3 defeat
@@ -6473,8 +6460,8 @@
       var effectiveMult = tierMult * scoreMultiplier;
 
       // Diagnostic logging for player_won event (Apr 3, 2026)
-      console.log('[VICTORY] About to fire player_won event');
-      console.log('[VICTORY] tierMult:', tierMult, 'scoreMultiplier:', scoreMultiplier, 'effectiveMult:', effectiveMult);
+      null;
+      null;
 
       fireEvent('player_won', {
         'ab_music_group': userABGroup,
@@ -6489,7 +6476,7 @@
         'effective_multiplier': effectiveMult
       });
 
-      console.log('[VICTORY] player_won event fired successfully');
+      null;
 
       // game_complete fires on every session ending regardless of outcome.
       fireEvent('game_complete', {
@@ -7550,11 +7537,11 @@
       var now = Date.now();
       var timeSinceLastDamage = lastDamageTime > 0 ? (now - lastDamageTime) : 0;
 
-      console.log('[DAMAGE] Hit detected | Damage:', damage, '| Time since last:', timeSinceLastDamage + 'ms', '| Invincible:', playerBlinking, '| Timer:', playerBlinkTimer);
+      null;
 
       // Invincibility frames — ignore all damage while blinking from a previous hit
       if (playerBlinking) {
-        console.log('[DAMAGE] ❌ BLOCKED by invincibility frames (', playerBlinkTimer, 'frames remaining)');
+        null;
         return;
       }
 
@@ -7574,15 +7561,15 @@
         }
         if (purplePhase) {
           // Purple phase: shield fully blocks all damage, no health loss
-          console.log('[DAMAGE] 🛡️ SHIELD ABSORBED (purple) + 2s invincibility | No HP loss');
+          null;
           return;
         }
         // Earlier phases: shield reduces damage to 5, protects health at low HP
         damage = 5;
-        console.log('[DAMAGE] 🛡️ SHIELD HIT + 2s invincibility | Damage reduced to 5 HP | Shield remaining:', shieldHitsRemaining);
+        null;
         if (health <= 15) {
           showAnnouncement("powerupDisplay", "Shield absorbed damage!", 800);
-          console.log('[DAMAGE] 🛡️ LOW HEALTH PROTECTION + 2s invincibility | Shield absorbed all damage | Health:', health);
+          null;
           return;
         }
       } else {
@@ -7614,7 +7601,7 @@
         playerBlinkTimer = 120; // Blink for 120 frames (2 seconds at 60 FPS)
       }
       lastDamageTime = Date.now(); // Track damage timestamp for debugging
-      console.log('[DAMAGE] ✅ DAMAGE APPLIED | Health:', health, '| Shield:', hasShield, '| Invincibility:', playerBlinkTimer, 'frames');
+      null;
 
       if (health <= 0) {
         health = 0;
@@ -7630,10 +7617,10 @@
         // Track deaths per phase - if 2 deaths in same phase, decrease tier
         var currentPhase = getCurrentPhase();
         deathsInPhase[currentPhase]++;
-        console.log('[AI Agent] Death in ' + currentPhase + ' phase | Deaths this phase:', deathsInPhase[currentPhase]);
+        null;
 
         if (deathsInPhase[currentPhase] >= 2) {
-          console.log('[AI Agent] 2 deaths in ' + currentPhase + ' phase - decreasing tier');
+          null;
           decreaseTier();
           deathsInPhase[currentPhase] = 0; // Reset counter for this phase
         }
@@ -7780,7 +7767,7 @@
         var totalMult = (tierMult * moveMult).toFixed(2);
         indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
         indicator.style.display = devMode ? 'block' : 'none';
-        console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢' : 'DISABLED 🔴'), 'color:#FF0;font-weight:bold;font-size:14px;');
+        null;
         return;
       }
 
@@ -7814,17 +7801,17 @@
             'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
             'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
             'Use [ / ] to adjust tier';
-          console.log('%c[AI MODE] ENABLED 🟢', 'color:#FFD700;font-weight:bold;font-size:14px;');
-          console.log('%c[AI MODE] Current tier: ' + currentTier + ' (' + tierName + ')', 'color:#FFD700;font-weight:bold;');
-          console.log('%c[AI MODE] • Speed: ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ' phase)', 'color:#FFD700;');
-          console.log('%c[AI MODE] • Shields: ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ' in purple)' : ''), 'color:#FFD700;');
-          console.log('%c[AI MODE] • Orbiters: ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
-          console.log('%c[AI MODE] • Minions: ' + tierParams.minionRate + 'x', 'color:#FFD700;');
-          console.log('%c[AI MODE] • Score: ' + tierMult + 'x (tier) × ' + moveMult + 'x (' + moveType + ') = ' + totalMult + 'x total', 'color:#FFD700;');
-          console.log('%c[AI MODE] • Deaths: G:' + deathsInPhase.green + ' R:' + deathsInPhase.red + ' P:' + deathsInPhase.purple, 'color:#FFD700;');
-          console.log('%c[AI MODE] • Cycles: ' + cyclesCompleted + ' | Speed Locked: ' + (speedLocked ? 'Yes' : 'No'), 'color:#FFD700;');
+          null;
+          null;
+          null;
+          null;
+          null;
+          null;
+          null;
+          null;
+          null;
         } else {
-          console.log('%c[AI MODE] DISABLED 🔴', 'color:#FFD700;font-weight:bold;font-size:14px;');
+          null;
         }
         aiIndicator.style.display = aiMode ? 'block' : 'none';
         return;
@@ -7833,7 +7820,7 @@
       // Shift+V — skip to victory (devMode only)
       if (e.shiftKey && (e.key === 'v' || e.key === 'V')) {
         if (devMode) {
-          console.log('%c[DEV MODE] Skipping to victory screen', 'color:#00FFFF;font-weight:bold;');
+          null;
           showVictory();
         }
         return;
@@ -7842,7 +7829,7 @@
       // Shift+G — skip to game over (devMode only)
       if (e.shiftKey && (e.key === 'g' || e.key === 'G')) {
         if (devMode) {
-          console.log('%c[DEV MODE] Skipping to game over screen', 'color:#00FFFF;font-weight:bold;');
+          null;
           health = 0;
           updateUI();
           gameOver = true;
@@ -7907,7 +7894,7 @@
       if (e.shiftKey && (e.key === 's' || e.key === 'S')) {
         if (devMode) {
           showSpeedDisplay = !showSpeedDisplay;
-          console.log('%c[DEV MODE] Speed display ' + (showSpeedDisplay ? 'ENABLED 📊' : 'DISABLED'), 'color:#00FFFF;font-weight:bold;');
+          null;
         }
         return;
       }
@@ -7916,7 +7903,7 @@
       if (e.shiftKey && (e.key === 'r' || e.key === 'R')) {
         if (devMode) {
           DIFFICULTY_CONFIG.bulletSpeed = 1.0;
-          console.log('%c[DEV MODE] Bullet speed reset to 1.0x', 'color:#00FFFF;font-weight:bold;');
+          null;
         }
         return;
       }
@@ -7941,12 +7928,12 @@
             var newScoreMult = tierParams.scoreMultiplier;
             var moveMult = scoreMultiplier;
             var totalMult = (newScoreMult * moveMult).toFixed(2);
-            console.log('%c[AI MODE] Tier: ' + oldTier + ' (' + oldName + ') → ' + currentTier + ' (' + newName + ')', 'color:#FFD700;font-weight:bold;');
-            console.log('%c[AI MODE] • Speed: ' + TIER_CONFIG[oldTier.toString()].bulletSpeed + ' → ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ')', 'color:#FFD700;');
-            console.log('%c[AI MODE] • Shields: ' + TIER_CONFIG[oldTier.toString()].shieldHits + ' → ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ')' : ''), 'color:#FFD700;');
-            console.log('%c[AI MODE] • Orbiters: ' + TIER_CONFIG[oldTier.toString()].bossOrbiters.join('/') + ' → ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
-            console.log('%c[AI MODE] • Minions: ' + TIER_CONFIG[oldTier.toString()].minionRate + 'x → ' + tierParams.minionRate + 'x', 'color:#FFD700;');
-            console.log('%c[AI MODE] • Score: ' + oldScoreMult + 'x → ' + newScoreMult + 'x (total: ' + totalMult + 'x)', 'color:#FFD700;');
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
             // Update AI Mode indicator
             var aiIndicator = document.getElementById('aiModeIndicator');
             if (aiIndicator) {
@@ -7961,7 +7948,7 @@
           // Dev Mode (legacy): decrease bullet speed multiplier
           DIFFICULTY_CONFIG.bulletSpeed = Math.max(0.5, DIFFICULTY_CONFIG.bulletSpeed - 0.05);
           DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
-          console.log('%c[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x', 'color:#00FFFF;font-weight:bold;');
+          null;
         }
         return;
       }
@@ -7986,12 +7973,12 @@
             var newScoreMult = tierParams.scoreMultiplier;
             var moveMult = scoreMultiplier;
             var totalMult = (newScoreMult * moveMult).toFixed(2);
-            console.log('%c[AI MODE] Tier: ' + oldTier + ' (' + oldName + ') → ' + currentTier + ' (' + newName + ')', 'color:#FFD700;font-weight:bold;');
-            console.log('%c[AI MODE] • Speed: ' + TIER_CONFIG[oldTier.toString()].bulletSpeed + ' → ' + tierParams.bulletSpeed + ' (actual: ' + actualSpeed + ' in ' + currentPhase + ')', 'color:#FFD700;');
-            console.log('%c[AI MODE] • Shields: ' + TIER_CONFIG[oldTier.toString()].shieldHits + ' → ' + tierParams.shieldHits + (purplePhase ? ' (actual: ' + actualShields + ')' : ''), 'color:#FFD700;');
-            console.log('%c[AI MODE] • Orbiters: ' + TIER_CONFIG[oldTier.toString()].bossOrbiters.join('/') + ' → ' + tierParams.bossOrbiters.join('/'), 'color:#FFD700;');
-            console.log('%c[AI MODE] • Minions: ' + TIER_CONFIG[oldTier.toString()].minionRate + 'x → ' + tierParams.minionRate + 'x', 'color:#FFD700;');
-            console.log('%c[AI MODE] • Score: ' + oldScoreMult + 'x → ' + newScoreMult + 'x (total: ' + totalMult + 'x)', 'color:#FFD700;');
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
             // Update AI Mode indicator
             var aiIndicator = document.getElementById('aiModeIndicator');
             if (aiIndicator) {
@@ -8006,7 +7993,7 @@
           // Dev Mode (legacy): increase bullet speed multiplier
           DIFFICULTY_CONFIG.bulletSpeed = Math.min(1.5, DIFFICULTY_CONFIG.bulletSpeed + 0.05);
           DIFFICULTY_CONFIG.bulletSpeed = Math.round(DIFFICULTY_CONFIG.bulletSpeed * 100) / 100;
-          console.log('%c[DEV MODE] Bullet speed: ' + DIFFICULTY_CONFIG.bulletSpeed + 'x', 'color:#00FFFF;font-weight:bold;');
+          null;
         }
         return;
       }
@@ -8050,7 +8037,7 @@
 
           updateUI();
           showAnnouncement("levelDisplay", "DEV: Level " + jumpLevel, 2000);
-          console.log('%c[DEV MODE] Jumped to level ' + jumpLevel, 'color:#00FFFF;font-weight:bold;');
+          null;
         }
       }
 
@@ -8322,8 +8309,7 @@
           }
 
           // Console log for confirmation
-          console.log('%c[DEV MODE] ' + (devMode ? 'ENABLED 🟢 (5-tap)' : 'DISABLED 🔴 (5-tap)'),
-            'color:#FF0;font-weight:bold;font-size:14px;');
+          null;
 
           // Reset counter
           devModeTapCount = 0;
