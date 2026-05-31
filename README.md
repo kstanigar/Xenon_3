@@ -3,7 +3,8 @@
 A browser-based top-scrolling space shooter with adaptive AI difficulty and tier-based scoring.
 
 ## 🚀 Live Demo
-**Play now:** [https://kstanigar.github.io/Xenon_3/](https://kstanigar.github.io/Xenon_3/)
+**Play now:** [https://nonx.standingtiger.com](https://nonx.standingtiger.com)
+**Legacy URL:** [https://kstanigar.github.io/Xenon_3/](https://kstanigar.github.io/Xenon_3/) (redirects to AWS)
 
 ## 📂 Project Structure
 
@@ -25,9 +26,12 @@ A browser-based top-scrolling space shooter with adaptive AI difficulty and tier
 │
 ├── docs/                       # Documentation (not publicly accessible)
 │   ├── design/                 # Game design documents
-│   ├── guides/                 # Testing & release checklists
+│   ├── guides/                 # Release & deployment checklists
 │   ├── summaries/              # Implementation summaries
-│   └── memory/                 # Project memory & session history
+│   ├── archive/                # Historical docs (completed features, deferred plans)
+│   ├── AUTO_DEPLOYMENT_ANALYSIS.md
+│   ├── DEPLOYMENT_QUICK_REFERENCE.md
+│   └── WORKFLOW_IMPLEMENTATION_GUIDE.md
 │
 ├── scripts/                    # Utility scripts
 │   ├── compress_assets.py      # PNG → WebP conversion
@@ -98,10 +102,12 @@ python3 scripts/compress_image.py input.png output.webp
 
 ## 📈 Deployment
 
-**Current:** GitHub Pages (`main` branch → https://kstanigar.github.io/Xenon_3/)
-**Planned:** AWS S3 + CloudFront CDN (production deployment)
+**Production:** AWS S3 + CloudFront CDN → https://nonx.standingtiger.com
+**Infrastructure:** Route 53 (DNS), ACM (SSL), Lambda (analytics bridge)
+**Region:** us-east-2 (Ohio)
+**Deployment:** Manual S3 sync (auto-deployment workflow in progress)
 
-Changes go live within 1-2 minutes of pushing to `main`.
+Changes go live within 1-2 minutes of S3 sync + CloudFront invalidation.
 
 ## 📄 Documentation
 
