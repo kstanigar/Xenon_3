@@ -1,0 +1,88 @@
+name: Deploy to AWS S3 + CloudFront
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Set deployment target based on branch
+      - name: Set deployment target
+        id: target
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=Production" >> $GITHUB_OUTPUT
+            echo "bucket=${{ secrets.PROD_BUCKET_NAME }}" >> $GITHUB_OUTPUT
+            echo "distribution=${{ secrets.PROD_DISTRIBUTION_ID }}" >> $GITHUB_OUTPUT
+            echo "role=${{ secrets.AWS_ROLE_PROD }}" >> $GITHUB_OUTPUT
+            echo "url=https://nonx.standingtiger.com" >> $GITHUB_OUTPUT
+          else
+            echo "environment=Development" >> $GITHUB_OUTPUT
+            echo "bucket=${{ secrets.DEV_BUCKET_NAME }}" >> $GITHUB_OUTPUT
+            echo "distribution=${{ secrets.DEV_DISTRIBUTION_ID }}" >> $GITHUB_OUTPUT
+            echo "role=${{ secrets.AWS_ROLE_DEV }}" >> $GITHUB_OUTPUT
+            echo "url=https://dev.nonx.standingtiger.com" >> $GITHUB_OUTPUT
+          fi
+
+      # Configure AWS credentials via OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.target.outputs.role }}
+          role-session-name: gha-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Verify AWS identity
+      - name: Verify AWS identity
+        run: |
+          echo "Deploying to: ${{ steps.target.outputs.environment }}"
+          aws sts get-caller-identity
+
+      # Sync files to S3 (excluding unnecessary files)
+      - name: Sync to S3 (${{ steps.target.outputs.environment }})
+        run: |
+          aws s3 sync . s3://${{ steps.target.outputs.bucket }} \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "docs/*" \
+            --exclude "backups/*" \
+            --exclude "scripts/*" \
+            --exclude "assets/audio/music/*" \
+            --exclude "*.md" \
+            --exclude ".DS_Store" \
+            --exclude ".claude/*" \
+            --delete
+
+      # Invalidate CloudFront cache
+      - name: Invalidate CloudFront cache
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.target.outputs.distribution }} \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "Invalidation ID: $INVALIDATION_ID"
+
+      # Deployment summary
+      - name: Deployment complete
+        run: |
+          echo "✅ Deployed to ${{ steps.target.outputs.environment }}"
+          echo "🔗 URL: ${{ steps.target.outputs.url }}"
+          echo "📦 Bucket: ${{ steps.target.outputs.bucket }}"
+          echo "🌐 Distribution: ${{ steps.target.outputs.distribution }}"
