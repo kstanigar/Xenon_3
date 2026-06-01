@@ -15,10 +15,10 @@
 | 3 | CloudFront dev distribution | 30 min | ✅ COMPLETE | May 31, 2026 |
 | 4 | Route 53 subdomain | 10 min | ✅ COMPLETE | May 31, 2026 |
 | 5 | IAM setup for GitHub Actions | 20 min | ✅ COMPLETE | May 31, 2026 |
-| 6 | GitHub Actions workflow | 30 min | ⏳ PENDING | - |
+| 6 | GitHub Actions workflow | 60 min | ✅ COMPLETE | May 31, 2026 |
 | 7 | Testing & verification | 20 min | ⏳ PENDING | - |
 
-**Overall Progress:** 5/7 phases complete (71%)
+**Overall Progress:** 6/7 phases complete (86%)
 
 ---
 
@@ -708,15 +708,23 @@ https://token.actions.github.com (WRONG - DO NOT USE)
 - Documented: AI error incident #1 - OIDC URL conflicting information (May 31, 2026)
 - Documented: AI error incident #2 - Insecure IAM role field guidance (May 31, 2026)
 - Updated: Task #5 marked complete in task tracker (Phase 5)
+- Created: .github/workflows/deploy-aws.yml workflow file (May 31, 2026)
+- Documented: Phase 6 Step 6.1 GitHub secrets configuration (May 31, 2026)
+- Documented: Phase 6 Step 6.2 Workflow file creation (May 31, 2026)
+- Documented: Phase 6 Step 6.3 Commit and push via PR #114 (May 31, 2026)
+- Documented: Phase 6 Step 6.4 First deployment success (May 31, 2026)
+- Documented: CloudFront 403 error troubleshooting and fix (May 31, 2026)
+- Updated: Task #6 marked complete in task tracker (Phase 6)
 
 ---
 
 ---
 
-## Phase 6: GitHub Actions Workflow ⏳ IN PROGRESS
+## Phase 6: GitHub Actions Workflow ✅ COMPLETE
 
 **Started:** May 31, 2026 (5:45 PM)
-**Estimated Duration:** 30 minutes
+**Completed:** May 31, 2026 (6:45 PM)
+**Duration:** 1 hour (including CloudFront 403 troubleshooting)
 
 ### Prerequisites Verified
 
@@ -724,9 +732,9 @@ https://token.actions.github.com (WRONG - DO NOT USE)
 - [x] IAM role ARNs documented
 - [x] CloudFront distribution IDs documented
 - [x] S3 bucket names documented
-- [ ] GitHub secrets configured
-- [ ] Workflow file created
-- [ ] First deployment tested
+- [x] GitHub secrets configured (7 secrets)
+- [x] Workflow file created
+- [x] First deployment tested and verified
 
 ---
 
@@ -775,17 +783,138 @@ https://token.actions.github.com (WRONG - DO NOT USE)
 
 ---
 
-### Step 6.3: Commit and Push Workflow ⏳ NEXT
+### Step 6.3: Commit and Push Workflow ✅ COMPLETE
 
-**Current Branch:** dev (verified)
+**Completed:** May 31, 2026 (6:20 PM)
+**Duration:** ~15 minutes (including PR workflow due to branch protection)
 
-**Files to Commit:**
+**Branch Protection Workflow Used:**
+1. Created feature branch: `feature/aws-deployment-workflow`
+2. Pushed feature branch to remote
+3. Created PR #114: "feat: add AWS auto-deployment workflow for dev and prod"
+4. Changed base branch from `main` to `dev` (critical step)
+5. Merged PR #114 into `dev` branch
+6. Workflow automatically triggered on merge
+
+**Files Committed:**
 - `.github/workflows/deploy-aws.yml` (new workflow)
 - `docs/DEPLOYMENT_PROGRESS.md` (deployment tracking)
 
-**Status:** Ready to commit and push to trigger first deployment
+**Commit Hash:** 7efa921
 
 ---
 
-**Last Updated:** May 31, 2026 (5:45 PM)
-**Next Action:** Add GitHub secrets (Step 6.1)
+### Step 6.4: Monitor First Deployment ✅ COMPLETE
+
+**Completed:** May 31, 2026 (6:25 PM)
+**Duration:** ~5 minutes
+
+**Workflow Run Details:**
+- **Run ID:** 26727420475
+- **Status:** Success ✅
+- **Duration:** 13 seconds
+- **Branch:** dev
+- **Environment:** Development (correctly detected)
+
+**Deployment Steps Executed:**
+1. ✅ Checkout code
+2. ✅ Set deployment target (Development)
+3. ✅ Configure AWS credentials via OIDC
+4. ✅ Verify AWS identity (Role: github-actions-nonx-dev)
+5. ✅ Sync to S3 (27 files, ~1.6 MiB uploaded in 1 second)
+6. ✅ Invalidate CloudFront cache (Invalidation ID: I1DLZT3UKWGN8ELF6JC6L9MHOX)
+7. ✅ Deployment summary output
+
+**Deployment Verification:**
+- **S3 Sync:** All game files uploaded successfully
+- **CloudFront:** Cache invalidated for all files (`/*`)
+- **Environment:** Development
+- **URL:** https://dev.nonx.standingtiger.com
+
+---
+
+### 🚨 CRITICAL ISSUE ENCOUNTERED - CloudFront 403 Access Denied
+
+**Issue:** After successful deployment, visiting https://dev.nonx.standingtiger.com returned 403 Access Denied error.
+
+**Timeline of Troubleshooting:**
+1. **6:30 PM:** User reported 403 error when testing dev site
+2. **6:33 PM:** Identified missing Default Root Object in CloudFront distribution settings
+3. **6:35 PM:** Launched Haiku research agent to verify fix (agent ID: a85de90)
+4. **6:37 PM:** Applied fix - Set Default Root Object to `index.html`
+5. **6:40 PM:** Saved CloudFront distribution settings (status: Deploying)
+6. **6:42 PM:** Verified S3 bucket policy (already correct from Phase 3 OAC setup)
+7. **6:45 PM:** CloudFront deployment completed, site tested successfully ✅
+
+**Root Cause:**
+During Phase 3 CloudFront distribution creation, the **Default Root Object** field was left empty. This caused CloudFront to attempt accessing the S3 bucket root directly when users visited `dev.nonx.standingtiger.com/`, resulting in 403 Access Denied instead of serving `index.html`.
+
+**Fix Applied:**
+1. Navigated to CloudFront distribution E1Q496KLUYVM0Z settings
+2. Set **Default root object** to `index.html`
+3. Saved changes and waited for propagation (2-5 minutes)
+
+**S3 Bucket Policy Verification:**
+Confirmed bucket policy was already correct from Phase 3:
+```json
+{
+    "Version": "2008-10-17",
+    "Id": "PolicyForCloudFrontPrivateContent",
+    "Statement": [
+        {
+            "Sid": "AllowCloudFrontServicePrincipal",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+            },
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::nonx-dev-032614958698-us-east-2-an/*",
+            "Condition": {
+                "ArnLike": {
+                    "AWS:SourceArn": "arn:aws:cloudfront::032614958698:distribution/E1Q496KLUYVM0Z"
+                }
+            }
+        }
+    ]
+}
+```
+
+**Accountability:**
+This configuration error occurred during Phase 3 CloudFront setup (May 31, 2026). The Default Root Object should have been set to `index.html` during initial distribution creation but was missed.
+
+**Prevention for Future Distributions:**
+When creating CloudFront distributions for static websites:
+- ✅ Always set Default Root Object to `index.html`
+- ✅ Verify setting before clicking "Create distribution"
+- ✅ Test the custom domain URL immediately after creation
+- ✅ Document this requirement in CloudFront setup checklists
+
+**Final Verification:**
+- **Site URL:** https://dev.nonx.standingtiger.com ✅ Working
+- **Default Root Object:** index.html ✅ Set
+- **S3 Bucket Policy:** CloudFront OAC access granted ✅ Correct
+- **Block Public Access:** Enabled ✅ Secure
+
+---
+
+---
+
+## Next Steps
+
+**Immediate:**
+- ⏳ Phase 7: Testing & Verification (dev environment)
+- ⏳ Test all game features on dev.nonx.standingtiger.com
+- ⏳ Verify Firebase integration
+- ⏳ Verify Google Analytics tracking
+- ⏳ Update Firebase allowed domains (add dev.nonx.standingtiger.com)
+- ⏳ Prepare for production deployment (merge dev → main)
+
+**Future:**
+- Production deployment will be automatic when dev is merged to main
+- CloudFront distribution for production: ED9CRAIN93YRS (already exists)
+- Production URL: https://nonx.standingtiger.com
+
+---
+
+**Last Updated:** May 31, 2026 (6:45 PM)
+**Next Action:** Phase 7 - Testing & Verification
