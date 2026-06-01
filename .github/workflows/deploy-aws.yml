@@ -63,7 +63,6 @@ jobs:
             --exclude "docs/*" \
             --exclude "backups/*" \
             --exclude "scripts/*" \
-            --exclude "assets/audio/music/*" \
             --exclude "*.md" \
             --exclude ".DS_Store" \
             --exclude ".claude/*" \
