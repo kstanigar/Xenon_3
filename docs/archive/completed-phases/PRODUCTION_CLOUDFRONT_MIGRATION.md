@@ -190,14 +190,14 @@ The S3 bucket policy needs to be updated. Copy the policy below:
    AWS Console → CloudFront → Distributions → ED9CRAIN93YRS
    ```
 
-2. **Status Timeline:**
+2. **Status Timeline (Last Modified Column):**
    ```
    0-1 min:  "Deploying" - Initial update
    1-10 min: "Deploying" - Propagating to edge locations
-   10+ min:  "Deployed" - ✅ Ready for next phase
+   10+ min:  Timestamp (e.g., "June 3, 2026 at 7:00:44 AM UTC") - ✅ Ready for next phase
    ```
 
-3. **Do NOT proceed to Phase 2 until status shows "Deployed"**
+3. **Do NOT proceed to Phase 2 until "Last modified" shows a timestamp (not "Deploying")**
 
 4. **While waiting, you can:**
    - Review Phase 2 steps
@@ -205,9 +205,11 @@ The S3 bucket policy needs to be updated. Copy the policy below:
    - Take a break
 
 5. **Checkpoint:**
-   - [ ] CloudFront status shows: "Deployed" (not "Deploying")
-   - [ ] Last modified timestamp updated
+   - [ ] "Last modified" shows timestamp (e.g., "June 3, 2026 at 7:00:44 AM UTC"), NOT "Deploying"
+   - [ ] "Status" column shows "Enabled"
    - [ ] No error messages
+
+**Note:** AWS CloudFront does NOT use "Deployed" as a status. The "Last modified" field changes from "Deploying" to a timestamp when propagation is complete.
 
 ---
 
