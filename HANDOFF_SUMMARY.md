@@ -117,22 +117,29 @@ Moved 11 completed documents to `docs/archive/` with directory structure:
 **URL:** https://dev.nonx.standingtiger.com
 
 **Firebase/Leaderboard Testing:**
-- [ ] Disable ad blockers (DEV_ERRORS_LOG.md documents Firebase blocked by extensions)
-- [ ] Verify leaderboard displays top 10 scores
-- [ ] Test score submission after game over
-- [ ] Add `dev.nonx.standingtiger.com` to Firebase allowed domains
-- [ ] Verify no Firebase console errors
+- [x] Disable ad blockers (DEV_ERRORS_LOG.md documents Firebase blocked by extensions) - June 2, 2026
+- [x] Verify leaderboard displays top 10 scores - June 2, 2026
+- [x] Test score submission after game over - June 2, 2026
+- [x] Add `dev.nonx.standingtiger.com` to Firebase authorized domains - June 2, 2026
+- [x] Verify no Firebase console errors - June 2, 2026
+
+**Note:** Firebase OAuth warning does NOT affect NON-X (game uses only Firestore, no authentication)
+- Research by Haiku agent (a477ddb) confirmed no Firebase Auth usage
+- Adding authorized domains is optional but completed for future-proofing
 
 **Google Analytics Testing:**
-- [ ] Verify GA4 tracking code loads (check network tab for analytics.js)
-- [ ] Confirm events being sent (check network for /collect requests)
-- [ ] Add `dev.nonx.standingtiger.com` to GA4 data stream
-- [ ] Verify no GA errors in console
+- [x] Verify GA4 tracking code loads (check network tab for analytics.js) - June 2, 2026
+- [x] Confirm events being sent (check network for /collect requests) - June 2, 2026
+- [x] Verify no GA errors in console - June 2, 2026
+
+**Note:** GA4 configuration for custom domains is optional (same as Firebase - not required for current functionality)
 
 **Game Functionality:**
-- [ ] Test desktop game (game.html) - levels 1-3 minimum
-- [ ] Test mobile game (game_mobile.html) - touch controls
-- [ ] Verify all features work (music ✅ already verified)
+- [x] Test desktop game (game.html) - levels 1-3, controls, enemies, bosses, scoring - June 2, 2026
+- [x] Test mobile game (game_mobile.html) - touch controls, orientation - June 2, 2026
+- [x] Verify all features work (music, gameplay, leaderboard) - June 2, 2026
+
+**✅ Priority 1 Complete:** Dev environment fully tested and verified working
 
 ---
 
@@ -203,6 +210,25 @@ Moved 11 completed documents to `docs/archive/` with directory structure:
 - Error made during Phase 6: Added music exclusion without verifying game requirements
 - Lesson: Always verify dependencies before excluding files from deployment
 - Prevention: Check DEV_ERRORS_LOG.md for patterns before making workflow changes
+
+---
+
+#### Priority 3: Post-Deployment Security (After Phase 7)
+
+**Firebase Leaderboard Spam Prevention:**
+- [ ] Research and implement device-based rate limiting for leaderboard submissions
+- [ ] Limit to 1 entry per device (prevent spam/abuse)
+- [ ] Options to investigate:
+  - Browser fingerprinting (device ID)
+  - localStorage device tracking
+  - Firestore security rules with device validation
+  - Server-side rate limiting via Cloud Functions
+- [ ] Update Firestore security rules to enforce rate limits
+- [ ] Test spam prevention without blocking legitimate users
+
+**Note:** Current Firestore rules allow unlimited writes (anyone can spam scores)
+**Priority:** High (prevents leaderboard abuse)
+**Estimated Effort:** 1-2 sessions
 
 ---
 
