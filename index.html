@@ -560,6 +560,12 @@
   </div>
 
   <script>
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // STARFIELD ANIMATION SYSTEM
     // ═══════════════════════════════════════════════════════════════════════════
@@ -791,7 +797,7 @@
         // Other entries: light gray, normal weight
         cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
         cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-        cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + playerName + "</span>";
+        cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + escapeHtml(playerName) + "</span>";
         cols[col] += "</div>";
       }
 
@@ -906,7 +912,7 @@
 
             cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
             cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-            cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + playerName + "</span>";
+            cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + escapeHtml(playerName) + "</span>";
             cols[col] += "</div>";
           }
 
