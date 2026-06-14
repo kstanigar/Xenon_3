@@ -538,6 +538,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp, where, doc, setDoc, updateDoc }
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { initializeAppCheck, ReCaptchaV3Provider }
+      from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 
     // Firebase project configuration (read-write API key, safe for client-side use)
     const firebaseConfig = {
@@ -551,6 +553,10 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6LdsiR4tAAAAACW1fmCReUAQPTyiuuJX4O8ZicWh'),
+      isTokenAutoRefreshEnabled: true
+    });
     const db = getFirestore(app);
 
     function escapeHtml(str) {
