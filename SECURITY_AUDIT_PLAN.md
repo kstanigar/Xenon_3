@@ -27,7 +27,7 @@
 | 13 | Ko-fi link uses string interpolation in onclick handler | LOW | ⬜ Not Started |
 | 14 | savedHandle from localStorage injected into HTML attribute | LOW | ⬜ Not Started |
 | 15 | No HTTPS enforcement verified (relying solely on CloudFront) | LOW | ⬜ Not Started |
-| 16 | Firebase App Check not enabled | LOW | ⬜ Not Started |
+| 16 | Firebase App Check not enabled | LOW | ✅ Complete (June 14, 2026) |
 | 17 | No Firebase budget alerts | LOW | ⬜ Not Started |
 | 18 | Developer mode accessible via keyboard shortcuts in production | LOW | ⬜ Not Started |
 
