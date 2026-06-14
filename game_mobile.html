@@ -588,7 +588,7 @@
           return { success: true, id: docRef.id, updated: true };
         }
       } catch (e) {
-        console.error("Firebase submit error:", e);
+        logger.error("Firebase submit error:", e);
         return { success: false, error: e };
       }
     };
@@ -600,7 +600,7 @@
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
-        console.error("Firebase fetch error:", e);
+        logger.error("Firebase fetch error:", e);
         return [];
       }
     };
@@ -1162,6 +1162,11 @@
       window.location.hostname.startsWith('127.') ||
       window.location.hostname === 'dev.nonx.standingtiger.com'
     );
+
+    var logger = {
+      error: function() { if (isDevEnvironment) console.error.apply(console, arguments); },
+      warn: function()  { if (isDevEnvironment) console.warn.apply(console, arguments); }
+    };
 
     // ── AI Mode (Tier Testing) ───────────────────────────────────────────────────
     // Toggle with Shift+A. Persists across sessions via localStorage.
@@ -3634,7 +3639,7 @@
       // Get initial shape positions (exploded - enters spread out)
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
       if (typeof shapeFunc !== 'function') {
-        console.error('Formation shape not found:', waveData.shapes[0]);
+        logger.error('Formation shape not found:', waveData.shapes[0]);
         shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
       }
       var positions = shapeFunc(count);
@@ -3642,7 +3647,7 @@
       for (var i = 0; i < count; i++) {
         var pos = positions[i];
         if (!pos) {
-          console.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
+          logger.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
           break; // stop spawning rather than crash
         }
         var width = 50;
@@ -4005,7 +4010,7 @@
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
         if (typeof shapeFunc !== 'function') {
-          console.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
+          logger.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
           shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
         }
         var count = formationEnemies[0].formationCount;
@@ -7196,7 +7201,7 @@
         sb.style.display = 'block';
         sb.click();
       } else {
-        console.error('[Play Again] startButton not found');
+        logger.error('[Play Again] startButton not found');
       }
     }
 
@@ -8525,7 +8530,7 @@
 
         // Console warning for performance drops (throttled to once per second to prevent feedback loop)
         if (deltaTime > 33 && currentTime - lastWarningTime > 1000) {
-          console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000 / deltaTime) + ' FPS)');
+          logger.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000 / deltaTime) + ' FPS)');
           lastWarningTime = currentTime;
         }
       }

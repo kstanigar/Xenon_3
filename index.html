@@ -443,7 +443,7 @@
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
-        console.error("Firebase fetch error:", e);
+        logger.error("Firebase fetch error:", e);
         return [];
       }
     };
@@ -577,6 +577,17 @@
   </div>
 
   <script>
+    var isDevEnvironment = (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname.startsWith('127.') ||
+      window.location.hostname === 'dev.nonx.standingtiger.com'
+    );
+
+    var logger = {
+      error: function() { if (isDevEnvironment) console.error.apply(console, arguments); },
+      warn: function()  { if (isDevEnvironment) console.warn.apply(console, arguments); }
+    };
+
     function escapeHtml(str) {
       var d = document.createElement('div');
       d.textContent = str;

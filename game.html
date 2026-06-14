@@ -624,7 +624,7 @@
           return { success: true, id: docRef.id, updated: true };
         }
       } catch (e) {
-        console.error("Firebase submit error:", e);
+        logger.error("Firebase submit error:", e);
         return { success: false, error: e };
       }
     };
@@ -644,7 +644,7 @@
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
-        console.error("Firebase fetch error:", e);
+        logger.error("Firebase fetch error:", e);
         return [];
       }
     };
@@ -1198,6 +1198,11 @@
       window.location.hostname.startsWith('127.') ||
       window.location.hostname === 'dev.nonx.standingtiger.com'
     );
+
+    var logger = {
+      error: function() { if (isDevEnvironment) console.error.apply(console, arguments); },
+      warn: function()  { if (isDevEnvironment) console.warn.apply(console, arguments); }
+    };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // AI MODE (TIER TESTING)
@@ -3342,7 +3347,7 @@
       // Shape functions return array of {x, y} objects with normalized coords (-1 to 1).
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
       if (typeof shapeFunc !== 'function') {
-        console.error('Formation shape not found:', waveData.shapes[0]);
+        logger.error('Formation shape not found:', waveData.shapes[0]);
         shapeFunc = FORMATION_SHAPES['grid3x3']; // Safe fallback to prevent crash
       }
       var positions = shapeFunc(count);
@@ -3352,7 +3357,7 @@
         var pos = positions[i];
         if (!pos) {
           // Safety check: shape function returned fewer positions than expected
-          console.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
+          logger.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
           break; // Stop spawning rather than crash
         }
 
@@ -3793,7 +3798,7 @@
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
         if (typeof shapeFunc !== 'function') {
-          console.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
+          logger.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
           shapeFunc = FORMATION_SHAPES['grid3x3']; // Safe fallback to prevent crash
         }
         var count = formationEnemies[0].formationCount;
@@ -7712,7 +7717,7 @@
 
         // Console warning for performance drops (throttled to once per second to prevent feedback loop)
         if (deltaTime > 33 && currentTime - lastWarningTime > 1000) {
-          console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000/deltaTime) + ' FPS)');
+          logger.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000/deltaTime) + ' FPS)');
           lastWarningTime = currentTime;
         }
       }
