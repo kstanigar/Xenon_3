@@ -109,6 +109,16 @@
 
 <head>
   <!-- Google tag (gtag.js) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    gtag('consent', 'default', {
+      'analytics_storage': 'denied',
+      'ad_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied'
+    });
+  </script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -433,7 +443,7 @@
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
-        console.error("Firebase fetch error:", e);
+        logger.error("Firebase fetch error:", e);
         return [];
       }
     };
@@ -441,6 +451,13 @@
 </head>
 
 <body>
+<div id="consentBanner" style="position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;color:#ccc;padding:14px 20px;z-index:99999;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-family:monospace;border-top:1px solid #00FFFF;">
+  <span>This game uses analytics cookies to track gameplay. <a href="/privacy.html" style="color:#00FFFF;">Privacy Policy</a></span>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <button id="declineConsent" style="padding:6px 16px;background:transparent;color:#888;border:1px solid #444;border-radius:4px;cursor:pointer;font-family:monospace;">Decline</button>
+    <button id="acceptConsent" style="padding:6px 16px;background:#00FFFF;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-family:monospace;">Accept</button>
+  </div>
+</div>
 
   <!-- Starfield background canvas — drawn behind all menu elements -->
   <canvas id="starfield"></canvas>
@@ -560,6 +577,51 @@
   </div>
 
   <script>
+    var isDevEnvironment = (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname.startsWith('127.') ||
+      window.location.hostname === 'dev.nonx.standingtiger.com'
+    );
+
+    var logger = {
+      error: function() { if (isDevEnvironment) console.error.apply(console, arguments); },
+      warn: function()  { if (isDevEnvironment) console.warn.apply(console, arguments); }
+    };
+
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    (function() {
+      var banner = document.getElementById('consentBanner');
+      if (!banner) return;
+      if (localStorage.getItem('nonx_consent') === 'granted') {
+        banner.style.display = 'none';
+        gtag('consent', 'update', { 'analytics_storage': 'granted' });
+        return;
+      }
+      if (localStorage.getItem('nonx_consent') === 'denied') {
+        banner.style.display = 'none';
+        return;
+      }
+      document.getElementById('acceptConsent').addEventListener('click', function() {
+        localStorage.setItem('nonx_consent', 'granted');
+        gtag('consent', 'update', {
+          'analytics_storage': 'granted',
+          'ad_storage': 'granted',
+          'ad_user_data': 'granted',
+          'ad_personalization': 'granted'
+        });
+        banner.style.display = 'none';
+      });
+      document.getElementById('declineConsent').addEventListener('click', function() {
+        localStorage.setItem('nonx_consent', 'denied');
+        banner.style.display = 'none';
+      });
+    })();
+
     // ═══════════════════════════════════════════════════════════════════════════
     // STARFIELD ANIMATION SYSTEM
     // ═══════════════════════════════════════════════════════════════════════════
@@ -791,7 +853,7 @@
         // Other entries: light gray, normal weight
         cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
         cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-        cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + playerName + "</span>";
+        cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + escapeHtml(playerName) + "</span>";
         cols[col] += "</div>";
       }
 
@@ -906,7 +968,7 @@
 
             cols[col] += "<div style='" + rowStyle + "font-size:13px;margin-bottom:5px;'>";
             cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-            cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + playerName + "</span>";
+            cols[col] += "<span style='color:" + nameColor + ";font-size:12px;'>" + escapeHtml(playerName) + "</span>";
             cols[col] += "</div>";
           }
 

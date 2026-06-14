@@ -115,6 +115,16 @@
 
 <head>
   <!-- Google tag (gtag.js) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    gtag('consent', 'default', {
+      'analytics_storage': 'denied',
+      'ad_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied'
+    });
+  </script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-9ECFZ9JBE5"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -578,7 +588,7 @@
           return { success: true, id: docRef.id, updated: true };
         }
       } catch (e) {
-        console.error("Firebase submit error:", e);
+        logger.error("Firebase submit error:", e);
         return { success: false, error: e };
       }
     };
@@ -590,7 +600,7 @@
         const snapshot = await getDocs(q);
         return snapshot.docs.map(function (doc) { return doc.data(); });
       } catch (e) {
-        console.error("Firebase fetch error:", e);
+        logger.error("Firebase fetch error:", e);
         return [];
       }
     };
@@ -598,6 +608,13 @@
 </head>
 
 <body>
+<div id="consentBanner" style="position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;color:#ccc;padding:14px 20px;z-index:99999;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-family:monospace;border-top:1px solid #00FFFF;">
+  <span>This game uses analytics cookies to track gameplay. <a href="/privacy.html" style="color:#00FFFF;">Privacy Policy</a></span>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <button id="declineConsent" style="padding:6px 16px;background:transparent;color:#888;border:1px solid #444;border-radius:4px;cursor:pointer;font-family:monospace;">Decline</button>
+    <button id="acceptConsent" style="padding:6px 16px;background:#00FFFF;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-family:monospace;">Accept</button>
+  </div>
+</div>
   <div id="container">
 
     <button id="startButton">Pause</button>
@@ -664,6 +681,43 @@
       d.textContent = str;
       return d.innerHTML;
     }
+    function escapeAttr(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g,  '&#x27;');
+    }
+
+    (function() {
+      var banner = document.getElementById('consentBanner');
+      if (!banner) return;
+      if (localStorage.getItem('nonx_consent') === 'granted') {
+        banner.style.display = 'none';
+        gtag('consent', 'update', { 'analytics_storage': 'granted' });
+        return;
+      }
+      if (localStorage.getItem('nonx_consent') === 'denied') {
+        banner.style.display = 'none';
+        return;
+      }
+      document.getElementById('acceptConsent').addEventListener('click', function() {
+        localStorage.setItem('nonx_consent', 'granted');
+        gtag('consent', 'update', {
+          'analytics_storage': 'granted',
+          'ad_storage': 'granted',
+          'ad_user_data': 'granted',
+          'ad_personalization': 'granted'
+        });
+        banner.style.display = 'none';
+      });
+      document.getElementById('declineConsent').addEventListener('click', function() {
+        localStorage.setItem('nonx_consent', 'denied');
+        banner.style.display = 'none';
+      });
+    })();
 
     // ============================================
     // GAME CONFIGURATION
@@ -1112,6 +1166,16 @@
     //   Shift+G  → skip to game over screen
     // All analytics are suppressed and logged to console instead.
     var devMode = false;
+    var isDevEnvironment = (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname.startsWith('127.') ||
+      window.location.hostname === 'dev.nonx.standingtiger.com'
+    );
+
+    var logger = {
+      error: function() { if (isDevEnvironment) console.error.apply(console, arguments); },
+      warn: function()  { if (isDevEnvironment) console.warn.apply(console, arguments); }
+    };
 
     // ── AI Mode (Tier Testing) ───────────────────────────────────────────────────
     // Toggle with Shift+A. Persists across sessions via localStorage.
@@ -1375,7 +1439,11 @@
         return;
       }
 
+      var _lbTimeout = setTimeout(function() {
+        display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Leaderboard unavailable.</div>";
+      }, 5000);
       window.firebaseGetTopScores().then(function (top10) {
+        clearTimeout(_lbTimeout);
         if (!top10 || top10.length === 0) {
           display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>No scores yet — be the first!</div>";
           return;
@@ -1427,6 +1495,9 @@
         html += "View Full Leaderboard (Top 25)</button>";
         html += "</div></div>";
         display.innerHTML = html;
+      }).catch(function() {
+        clearTimeout(_lbTimeout);
+        display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Leaderboard unavailable.</div>";
       });
     }
 
@@ -1461,7 +1532,11 @@
         return;
       }
 
+      var _lbModalTimeout = setTimeout(function() {
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+      }, 5000);
       window.firebaseGetTopScores(25).then(function (top25) {
+        clearTimeout(_lbModalTimeout);
         if (!top25 || top25.length === 0) {
           content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
           return;
@@ -1514,6 +1589,9 @@
         html += "</div>";
 
         content.innerHTML = html;
+      }).catch(function() {
+        clearTimeout(_lbModalTimeout);
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
       });
     }
 
@@ -1955,20 +2033,22 @@
     //   - Green Boss: ?level=4&god=true
     //   - Red Boss:   ?level=8&god=true
     //   - Purple Boss: ?level=12&god=true
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('level')) {
-      var startLevel = parseInt(urlParams.get('level'));
-      if (startLevel >= 1 && startLevel <= 12) {
-        level = startLevel;
-        localStorage.setItem('nonx_dev_mode', 'true'); // Auto-enable dev mode
+    if (isDevEnvironment) {
+      var urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('level')) {
+        var startLevel = parseInt(urlParams.get('level'));
+        if (startLevel >= 1 && startLevel <= 12) {
+          level = startLevel;
+          localStorage.setItem('nonx_dev_mode', 'true'); // Auto-enable dev mode
+        }
       }
-    }
-    if (urlParams.get('god') === 'true') {
-      godMode = true; // Enable invincibility
-    }
-    if (urlParams.get('dev') === 'true') {
-      devMode = true; // Enable developer mode
-      localStorage.setItem('nonx_dev_mode', 'true');
+      if (urlParams.get('god') === 'true') {
+        godMode = true; // Enable invincibility
+      }
+      if (urlParams.get('dev') === 'true') {
+        devMode = true; // Enable developer mode
+        localStorage.setItem('nonx_dev_mode', 'true');
+      }
     }
     // Load top 10 high scores from localStorage
     var highScores = JSON.parse(localStorage.getItem('xenonHighScores')) || [];
@@ -3568,7 +3648,7 @@
       // Get initial shape positions (exploded - enters spread out)
       var shapeFunc = FORMATION_SHAPES[waveData.shapes[0]];
       if (typeof shapeFunc !== 'function') {
-        console.error('Formation shape not found:', waveData.shapes[0]);
+        logger.error('Formation shape not found:', waveData.shapes[0]);
         shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
       }
       var positions = shapeFunc(count);
@@ -3576,7 +3656,7 @@
       for (var i = 0; i < count; i++) {
         var pos = positions[i];
         if (!pos) {
-          console.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
+          logger.error('No position for formation enemy index', i, '— shape returned', positions.length, 'positions for count', count);
           break; // stop spawning rather than crash
         }
         var width = 50;
@@ -3939,7 +4019,7 @@
         var shapeName = waveShapes[newShapeIndex];
         var shapeFunc = FORMATION_SHAPES[shapeName];
         if (typeof shapeFunc !== 'function') {
-          console.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
+          logger.error('Morph shape not found:', shapeName, '(index', newShapeIndex, ')');
           shapeFunc = FORMATION_SHAPES['grid3x3']; // safe fallback
         }
         var count = formationEnemies[0].formationCount;
@@ -6382,8 +6462,7 @@
 
       // Support buttons (Bug report + Ko-fi) at bottom of scorecard
       // Added Apr 12, 2026 to match desktop implementation
-      html += '<div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
-      html += buildKofiButtonHTML('scorecard'); // Ko-fi FIRST (left on large screens, top on small) - SUPPORT THE DEV BUTTON
+      html += '<div id="kofiButtonWrapper" style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
       html += buildBugButtonHTML('scorecard');  // Bug SECOND (right on large screens, bottom on small)
       html += '</div>';
 
@@ -6400,6 +6479,7 @@
 
       // Populate modal content
       document.getElementById('scorecardContent').innerHTML = html;
+      document.getElementById('kofiButtonWrapper').prepend(buildKofiButton('scorecard'));
 
       // Show modal
       document.getElementById('scorecardModal').style.display = 'block';
@@ -6539,7 +6619,7 @@
         var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
         html += "<div id='leaderboardSubmit' style='margin-bottom: 20px; text-align: center;'>";
         html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
-        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + savedHandle + "' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + escapeAttr(savedHandle) + "' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
         html += "</div>";
       } else {
@@ -6585,7 +6665,7 @@
     // ============================================
     // Forms submit directly to stanigarkeith@gmail.com via FormSubmit.co
     // No account or ID needed — already configured and working.
-    var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/stanigarkeith@gmail.com';
+    var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/45e055cecae307ffc412306a96dd1ff3';
 
     function shouldShowSurvey() {
       var gameCount = parseInt(localStorage.getItem('nonx_game_count') || '0', 10);
@@ -6798,7 +6878,7 @@
         html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
         html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 4px;'>Submit to Global Leaderboard:</div>";
         html += "<div style='display:flex; justify-content:center; align-items:center; gap:8px;'>";
-        html += "<input type='text' id='igInput' placeholder='Player name or handle (optional)' value='" + savedHandle + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
+        html += "<input type='text' id='igInput' placeholder='Player name or handle (optional)' value='" + escapeAttr(savedHandle) + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; white-space:nowrap;'>Submit Score</button>";
         html += "</div>";
         html += "</div>";
@@ -6840,8 +6920,27 @@
      */
     // "KEEP THE LIGHTS ON" BUTTON - Narrative-driven support button with critical power failure animation
     // See: docs/design/SUPPORT_DEV_BUTTON_LOCATIONS.md for design rationale and update locations
-    function buildKofiButtonHTML(source) {
-      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: 2px solid #FFD700; background: rgba(255, 215, 0, 0.15); color: #FFD700; cursor: pointer; text-decoration: none; font-weight: bold; animation: hazard-flicker 8s infinite steps(1);' onmouseenter='this.style.animationPlayState=\"paused\"; this.style.boxShadow=\"0 0 20px rgba(255, 215, 0, 0.5)\";' onmouseleave='this.style.animationPlayState=\"running\"; this.style.boxShadow=\"\";'>⚡ Keep the Lights On</a>";
+    function buildKofiButton(source) {
+      var link = document.createElement('a');
+      link.href = 'https://ko-fi.com/raginats';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = '⚡ Keep the Lights On';
+      link.style.cssText = 'display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: 2px solid #FFD700; background: rgba(255, 215, 0, 0.15); color: #FFD700; cursor: pointer; text-decoration: none; font-weight: bold; animation: hazard-flicker 8s infinite steps(1);';
+      link.addEventListener('mouseenter', function() {
+        this.style.animationPlayState = 'paused';
+        this.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.5)';
+      });
+      link.addEventListener('mouseleave', function() {
+        this.style.animationPlayState = 'running';
+        this.style.boxShadow = '';
+      });
+      link.addEventListener('click', function() {
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'kofi_click', { location: source });
+        }
+      });
+      return link;
     }
 
     /**
@@ -7130,7 +7229,7 @@
         sb.style.display = 'block';
         sb.click();
       } else {
-        console.error('[Play Again] startButton not found');
+        logger.error('[Play Again] startButton not found');
       }
     }
 
@@ -7758,75 +7857,77 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
-      // Shift+D — toggle developer mode
-      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
-        devMode = !devMode;
-        var indicator = document.getElementById('devModeIndicator');
-        if (!indicator) {
-          indicator = document.createElement('div');
-          indicator.id = 'devModeIndicator';
-          indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
-            'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
-            'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
-          document.body.appendChild(indicator);
-        }
-        // AI Agent v1.0: Show tier info in dev mode
-        var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
-        var tierName = tierNames[currentTier.toString()] || 'Unknown';
-        var lockStatus = speedLocked ? '🔒' : '🔓';
-        var tierMult = getTierMultiplier();
-        var moveMult = scoreMultiplier;
-        var totalMult = (tierMult * moveMult).toFixed(2);
-        indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
-        indicator.style.display = devMode ? 'block' : 'none';
-        null;
-        return;
-      }
-
-      // Shift+A — toggle AI Mode (tier testing interface)
-      if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
-        aiMode = !aiMode;
-        localStorage.setItem('nonx_ai_mode', aiMode.toString());
-        var aiIndicator = document.getElementById('aiModeIndicator');
-        if (!aiIndicator) {
-          aiIndicator = document.createElement('div');
-          aiIndicator.id = 'aiModeIndicator';
-          aiIndicator.style.cssText = 'position:fixed;top:8px;right:8px;' +
-            'background:#FFD700;color:#000;font-family:monospace;font-size:11px;font-weight:bold;' +
-            'padding:4px 10px;border-radius:4px;z-index:9999;pointer-events:none;line-height:1.4;';
-          document.body.appendChild(aiIndicator);
-        }
-        if (aiMode) {
+      if (isDevEnvironment) {
+        // Shift+D — toggle developer mode
+        if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+          devMode = !devMode;
+          var indicator = document.getElementById('devModeIndicator');
+          if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'devModeIndicator';
+            indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
+              'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
+              'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
+            document.body.appendChild(indicator);
+          }
+          // AI Agent v1.0: Show tier info in dev mode
           var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
           var tierName = tierNames[currentTier.toString()] || 'Unknown';
-          var tierParams = TIER_CONFIG[currentTier.toString()];
-          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
-          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
-          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
-          var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+          var lockStatus = speedLocked ? '🔒' : '🔓';
           var tierMult = getTierMultiplier();
           var moveMult = scoreMultiplier;
           var totalMult = (tierMult * moveMult).toFixed(2);
-          var moveType = moveMult === 1.25 ? 'Horizontal' : 'Full';
-          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
-            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
-            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
-            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
-            'Use [ / ] to adjust tier';
+          indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
+          indicator.style.display = devMode ? 'block' : 'none';
           null;
-          null;
-          null;
-          null;
-          null;
-          null;
-          null;
-          null;
-          null;
-        } else {
-          null;
+          return;
         }
-        aiIndicator.style.display = aiMode ? 'block' : 'none';
-        return;
+
+        // Shift+A — toggle AI Mode (tier testing interface)
+        if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+          aiMode = !aiMode;
+          localStorage.setItem('nonx_ai_mode', aiMode.toString());
+          var aiIndicator = document.getElementById('aiModeIndicator');
+          if (!aiIndicator) {
+            aiIndicator = document.createElement('div');
+            aiIndicator.id = 'aiModeIndicator';
+            aiIndicator.style.cssText = 'position:fixed;top:8px;right:8px;' +
+              'background:#FFD700;color:#000;font-family:monospace;font-size:11px;font-weight:bold;' +
+              'padding:4px 10px;border-radius:4px;z-index:9999;pointer-events:none;line-height:1.4;';
+            document.body.appendChild(aiIndicator);
+          }
+          if (aiMode) {
+            var tierNames = { '-3': 'Tutorial', '-2': 'Beginner', '-1': 'Easy', '0': 'Normal', '1': 'Challenge', '2': 'Veteran', '3': 'Expert' };
+            var tierName = tierNames[currentTier.toString()] || 'Unknown';
+            var tierParams = TIER_CONFIG[currentTier.toString()];
+            var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+            var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+            var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+            var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+            var tierMult = getTierMultiplier();
+            var moveMult = scoreMultiplier;
+            var totalMult = (tierMult * moveMult).toFixed(2);
+            var moveType = moveMult === 1.25 ? 'Horizontal' : 'Full';
+            aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+              'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+              'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+              'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+              'Use [ / ] to adjust tier';
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+          } else {
+            null;
+          }
+          aiIndicator.style.display = aiMode ? 'block' : 'none';
+          return;
+        }
       }
 
       // Shift+V — skip to victory (devMode only)
@@ -8457,7 +8558,7 @@
 
         // Console warning for performance drops (throttled to once per second to prevent feedback loop)
         if (deltaTime > 33 && currentTime - lastWarningTime > 1000) {
-          console.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000 / deltaTime) + ' FPS)');
+          logger.warn('[PERF WARNING] Frame took ' + deltaTime + 'ms (' + Math.round(1000 / deltaTime) + ' FPS)');
           lastWarningTime = currentTime;
         }
       }
