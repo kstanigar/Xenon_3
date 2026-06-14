@@ -33,10 +33,16 @@
 - [x] Finding 6 — CloudFront security headers (HIGH) — Created `nonx-security-headers` custom policy (HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, CSP). Attached SecurityHeadersPolicy (managed) to prod + dev distributions (June 14, 2026)
 - [x] Finding 16 — Firebase App Check (LOW) — Registered reCAPTCHA v3 site key, integrated App Check SDK into game.html, game_mobile.html, index.html. PR #124 merged (June 14, 2026)
 
-**⚠️ App Check enforcement pending** — Must verify leaderboard works on dev.nonx.standingtiger.com before going to Firebase App Check → APIs → Cloud Firestore → Enforce.
+**⚠️ App Check enforcement pending** — Leaderboard must work on dev first, then enforce in Firebase Console → App Check → APIs → Cloud Firestore → Enforce.
+
+**⚠️ Leaderboard bug (in progress):** Game-end leaderboard stuck on "Loading..." due to App Check reCAPTCHA token fetch hanging silently. Fix applied (timeout + .catch() on all 4 fetch calls in game.html + game_mobile.html) — not yet committed/deployed as of session end.
+
+**⚠️ XSS still present in index.html** — escapeHtml was never added to index.html leaderboard (line 794). Needs fix.
+
+**Leaderboard doc:** docs/LEADERBOARD_COMPARISON.md — full code audit of both leaderboards.
 
 **Remaining Phase 2 items:**
-- [ ] Finding 4 — CSP header (HIGH) — CloudFront Function needed (managed policy can't do custom CSP on free plan)
+- [ ] Finding 4 — CSP header (HIGH) — CloudFront Function needed (free plan can't attach custom policy)
 - [ ] Finding 8 — Gate dev/god URL params to non-production (MEDIUM)
 - [ ] Finding 18 — Gate Shift+D/Shift+A keyboard shortcuts to non-production (MEDIUM)
 
