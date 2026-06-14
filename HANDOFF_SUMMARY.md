@@ -14,6 +14,36 @@
 
 ---
 
+## Session: June 13–14, 2026 - Status: ⏳ PENDING
+
+**Session Duration:** ~2 sessions
+**Agent:** Claude Sonnet 4.6
+**Branch:** dev
+**Phase:** Security Audit
+
+### What Was Accomplished
+
+#### Security Audit — Phase 1 & Phase 2 (Partial) ✅
+
+**Findings completed:**
+
+- [x] Finding 1 — Firestore security rules (CRITICAL) — Published strict rules validating all 6 fields (date, instagram, movement_group, platform, player_id, score), score capped at 999999, catch-all deny rule added (June 13, 2026)
+- [x] Finding 2 — Firebase API key restricted (HIGH) — GCP Console: HTTP referrer restrictions set to localhost, dev.nonx.standingtiger.com, nonx.standingtiger.com (June 13, 2026)
+- [x] Finding 3 — XSS via innerHTML (HIGH) — Added `escapeHtml()` helper to game.html + game_mobile.html, wrapped all 4 playerName render locations. PR #123 merged (June 14, 2026)
+- [x] Finding 6 — CloudFront security headers (HIGH) — Created `nonx-security-headers` custom policy (HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, CSP). Attached SecurityHeadersPolicy (managed) to prod + dev distributions (June 14, 2026)
+- [x] Finding 16 — Firebase App Check (LOW) — Registered reCAPTCHA v3 site key, integrated App Check SDK into game.html, game_mobile.html, index.html. PR #124 merged (June 14, 2026)
+
+**⚠️ App Check enforcement pending** — Must verify leaderboard works on dev.nonx.standingtiger.com before going to Firebase App Check → APIs → Cloud Firestore → Enforce.
+
+**Remaining Phase 2 items:**
+- [ ] Finding 4 — CSP header (HIGH) — CloudFront Function needed (managed policy can't do custom CSP on free plan)
+- [ ] Finding 8 — Gate dev/god URL params to non-production (MEDIUM)
+- [ ] Finding 18 — Gate Shift+D/Shift+A keyboard shortcuts to non-production (MEDIUM)
+
+**SECURITY_AUDIT_PLAN.md** — Created June 13, 2026. 18 findings, 4 phases. Source of truth for all security work.
+
+---
+
 ## Session: June 1, 2026 - Status: ⏳ PENDING
 
 **Session Duration:** ~2 hours
