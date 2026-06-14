@@ -1,13 +1,30 @@
 # Current Project Priorities
 
-**Updated:** June 3, 2026
+**Updated:** June 13, 2026
 **Phase:** 7/7 Complete (100%) ✅
 
 ---
 
-## Immediate Priorities (Complete These First)
+## 🔴 CURRENT PRIORITY: Security Audit (Started June 13, 2026)
 
-### 1. ✅ Adaptive AI Difficulty - COMPLETE
+**Status:** In Progress
+**Plan:** SECURITY_AUDIT_PLAN.md — 18 findings, 4 phases
+**Critical Path:** Phase 1 (Firestore rules) → Phase 2 (API key, XSS, CSP, headers) → Phase 3 (consent, email, localStorage) → Phase 4 (polish)
+
+| Phase | Items | Status |
+|---|---|---|
+| Phase 1 — Critical | 3 tasks | ⬜ Not Started |
+| Phase 2 — High Priority | 6 tasks | ⬜ Not Started |
+| Phase 3 — Medium Priority | 7 tasks | ⬜ Not Started |
+| Phase 4 — Low Priority / Polish | 6 tasks | ⬜ Not Started |
+
+**Reference:** See SECURITY_AUDIT_PLAN.md for full task list with step-by-step instructions per finding.
+
+---
+
+## Completed Priorities
+
+### ✅ Adaptive AI Difficulty - COMPLETE
 **Status:** Fully implemented and deployed on main branch
 **Verified:** June 1, 2026 via Haiku agent audit
 **Features Working:**

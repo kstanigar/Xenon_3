@@ -553,6 +553,12 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
     /**
      * Submits a score entry to the Firestore "leaderboard" collection.
      * One entry per player: Query by unique player_id, update if new score is higher, create if none exists.
@@ -1451,7 +1457,7 @@
           // Other entries: white score, gray username
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + escapeHtml(playerName) + "</span>";
           cols[col] += "</div>";
         }
 
@@ -1529,7 +1535,7 @@
 
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + escapeHtml(playerName) + "</span>";
           cols[col] += "</div>";
         }
 

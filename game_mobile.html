@@ -528,6 +528,12 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
     // Expose to global scope so non-module game script can call them
     // One entry per player: Query by unique player_id, update if new score is higher, create if none exists
     // This prevents name collisions (multiple players using "Anonymous" or same display name)
@@ -1393,7 +1399,7 @@
           // Other entries: white score, gray username
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + escapeHtml(playerName) + "</span>";
           cols[col] += "</div>";
         }
         var html = "<div style='margin-top:12px;text-align:center;'>";
@@ -1472,7 +1478,7 @@
 
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + escapeHtml(playerName) + "</span>";
           cols[col] += "</div>";
         }
 
