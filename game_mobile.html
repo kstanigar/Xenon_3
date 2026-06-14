@@ -514,6 +514,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp, where, doc, setDoc, updateDoc }
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { initializeAppCheck, ReCaptchaV3Provider }
+      from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDumeBRk__-lcKFJA2WLD7Wi-0y6OuFZlo",
@@ -526,6 +528,10 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6LdsiR4tAAAAACW1fmCReUAQPTyiuuJX4O8ZicWh'),
+      isTokenAutoRefreshEnabled: true
+    });
     const db = getFirestore(app);
 
     // Expose to global scope so non-module game script can call them
@@ -653,6 +659,12 @@
   </div>
 
   <script>
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
     // ============================================
     // GAME CONFIGURATION
     // ============================================
@@ -1393,7 +1405,7 @@
           // Other entries: white score, gray username
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + escapeHtml(playerName) + "</span>";
           cols[col] += "</div>";
         }
         var html = "<div style='margin-top:12px;text-align:center;'>";
@@ -1472,7 +1484,7 @@
 
           cols[col] += "<div style='" + rowStyle + "font-size:12px;margin-bottom:4px;'>";
           cols[col] += (i + 1) + ". <strong>" + entry.score + "</strong> ";
-          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + playerName + "</span>";
+          cols[col] += "<span style='color:" + nameColor + ";font-size:11px;'>" + escapeHtml(playerName) + "</span>";
           cols[col] += "</div>";
         }
 

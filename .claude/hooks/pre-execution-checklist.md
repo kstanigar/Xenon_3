@@ -91,5 +91,56 @@
 
 ---
 
-**Last Updated:** April 13, 2026
+## 🔄 Git Commit Operations Checklist
+
+**Trigger:** When message contains: "commit", "push", "merge", "PR", "pull request", "git"
+
+**MANDATORY: Read docs/GIT_COMMIT_WORKFLOW.md IMMEDIATELY before any git operation**
+
+### Git Operations Checklist
+- [ ] Read docs/GIT_COMMIT_WORKFLOW.md (REQUIRED)
+- [ ] Verify Rule #1: NO co-author lines in commit message
+- [ ] Verify Rule #2: Base branch is correct (dev, not main)
+- [ ] Confirm using feature branch workflow (not pushing directly to dev/main)
+- [ ] Branch protection requires PRs for dev and main
+- [ ] Commit message follows format: `<type>: <description>` (no co-author)
+
+### Feature Branch Workflow (REQUIRED)
+```bash
+# 1. Create feature branch from dev
+git checkout -b feature/description
+
+# 2. Commit changes (NO co-author line)
+git commit -m "type: description"
+
+# 3. Push feature branch
+git push -u origin feature/description
+
+# 4. Create PR to dev (NOT main)
+gh pr create --base dev --title "title" --body "description"
+
+# 5. Merge PR
+gh pr merge --squash --delete-branch
+
+# 6. Pull updated dev
+git checkout dev && git pull origin dev
+```
+
+### 🚨 Critical Rules (NEVER VIOLATE)
+1. **NO co-author lines** - Never add "Co-Authored-By:" to commits
+2. **Always use feature branches** - Never push directly to dev or main
+3. **Base branch = dev** - PRs go to dev first, not main
+4. **Read workflow first** - Check GIT_COMMIT_WORKFLOW.md before ANY git operation
+
+### Stop Conditions
+**If ANY of these are true, STOP immediately:**
+- ❌ About to add co-author line to commit
+- ❌ About to push directly to dev or main
+- ❌ About to create PR with base branch = main (should be dev)
+- ❌ Haven't read GIT_COMMIT_WORKFLOW.md yet
+
+---
+
+**Last Updated:** June 3, 2026
 **Reason Created:** Prevent 2-hour mistake from Phase 2 skip (April 13, 2026 session)
+**Updated:** Added Git Commit Operations checklist (June 3, 2026) - Prevent co-author violations and workflow mistakes
