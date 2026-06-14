@@ -534,12 +534,6 @@
     });
     const db = getFirestore(app);
 
-    function escapeHtml(str) {
-      var d = document.createElement('div');
-      d.textContent = str;
-      return d.innerHTML;
-    }
-
     // Expose to global scope so non-module game script can call them
     // One entry per player: Query by unique player_id, update if new score is higher, create if none exists
     // This prevents name collisions (multiple players using "Anonymous" or same display name)
@@ -665,6 +659,12 @@
   </div>
 
   <script>
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
     // ============================================
     // GAME CONFIGURATION
     // ============================================
@@ -1375,7 +1375,11 @@
         return;
       }
 
+      var _lbTimeout = setTimeout(function() {
+        display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Leaderboard unavailable.</div>";
+      }, 5000);
       window.firebaseGetTopScores().then(function (top10) {
+        clearTimeout(_lbTimeout);
         if (!top10 || top10.length === 0) {
           display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>No scores yet — be the first!</div>";
           return;
@@ -1427,6 +1431,9 @@
         html += "View Full Leaderboard (Top 25)</button>";
         html += "</div></div>";
         display.innerHTML = html;
+      }).catch(function() {
+        clearTimeout(_lbTimeout);
+        display.innerHTML = "<div style='color:#aaa;font-size:13px;margin-top:10px;'>Leaderboard unavailable.</div>";
       });
     }
 
@@ -1461,7 +1468,11 @@
         return;
       }
 
+      var _lbModalTimeout = setTimeout(function() {
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
+      }, 5000);
       window.firebaseGetTopScores(25).then(function (top25) {
+        clearTimeout(_lbModalTimeout);
         if (!top25 || top25.length === 0) {
           content.innerHTML = "<div style='color:#aaa;font-size:13px;padding:4px 0;'>No scores yet — be the first!</div>";
           return;
@@ -1514,6 +1525,9 @@
         html += "</div>";
 
         content.innerHTML = html;
+      }).catch(function() {
+        clearTimeout(_lbModalTimeout);
+        content.innerHTML = "<div style='color:#aaa;font-size:13px;'>Leaderboard unavailable.</div>";
       });
     }
 

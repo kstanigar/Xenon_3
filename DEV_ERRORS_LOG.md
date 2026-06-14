@@ -50,6 +50,35 @@
 
 # Error Log Entries
 
+## June 14, 2026 - Leaderboard Broken After XSS Fix — escapeHtml Scope Error - 🟢 RESOLVED
+
+**Discovered:** June 14, 2026
+**Environment:** dev.nonx.standingtiger.com
+**Severity:** CRITICAL
+**Status:** RESOLVED
+
+**Error:**
+`ReferenceError: escapeHtml is not defined` — leaderboard stuck on "Loading leaderboard..." indefinitely after XSS fix (PR #123) was deployed.
+
+**Impact:**
+- Leaderboard failed to render on game over screen (desktop + mobile)
+- Top 10 and Top 25 modal both broken
+- Score submission unaffected
+
+**Root Cause:**
+`escapeHtml()` was defined inside `<script type="module">` (Firebase module block). ES modules have isolated scope — functions defined there are NOT accessible to regular `<script>` blocks on the same page. The leaderboard render functions (`showLeaderboard`, `showFullLeaderboard`) live in the regular script block and called `escapeHtml()`, causing a ReferenceError at runtime.
+
+**Solution:**
+- Remove `escapeHtml` from `<script type="module">` block in both files
+- Add `escapeHtml` to the top of the regular `<script>` block in both files
+- game.html: moved to line 712 (top of regular script block)
+- game_mobile.html: moved to line 668 (top of regular script block)
+
+**Resolution:**
+Fixed June 14, 2026. PR #126 — security/xss-scope-fix → dev.
+
+---
+
 ## June 3, 2026 - AI Agent Added Non-Error Content to Error Log - 🟢 RESOLVED
 
 **Discovered:** June 3, 2026, 3:30 AM (Post-Phase 7 documentation updates)

@@ -25,7 +25,7 @@
 - ✅ Finding 6 — CloudFront security headers
 - ✅ Finding 16 — Firebase App Check SDK integrated (PR #124)
 
-**⚠️ Action required before next session:** Verify leaderboard on dev.nonx.standingtiger.com, then enforce App Check in Firebase Console → App Check → APIs → Cloud Firestore → Enforce.
+**⚠️ In progress:** Leaderboard timeout fix applied to game.html + game_mobile.html — needs commit + deploy + verify before App Check enforcement.
 
 **Reference:** See SECURITY_AUDIT_PLAN.md for full task list with step-by-step instructions per finding.
 
