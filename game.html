@@ -1148,6 +1148,11 @@
     //
     // All analytics events are suppressed and logged to console with cyan badge.
     var devMode = false;
+    var isDevEnvironment = (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname.startsWith('127.') ||
+      window.location.hostname === 'dev.nonx.standingtiger.com'
+    );
 
     // ═══════════════════════════════════════════════════════════════════════════
     // AI MODE (TIER TESTING)
@@ -1853,21 +1858,23 @@
     // ═══════════════════════════════════════════════════════════════════════════
     // Allows enabling dev mode via URL for mobile testing (no keyboard available)
     // Usage: game.html?dev=true&level=11&god=true
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('level')) {
-      var startLevel = parseInt(urlParams.get('level'));
-      if (startLevel >= 1 && startLevel <= 12) {
-        level = startLevel;
-        devMode = true; // Auto-enable dev mode when jumping to level
+    if (isDevEnvironment) {
+      var urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('level')) {
+        var startLevel = parseInt(urlParams.get('level'));
+        if (startLevel >= 1 && startLevel <= 12) {
+          level = startLevel;
+          devMode = true; // Auto-enable dev mode when jumping to level
+          localStorage.setItem('nonx_dev_mode', 'true');
+        }
+      }
+      if (urlParams.get('god') === 'true') {
+        godMode = true; // Enable invincibility
+      }
+      if (urlParams.get('dev') === 'true') {
+        devMode = true; // Enable developer mode
         localStorage.setItem('nonx_dev_mode', 'true');
       }
-    }
-    if (urlParams.get('god') === 'true') {
-      godMode = true; // Enable invincibility
-    }
-    if (urlParams.get('dev') === 'true') {
-      devMode = true; // Enable developer mode
-      localStorage.setItem('nonx_dev_mode', 'true');
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -7230,75 +7237,77 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
-      // Shift+D — toggle developer mode
-      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
-        devMode = !devMode;
-        var indicator = document.getElementById('devModeIndicator');
-        if (!indicator) {
-          indicator = document.createElement('div');
-          indicator.id = 'devModeIndicator';
-          indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
-            'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
-            'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
-          document.body.appendChild(indicator);
-        }
-        // AI Agent v1.0: Show tier info in dev mode
-        var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
-        var tierName = tierNames[currentTier.toString()] || 'Unknown';
-        var lockStatus = speedLocked ? '🔒' : '🔓';
-        var tierMult = getTierMultiplier();
-        var moveMult = scoreMultiplier;
-        var totalMult = (tierMult * moveMult).toFixed(2);
-        indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
-        indicator.style.display = devMode ? 'block' : 'none';
-        null;
-        return;
-      }
-
-      // Shift+A — toggle AI Mode (tier testing interface)
-      if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
-        aiMode = !aiMode;
-        localStorage.setItem('nonx_ai_mode', aiMode.toString());
-        var aiIndicator = document.getElementById('aiModeIndicator');
-        if (!aiIndicator) {
-          aiIndicator = document.createElement('div');
-          aiIndicator.id = 'aiModeIndicator';
-          aiIndicator.style.cssText = 'position:fixed;top:8px;right:8px;' +
-            'background:#FFD700;color:#000;font-family:monospace;font-size:11px;font-weight:bold;' +
-            'padding:4px 10px;border-radius:4px;z-index:9999;pointer-events:none;line-height:1.4;';
-          document.body.appendChild(aiIndicator);
-        }
-        if (aiMode) {
+      if (isDevEnvironment) {
+        // Shift+D — toggle developer mode
+        if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+          devMode = !devMode;
+          var indicator = document.getElementById('devModeIndicator');
+          if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'devModeIndicator';
+            indicator.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);' +
+              'background:#FF0;color:#000;font-family:monospace;font-size:12px;font-weight:bold;' +
+              'padding:3px 10px;border-radius:4px;z-index:9999;pointer-events:none;';
+            document.body.appendChild(indicator);
+          }
+          // AI Agent v1.0: Show tier info in dev mode
           var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
           var tierName = tierNames[currentTier.toString()] || 'Unknown';
-          var tierParams = TIER_CONFIG[currentTier.toString()];
-          var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
-          var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
-          var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
-          var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+          var lockStatus = speedLocked ? '🔒' : '🔓';
           var tierMult = getTierMultiplier();
           var moveMult = scoreMultiplier;
           var totalMult = (tierMult * moveMult).toFixed(2);
-          var moveType = moveMult === 1.25 ? 'Horizontal' : 'Full';
-          aiIndicator.innerHTML = '⚡ AI MODE<br>' +
-            'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
-            'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
-            'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
-            'Use [ / ] to adjust tier';
+          indicator.textContent = '⚠ DEV MODE — AI Tier: ' + currentTier + ' (' + tierName + ') ' + lockStatus + ' | Score: ' + totalMult + 'x | Cycles: ' + cyclesCompleted + ' | Analytics OFF';
+          indicator.style.display = devMode ? 'block' : 'none';
           null;
-          null;
-          null;
-          null;
-          null;
-          null;
-          null;
-          null;
-          null;
-        } else {
-          null;
+          return;
         }
-        aiIndicator.style.display = aiMode ? 'block' : 'none';
-        return;
+
+        // Shift+A — toggle AI Mode (tier testing interface)
+        if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+          aiMode = !aiMode;
+          localStorage.setItem('nonx_ai_mode', aiMode.toString());
+          var aiIndicator = document.getElementById('aiModeIndicator');
+          if (!aiIndicator) {
+            aiIndicator = document.createElement('div');
+            aiIndicator.id = 'aiModeIndicator';
+            aiIndicator.style.cssText = 'position:fixed;top:8px;right:8px;' +
+              'background:#FFD700;color:#000;font-family:monospace;font-size:11px;font-weight:bold;' +
+              'padding:4px 10px;border-radius:4px;z-index:9999;pointer-events:none;line-height:1.4;';
+            document.body.appendChild(aiIndicator);
+          }
+          if (aiMode) {
+            var tierNames = {'-3':'Tutorial','-2':'Beginner','-1':'Easy','0':'Normal','1':'Challenge','2':'Veteran','3':'Expert'};
+            var tierName = tierNames[currentTier.toString()] || 'Unknown';
+            var tierParams = TIER_CONFIG[currentTier.toString()];
+            var currentPhase = purplePhase ? 'purple' : redPhase ? 'red' : 'green';
+            var phaseMultiplier = purplePhase ? 1.5 : redPhase ? 1.25 : 1.0;
+            var actualSpeed = (tierParams.bulletSpeed * phaseMultiplier).toFixed(1);
+            var actualShields = purplePhase ? Math.ceil(tierParams.shieldHits * 1.67) : tierParams.shieldHits;
+            var tierMult = getTierMultiplier();
+            var moveMult = scoreMultiplier;
+            var totalMult = (tierMult * moveMult).toFixed(2);
+            var moveType = moveMult === 1.25 ? 'Horizontal' : 'Full';
+            aiIndicator.innerHTML = '⚡ AI MODE<br>' +
+              'Tier: ' + currentTier + ' (' + tierName + ')<br>' +
+              'Speed: ' + tierParams.bulletSpeed + ' → ' + actualSpeed + ' (' + currentPhase + ')<br>' +
+              'Score: ' + tierMult + 'x × ' + moveMult + 'x = ' + totalMult + 'x<br>' +
+              'Use [ / ] to adjust tier';
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+            null;
+          } else {
+            null;
+          }
+          aiIndicator.style.display = aiMode ? 'block' : 'none';
+          return;
+        }
       }
 
       // Shift+V — skip to victory (devMode only)
