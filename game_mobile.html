@@ -681,6 +681,15 @@
       d.textContent = str;
       return d.innerHTML;
     }
+    function escapeAttr(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g,  '&#x27;');
+    }
 
     (function() {
       var banner = document.getElementById('consentBanner');
@@ -6610,7 +6619,7 @@
         var savedHandle = localStorage.getItem('nonx_ig_handle') || '';
         html += "<div id='leaderboardSubmit' style='margin-bottom: 20px; text-align: center;'>";
         html += "<div style='font-size: 16px; margin-bottom: 8px;'>Submit to Global Leaderboard:</div>";
-        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + savedHandle + "' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
+        html += "<input type='text' id='igInput' placeholder='Instagram handle (optional)' value='" + escapeAttr(savedHandle) + "' style='padding: 8px; font-size: 14px; width: 200px; border-radius: 4px; border: none; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;'><br>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 8px 16px; font-size: 14px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold;'>Submit Score</button>";
         html += "</div>";
       } else {
@@ -6869,7 +6878,7 @@
         html += "<div id='leaderboardSubmit' style='margin-top: 16px; margin-bottom: 8px; text-align: center;'>";
         html += "<div style='font-size: 14px; color: #aaa; margin-bottom: 4px;'>Submit to Global Leaderboard:</div>";
         html += "<div style='display:flex; justify-content:center; align-items:center; gap:8px;'>";
-        html += "<input type='text' id='igInput' placeholder='Player name or handle (optional)' value='" + savedHandle + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
+        html += "<input type='text' id='igInput' placeholder='Player name or handle (optional)' value='" + escapeAttr(savedHandle) + "' style='padding: 6px; font-size: 13px; width: 190px; border-radius: 4px; border: none;'>";
         html += "<button onclick='submitToLeaderboard()' style='padding: 6px 14px; font-size: 13px; border-radius: 4px; border-radius: 4px; border: none; background: #00FFFF; color: #000; cursor: pointer; font-weight: bold; white-space:nowrap;'>Submit Score</button>";
         html += "</div>";
         html += "</div>";
