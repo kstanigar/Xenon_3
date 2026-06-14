@@ -13,10 +13,19 @@
 
 | Phase | Items | Status |
 |---|---|---|
-| Phase 1 — Critical | 3 tasks | ⬜ Not Started |
-| Phase 2 — High Priority | 6 tasks | ⬜ Not Started |
+| Phase 1 — Critical | 3 tasks | ✅ Complete |
+| Phase 2 — High Priority | 6 tasks | ⏳ In Progress (3/6 done) |
 | Phase 3 — Medium Priority | 7 tasks | ⬜ Not Started |
 | Phase 4 — Low Priority / Polish | 6 tasks | ⬜ Not Started |
+
+**Completed (June 13–14, 2026):**
+- ✅ Finding 1 — Firestore security rules
+- ✅ Finding 2 — Firebase API key restricted
+- ✅ Finding 3 — XSS innerHTML fixed (PR #123)
+- ✅ Finding 6 — CloudFront security headers
+- ✅ Finding 16 — Firebase App Check SDK integrated (PR #124)
+
+**⚠️ Action required before next session:** Verify leaderboard on dev.nonx.standingtiger.com, then enforce App Check in Firebase Console → App Check → APIs → Cloud Firestore → Enforce.
 
 **Reference:** See SECURITY_AUDIT_PLAN.md for full task list with step-by-step instructions per finding.
 
