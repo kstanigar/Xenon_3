@@ -5863,8 +5863,7 @@
 
       // Support buttons (Bug report + Ko-fi) at bottom of scorecard
       // ROLLBACK: Remove lines below to restore buttons to end screens only
-      html += '<div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
-      html += buildKofiButtonHTML('scorecard'); // Ko-fi FIRST (left on large screens, top on small)
+      html += '<div id="kofiButtonWrapper" style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">';
       html += buildBugButtonHTML('scorecard');  // Bug SECOND (right on large screens, bottom on small)
       html += '</div>';
 
@@ -5881,6 +5880,7 @@
 
       // Populate modal content
       document.getElementById('scorecardContent').innerHTML = html;
+      document.getElementById('kofiButtonWrapper').prepend(buildKofiButton('scorecard'));
 
       // Show modal
       document.getElementById('scorecardModal').style.display = 'block';
@@ -6217,8 +6217,27 @@
      */
     // "KEEP THE LIGHTS ON" BUTTON - Narrative-driven support button with critical power failure animation
     // See: docs/design/SUPPORT_DEV_BUTTON_LOCATIONS.md for design rationale and update locations
-    function buildKofiButtonHTML(source) {
-      return "<a href='https://ko-fi.com/raginats' target='_blank' onclick=\"if(typeof gtag !== 'undefined') gtag('event', 'kofi_click', {location: '" + source + "'});\" style='display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: 2px solid #FFD700; background: rgba(255, 215, 0, 0.15); color: #FFD700; cursor: pointer; text-decoration: none; font-weight: bold; animation: hazard-flicker 8s infinite steps(1);' onmouseenter='this.style.animationPlayState=\"paused\"; this.style.boxShadow=\"0 0 20px rgba(255, 215, 0, 0.5)\";' onmouseleave='this.style.animationPlayState=\"running\"; this.style.boxShadow=\"\";'>⚡ Keep the Lights On</a>";
+    function buildKofiButton(source) {
+      var link = document.createElement('a');
+      link.href = 'https://ko-fi.com/raginats';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = '⚡ Keep the Lights On';
+      link.style.cssText = 'display: inline-block; padding: 10px 20px; font-size: 14px; border-radius: 4px; border: 2px solid #FFD700; background: rgba(255, 215, 0, 0.15); color: #FFD700; cursor: pointer; text-decoration: none; font-weight: bold; animation: hazard-flicker 8s infinite steps(1);';
+      link.addEventListener('mouseenter', function() {
+        this.style.animationPlayState = 'paused';
+        this.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.5)';
+      });
+      link.addEventListener('mouseleave', function() {
+        this.style.animationPlayState = 'running';
+        this.style.boxShadow = '';
+      });
+      link.addEventListener('click', function() {
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'kofi_click', { location: source });
+        }
+      });
+      return link;
     }
 
     /**
