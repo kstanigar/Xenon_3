@@ -7298,6 +7298,7 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (isDevEnvironment) {
         // Shift+D — toggle developer mode
         if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
