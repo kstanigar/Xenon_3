@@ -14,9 +14,9 @@
 
 ---
 
-## Session: June 13–14, 2026 - Status: ⏳ PENDING
+## Session: June 13–15, 2026 - Status: ⏳ PENDING
 
-**Session Duration:** ~2 sessions
+**Session Duration:** ~3 sessions
 **Agent:** Claude Sonnet 4.6
 **Branch:** dev
 **Phase:** Security Audit
@@ -30,23 +30,89 @@
 - [x] Finding 1 — Firestore security rules (CRITICAL) — Published strict rules validating all 6 fields (date, instagram, movement_group, platform, player_id, score), score capped at 999999, catch-all deny rule added (June 13, 2026)
 - [x] Finding 2 — Firebase API key restricted (HIGH) — GCP Console: HTTP referrer restrictions set to localhost, dev.nonx.standingtiger.com, nonx.standingtiger.com (June 13, 2026)
 - [x] Finding 3 — XSS via innerHTML (HIGH) — Added `escapeHtml()` helper to game.html + game_mobile.html, wrapped all 4 playerName render locations. PR #123 merged (June 14, 2026)
+- [x] Finding 3 (index.html) — XSS via innerHTML — Added `escapeHtml()` + wrapped playerName at lines 800 + 915. PR merged (June 14, 2026)
 - [x] Finding 6 — CloudFront security headers (HIGH) — Created `nonx-security-headers` custom policy (HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, CSP). Attached SecurityHeadersPolicy (managed) to prod + dev distributions (June 14, 2026)
+- [x] Finding 8 — Gate dev/god URL params — `isDevEnvironment` wraps URL param block in game.html + game_mobile.html. PR pending (June 14, 2026)
 - [x] Finding 16 — Firebase App Check (LOW) — Registered reCAPTCHA v3 site key, integrated App Check SDK into game.html, game_mobile.html, index.html. PR #124 merged (June 14, 2026)
+- [x] Finding 18 — Gate Shift+D/Shift+A keyboard shortcuts — same `isDevEnvironment` gate in game.html + game_mobile.html. PR pending (June 14, 2026)
 
-**⚠️ App Check enforcement pending** — Leaderboard must work on dev first, then enforce in Firebase Console → App Check → APIs → Cloud Firestore → Enforce.
+**⚠️ App Check enforcement pending — researched, documented** — "Outdated client requests" are NOT a CDN cache issue. They are users who haven't loaded the new App Check-enabled version of the game yet (old tab, haven't revisited). Metrics: 6:30 AM 62% → 2:17 PM 67% → 6:25 PM 61% verified (61% verified / 21% outdated / 18% invalid, 146 total). Invalid requests appeared at 6:25 PM check (were 0% before — possibly bots). Firebase guidance: enforce only when verified % reaches 85%+. Re-check June 15 ~5 AM. Do not enforce below 85% verified. Full details in DEV_ERRORS_LOG.md.
 
-**⚠️ Leaderboard bug (in progress):** Game-end leaderboard stuck on "Loading..." due to App Check reCAPTCHA token fetch hanging silently. Fix applied (timeout + .catch() on all 4 fetch calls in game.html + game_mobile.html) — not yet committed/deployed as of session end.
-
-**⚠️ XSS still present in index.html** — escapeHtml was never added to index.html leaderboard (line 794). Needs fix.
+**⚠️ App Check enforcement pending — leaderboard timeout fix deployed:** Leaderboard "Loading..." hang fix confirmed implemented — 5-second timeout + .catch() on all 4 fetch calls (game.html lines 1437–1499, 1533–1535; game_mobile.html lines 1383–1442, 1476–1479). Waiting for App Check unverified % to reach 0% before enforcing. See DEV_ERRORS_LOG.md.
 
 **Leaderboard doc:** docs/LEADERBOARD_COMPARISON.md — full code audit of both leaderboards.
 
 **Remaining Phase 2 items:**
-- [ ] Finding 4 — CSP header (HIGH) — CloudFront Function needed (free plan can't attach custom policy)
-- [ ] Finding 8 — Gate dev/god URL params to non-production (MEDIUM)
-- [ ] Finding 18 — Gate Shift+D/Shift+A keyboard shortcuts to non-production (MEDIUM)
+- [x] Finding 4 — CSP header (HIGH) — CloudFront Function `add-csp-header` deployed to both distributions in Report-Only mode (June 15, 2026). Custom Response Headers Policies require Business plan — workaround: CloudFront Function on Viewer response event (free tier, 2M invocations/month). Verified: `content-security-policy-report-only` in prod response headers.
+- [x] Finding 8 — Gate dev/god URL params to non-production — `isDevEnvironment` check added to game.html + game_mobile.html. PR #129 merged (June 14, 2026)
+- [x] Finding 18 — Gate Shift+D/Shift+A keyboard shortcuts to non-production — same `isDevEnvironment` gate. PR #129 merged (June 14, 2026)
 
 **SECURITY_AUDIT_PLAN.md** — Created June 13, 2026. 18 findings, 4 phases. Source of truth for all security work.
+
+**Finding 5 — GA4 Consent Mode v2 — ✅ Complete (PR #130, June 14)**
+- Consent default deny block added before gtag script in all 3 files
+- Cookie banner (dark navy, cyan border, Accept/Decline) added after `<body>` in all 3 files
+- Consent handler JS added after `escapeHtml` in all 3 files
+- localStorage key: `nonx_consent` — values: `'granted'` / `'denied'`
+- Note: `/privacy.html` link in banner will 404 until Privacy Policy page is created (Phase 3, Finding 5 task 3B)
+- ✅ Verified June 14: banner displayed, GA4 collect requests fire after Accept, clean console in incognito
+
+**Finding 7 — FormSubmit email hash — ✅ Complete (PR #131, June 14)**
+- Replaced `stanigarkeith@gmail.com` with hash `45e055cecae307ffc412306a96dd1ff3` in game.html + game_mobile.html
+- Hash activated via FormSubmit confirmation email — works on both dev and prod domains
+- Email no longer visible in page source
+
+**Finding 9 — Score from memory — ✅ Complete (audit only, June 14)**
+- `var score = 0` in-memory variable used directly at Firebase submission (game.html:1423)
+- `nonx_submitted_score` localStorage key only written after successful submission — used as re-submission guard, never as score source
+- No code change needed
+
+**Finding 10 — Production-safe logger — ✅ Complete (PR merged June 14)**
+- `logger` object added after `isDevEnvironment` in game.html + game_mobile.html
+- `isDevEnvironment` + `logger` added to index.html main script block
+- 14 console.error/warn calls replaced across 3 files — silent on production, active on dev
+
+**Finding 14 — HTML-encode savedHandle — ✅ Complete (PR merged June 14)**
+- `escapeAttr()` function added after `escapeHtml` in game.html + game_mobile.html
+- All 4 `savedHandle` attribute injections wrapped with `escapeAttr()`
+- Verified: `value="Test's &quot;Quote&quot; &lt;tag&gt;"` in outerHTML — entities encoded correctly
+
+**Finding 13 — Ko-fi onclick refactor — ✅ Complete (PR #134, June 14)**
+- `buildKofiButtonHTML()` renamed to `buildKofiButton()`, now returns a DOM element
+- `onclick`, `onmouseenter`, `onmouseleave` moved to `addEventListener` calls
+- `rel="noopener noreferrer"` added to anchor
+- `id="kofiButtonWrapper"` added to wrapper div; button prepended after `scorecardContent.innerHTML` set
+- CI integrity check updated to match new function name
+- Applied to game.html + game_mobile.html
+
+**Phase 2 complete — all 6 findings done**
+**Phase 3 complete — all 7 findings done**
+
+**Finding 4 — CSP Report-Only violations (researched June 15, 2026):**
+3 violations in DevTools Console — all caused by Firebase App Check (reCAPTCHA v3). Nothing blocked (report-only). Must fix before switching to enforcement (Phase 4 task 4F):
+- **script-src** — add: `https://www.google.com/recaptcha/`
+- **frame-src** — add: `https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/`
+- **connect-src** — add: `https://www.google.com/recaptcha/ https://recaptcha.google.com/`
+- Full updated function code documented in SECURITY_AUDIT_PLAN.md Phase 4 task 4F
+
+**Task 4F — CSP enforcement — ✅ Complete (June 15, 2026):**
+- reCAPTCHA domains added to script-src, frame-src, connect-src
+- Verified zero violations in DevTools Console (played full game on prod)
+- Switched `content-security-policy-report-only` → `content-security-policy` (enforcement mode)
+- Published to both distributions (prod ED9CRAIN93YRS + dev E1Q496KLUYVM0Z) at 3:42 AM UTC
+- Additional fix: added `https://www.gstatic.com` to connect-src — Firebase source map files (.js.map) were blocked in enforcement mode; only triggered when DevTools is open but CSP blocks regardless. Published 4:02 AM UTC.
+- Full final function code in SECURITY_AUDIT_PLAN.md Phase 4 task 4F
+
+**Next priorities (Phase 4):**
+2. GA4 `final_score` custom dimension — add param to `player_won` event in game.html + game_mobile.html, register in GA4 console. Unblocks NON-X Analytics dashboard (`customEvent:final_score` × `customEvent:new_tier` chart). No BigQuery, cost $0. Est. 1–2 hrs.
+3. App Check enforcement — re-check June 15 ~5 AM, enforce only when verified % ≥ 85%
+4. SRI, HTTPS verification, TLS policy, sync_paim.sh (low polish)
+
+**NEW BUG — 120fps game loop (discovered June 15, 2026):**
+Game runs uncapped at display refresh rate. On 120Hz monitors all frame-dependent mechanics run 2x faster. Player/bullet/enemy speeds doubled, invincibility halved to 1s, enemy spawns doubled. Fix: add FPS cap `setTimeout(() => requestAnimationFrame(draw), 1000/60)` at game loop lines 7739/8423 in game.html. game_mobile.html likely same issue. Full details in CURRENT_PRIORITIES.md.
+
+**NEW BUG — Spacebar blocked in textarea fields (discovered June 15, 2026):**
+Global keydown handler at game.html line ~7574 fires e.preventDefault() for spacebar with no input/textarea target check. Blocks spacebar in surveyComments (line 6101), bugDescription + bugSteps (lines 6363, 6367). Fix: add `if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;` at top of spacebar handler. Both game.html + game_mobile.html.
 
 ---
 

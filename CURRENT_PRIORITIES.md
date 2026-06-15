@@ -1,6 +1,6 @@
 # Current Project Priorities
 
-**Updated:** June 13, 2026
+**Updated:** June 15, 2026
 **Phase:** 7/7 Complete (100%) ✅
 
 ---
@@ -14,20 +14,98 @@
 | Phase | Items | Status |
 |---|---|---|
 | Phase 1 — Critical | 3 tasks | ✅ Complete |
-| Phase 2 — High Priority | 6 tasks | ⏳ In Progress (3/6 done) |
-| Phase 3 — Medium Priority | 7 tasks | ⬜ Not Started |
-| Phase 4 — Low Priority / Polish | 6 tasks | ⬜ Not Started |
+| Phase 2 — High Priority | 6 tasks | ✅ Complete |
+| Phase 3 — Medium Priority | 7 tasks | ✅ Complete |
+| Phase 4 — Low Priority / Polish | 6 tasks | ⏳ In Progress (4F complete, remaining: SRI, HTTPS, TLS, sync_paim.sh) |
 
 **Completed (June 13–14, 2026):**
 - ✅ Finding 1 — Firestore security rules
 - ✅ Finding 2 — Firebase API key restricted
-- ✅ Finding 3 — XSS innerHTML fixed (PR #123)
+- ✅ Finding 3 — XSS innerHTML fixed in game.html + game_mobile.html (PR #123)
+- ✅ Finding 3 — XSS innerHTML fixed in index.html (PR merged June 14)
 - ✅ Finding 6 — CloudFront security headers
+- ✅ Finding 8 — Dev/god URL params gated to non-production (merged June 14)
 - ✅ Finding 16 — Firebase App Check SDK integrated (PR #124)
+- ✅ Finding 18 — Shift+D/Shift+A keyboard shortcuts gated to non-production (merged June 14)
+- ✅ Finding 5 — GA4 Consent Mode v2 — consent banner + default deny on all 3 pages (PR #130, June 14)
+- ✅ Finding 7 — FormSubmit email hash — replaced plaintext email with hash endpoint in game.html + game_mobile.html (PR #131, June 14)
+- ✅ Finding 9 — Score from memory confirmed — in-memory `score` variable used at Firebase submission, localStorage only used as re-submission guard (no code change needed, June 14)
+- ✅ Finding 10 — Production-safe logger — `logger` object added to all 3 files, 14 console.error/warn calls replaced (PR merged June 14)
+- ✅ Finding 14 — HTML-encode savedHandle — `escapeAttr()` added to game.html + game_mobile.html, all 4 attribute injections wrapped (PR merged June 14)
+- ✅ Finding 13 — Ko-fi onclick refactor — `buildKofiButton()` returns DOM element, event listeners attached via addEventListener, rel=noopener noreferrer added (PR #134, June 14)
+- ✅ Finding 4 — CSP header — CloudFront Function `add-csp-header` deployed in enforcement mode (June 15). reCAPTCHA domains added, zero violations verified on prod, switched to `content-security-policy` enforcement.
 
-**⚠️ In progress:** Leaderboard timeout fix applied to game.html + game_mobile.html — needs commit + deploy + verify before App Check enforcement.
+**⚠️ App Check enforcement pending:** Do NOT enforce until verified % ≥ 85%. Last check 6:25 PM June 14: 61% verified / 21% outdated / 18% invalid (89+31+26 = 146 total). Previously 67% at 2:17 PM — slight drop, possibly more invalid requests appearing. Re-check June 15 ~5 AM. See DEV_ERRORS_LOG.md for full research.
+
+**Phase 4 next priorities:**
+
+**1. ✅ Task 4F — Fix reCAPTCHA CSP violations + switch to enforcement — Complete (June 15, 2026)**
+
+**2. GA4 final_score custom dimension**
+- Add `final_score` as event param on `player_won` event in game.html + game_mobile.html
+- Register as GA4 custom dimension in GA4 console
+- Unblocks NON-X Analytics dashboard: replace placeholder chart with `customEvent:final_score` × `customEvent:new_tier` scatter/bar
+- No BigQuery needed — standard Lambda query once dim is registered. Cost: $0
+- Estimate: 1–2 hours once game change ships
+
+**3. App Check enforcement**
+- Re-check June 15 ~5 AM. Enforce ONLY when verified % ≥ 85% (last check 6:25 PM June 14: 61%)
+
+**4. Phase 4 polish** — SRI hashes, HTTPS verification, TLS policy, sync_paim.sh paths
 
 **Reference:** See SECURITY_AUDIT_PLAN.md for full task list with step-by-step instructions per finding.
+
+---
+
+## 🟡 NEW BUG: 120fps Game Loop (Discovered June 15, 2026)
+
+**Status:** Open — must fix before launch
+**Severity:** HIGH — breaks core gameplay on 120Hz monitors
+**Files:** game.html (game_mobile.html likely same issue)
+
+**Problem:** Game loop uses uncapped `requestAnimationFrame` with zero delta-time compensation. On 120Hz monitors the game runs at 120fps — all frame-dependent mechanics run 2× faster than intended.
+
+**Impact at 120fps vs 60fps:**
+- Player, bullet, enemy speeds: 2× faster
+- Enemy spawn rate: 2× more frequent
+- Invincibility duration: halved (1s instead of 2s)
+- Shield flash visual: imperceptible (~25ms)
+
+**Key lines (game.html):**
+- Game loop: 7712–7739 (uncapped `requestAnimationFrame`)
+- Invincibility timer: 6962, 7018 (hardcoded 120 frames)
+- Player speed: CONFIG ~line 788–801
+- Enemy speed: 4141, 4155, 4167, 8033
+
+**Fix options:**
+1. **FPS cap (simple):** Replace `requestAnimationFrame(draw)` with `setTimeout(() => requestAnimationFrame(draw), 1000/60)` — forces 60fps cap
+2. **Delta-time (proper):** Multiply all px/frame values by `deltaTime / (1000/60)` — frame-rate independent
+
+**Recommendation:** FPS cap is low-risk, 1-line fix. Delta-time requires touching every movement calculation. Fix FPS cap first, delta-time as follow-up if needed.
+
+**Also found:** Spacebar blocked in survey/comments textarea — global keydown handler (line ~7574) missing `if (e.target.tagName === 'TEXTAREA') return;` guard. Affects `surveyComments` (line 6101), `bugDescription` + `bugSteps` (lines 6363, 6367). Both game.html + game_mobile.html need the fix.
+
+---
+
+## 🐯 Standing Tiger Branding (Favicon + Studio Identity)
+
+**Asset:** `st_favicon.png` — 1024×1024 RGBA PNG, transparent background, circular badge
+**Brand:** Standing Tiger Engineering & Development
+**Philosophy:** Logo stays subconscious — game titles and features shine; ST brand builds recognition passively
+
+**Implementation plan (subtlest → most visible):**
+1. **Browser tab favicon** — resize to 32×32 + 180×180 (Apple touch); add `<link rel="icon">` to all 3 HTML files
+2. **Open Graph meta tags** — `og:image` uses logo; shows when URL shared on Discord/social. Invisible to players
+3. **HTML footer on index.html** — small `© Standing Tiger Engineering & Development` below play button
+4. **Game scorecard corner watermark** — tiny ST logo watermark bottom-right of end-screen scorecard
+5. **PWA app manifest** — logo as app icon if player installs to home screen
+
+**Format note:** Source file (1024×1024) is perfect to keep. Need to generate:
+- `favicon-32x32.png` — browser tab
+- `apple-touch-icon.png` (180×180) — iOS home screen
+- `favicon.ico` — legacy fallback (optional)
+
+**Status:** Asset ready, implementation pending (not part of current security audit)
 
 ---
 
