@@ -5923,7 +5923,7 @@
       boss = null;
 
       // player_won fires when all 3 bosses are defeated.
-      // score is used (not final_score) to match naming convention across all events.
+      // score and final_score both sent — score matches naming convention across all events; final_score is the GA4 custom dimension for the analytics dashboard.
       // session_duration_seconds measures the full run length for completion-time analysis.
       // health_remaining_bonus tracks the health bonus added at victory (Mar 26, 2026)
       // tier_multiplier and effective_multiplier track AI Agent scoring impact (Apr 1, 2026)
@@ -5944,7 +5944,8 @@
         'tier': currentTier,
         'tier_multiplier': tierMult,
         'movement_multiplier': scoreMultiplier,
-        'effective_multiplier': effectiveMult
+        'effective_multiplier': effectiveMult,
+        'final_score': score
       });
 
       null;
