@@ -2279,6 +2279,8 @@
     var fpsFrameTimes = [];
     var fpsLastTime = Date.now();
     var lastWarningTime = 0; // Throttle console warnings to prevent feedback loop
+    var msPrev = window.performance.now(); // 60fps cap — prevents 2x speed on 120Hz displays
+    var MS_PER_FRAME = 1000 / 60;
 
     // Dev mode: 5-tap toggle (mobile-friendly alternative to Shift+D)
     var devModeTapCount = 0;
@@ -8523,6 +8525,13 @@
      *   9. Schedules the next frame with requestAnimationFrame.
      */
     function draw() {
+      requestAnimationFrame(draw);
+
+      var msNow = window.performance.now();
+      var msPassed = msNow - msPrev;
+      if (msPassed < MS_PER_FRAME) return;
+      msPrev = msNow - (msPassed % MS_PER_FRAME);
+
       // Dev mode: Calculate and display FPS (BEFORE gameOver/pause checks so it always shows)
       if (devMode) {
         var currentTime = Date.now();
@@ -8547,10 +8556,7 @@
       if (gameOver) return;
 
       // If paused, just keep the animation frame going but don't update
-      if (paused) {
-        requestAnimationFrame(draw);
-        return;
-      }
+      if (paused) return;
 
       // Update screen shake effect
       updateScreenShake();
@@ -9279,8 +9285,6 @@
 
         ctx.restore();
       }
-
-      requestAnimationFrame(draw);
     }
 
     // ============================================

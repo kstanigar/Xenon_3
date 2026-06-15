@@ -2107,6 +2107,8 @@
     var fpsFrameTimes = [];
     var fpsLastTime = Date.now();
     var lastWarningTime = 0; // Throttle console warnings to prevent feedback loop
+    var msPrev = window.performance.now(); // 60fps cap — prevents 2x speed on 120Hz displays
+    var MS_PER_FRAME = 1000 / 60;
 
     // Player blink state (when damaged)
     var playerBlinking = false;
@@ -7710,6 +7712,13 @@
      * - Boss only takes damage when fully visible (not during entry animation)
      */
     function draw() {
+      requestAnimationFrame(draw);
+
+      var msNow = window.performance.now();
+      var msPassed = msNow - msPrev;
+      if (msPassed < MS_PER_FRAME) return;
+      msPrev = msNow - (msPassed % MS_PER_FRAME);
+
       // Dev mode: Calculate and display FPS (BEFORE gameOver/pause checks so it always shows)
       if (devMode) {
         var currentTime = Date.now();
@@ -7735,10 +7744,7 @@
       if (gameOver) return;
 
       // If paused, keep animation loop running but skip all updates
-      if (paused) {
-        requestAnimationFrame(draw);
-        return;
-      }
+      if (paused) return;
 
       // Update screen shake effect (applied via CSS transform on canvas wrapper)
       updateScreenShake();
@@ -8419,8 +8425,6 @@
 
         ctx.restore();
       }
-
-      requestAnimationFrame(draw);
     }
 
     // ============================================
