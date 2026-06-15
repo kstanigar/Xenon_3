@@ -161,7 +161,69 @@
 - [ ] 4C — Verify CloudFront HTTPS enforcement (Finding 15)
 - [ ] 4D — Verify CloudFront TLS policy = TLSv1.2_2021
 - [ ] 4E — Verify CloudFront access logging enabled
-- [ ] 4F — Switch CSP from Report-Only to enforcement mode (after Phase 2E verified)
+- [x] 4F — Fix reCAPTCHA CSP violations then switch to enforcement mode (see notes below) — ✅ Complete June 15, 2026
+
+**4F — CSP reCAPTCHA violation fixes (researched June 15, 2026):**
+
+Three Report-Only violations confirmed on prod. All caused by Firebase App Check (reCAPTCHA v3).
+
+**Add to script-src:**
+```
+https://www.google.com/recaptcha/
+```
+
+**Replace frame-src with:**
+```
+https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://ko-fi.com
+```
+
+**Add to connect-src:**
+```
+https://www.google.com/recaptcha/ https://recaptcha.google.com/
+```
+
+**How to apply:** Edit the `add-csp-header` CloudFront Function:
+1. CloudFront Console → Functions → `add-csp-header` → Edit → Build tab
+2. Update the `csp` variable with the additions above
+3. Save changes → Publish
+4. Verify zero violations in DevTools Console on prod
+5. Once violations = zero: change `content-security-policy-report-only` → `content-security-policy` in the function
+6. Save → Publish → verify game works normally on both environments
+
+**Final CSP function code (enforcement mode — live as of June 15, 2026 4:02 AM UTC):**
+
+**Change log:**
+- Initial: Report-only mode, no reCAPTCHA domains
+- 4F fix: Added reCAPTCHA domains to script-src, frame-src, connect-src; switched to enforcement
+- gstatic fix: Added `https://www.gstatic.com` to connect-src (Firebase source map CSP violation)
+
+```javascript
+function handler(event) {
+    var response = event.response;
+    var headers = response.headers;
+    var csp = "default-src 'none';" +
+        " script-src 'self' https://www.googletagmanager.com https://www.gstatic.com" +
+        " https://cdn.jsdelivr.net https://www.google.com/recaptcha/ 'unsafe-inline';" +
+        " style-src 'self' 'unsafe-inline';" +
+        " img-src 'self' data: https:;" +
+        " media-src 'self' blob:;" +
+        " connect-src 'self' https://*.googleapis.com https://firestore.googleapis.com" +
+        " https://securetoken.googleapis.com https://*.firebaseio.com" +
+        " https://www.google-analytics.com https://analytics.google.com" +
+        " https://region1.google-analytics.com https://ko-fi.com https://cdn.ko-fi.com" +
+        " https://formsubmit.co https://www.google.com/recaptcha/ https://recaptcha.google.com/" +
+        " https://www.gstatic.com;" +
+        " frame-src https://ko-fi.com https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/;" +
+        " font-src 'self';" +
+        " object-src 'none';" +
+        " base-uri 'none';" +
+        " form-action 'self' https://formsubmit.co;" +
+        " frame-ancestors 'none';" +
+        " upgrade-insecure-requests;";
+    headers['content-security-policy'] = { value: csp };
+    return response;
+}
+```
 
 ---
 
@@ -351,37 +413,86 @@ display.appendChild(container);
 **Estimated Time:** 15 minutes
 **Files:** AWS CloudFront Console only
 
-### Steps
-1. Open AWS CloudFront Console: https://console.aws.amazon.com/cloudfront/v3/home
-2. In the left sidebar click **Policies** → **Response headers**
-3. Click **Create response headers policy**
-4. Name it: `nonx-csp-policy`
-5. Scroll to **Custom headers** section → click **Add header**
-6. Add this header in **Report-Only mode first** (safer — won't break anything):
-   - Header name: `Content-Security-Policy-Report-Only`
-   - Value: (use the CSP value in the Code section below)
-   - Override: Yes
-7. Click **Create policy**
-8. Navigate to **Distributions** → select your distribution → **Behaviors** tab
-9. Select the default behavior (`*`) → click **Edit**
-10. Under **Response headers policy** select `nonx-csp-policy`
-11. Click **Save changes** — wait 3–5 minutes for propagation
-12. Repeat steps 8–11 for the dev distribution
+**Updated June 14, 2026 — verified steps based on actual console state:**
+- `nonx-security-headers` custom policy already exists with all 5 security headers + CSP in enforcement mode
+- Both distributions currently use AWS managed `SecurityHeadersPolicy` (no CSP)
+- CloudFront allows only ONE response headers policy per behavior — must replace managed with custom
+- Research confirmed: deploy CSP in Report-Only mode first, then switch to enforcement after verifying zero violations
 
-### Verify
-- [ ] Open https://nonx.standingtiger.com in Chrome → DevTools → Network tab → click index.html → Response Headers → confirm `content-security-policy-report-only` is present
-- [ ] Check DevTools Console for any CSP violation warnings — these indicate what needs to be added to the policy before switching to enforcement mode
-- [ ] The game should function completely normally (Report-Only never blocks anything)
-- [ ] After verifying zero violations: update the header name to `Content-Security-Policy` (enforcement mode) — see Phase 4 task 4F
+### Steps
+
+**Step 1 — Edit nonx-security-headers policy to use Report-Only CSP**
+1. CloudFront Console → **Policies** → **Response headers** → click `nonx-security-headers` → **Edit**
+2. Find the `Content-Security-Policy` toggle in the Security headers section — **disable it** (turn off)
+3. Scroll to **Custom headers** → click **Add header**:
+   - Header name: `Content-Security-Policy-Report-Only`
+   - Value: *(CSP value from Code section below)*
+   - Override: **Yes**
+4. Click **Save changes**
+
+**⚠️ NOTE (June 14, 2026): Custom Response Headers Policies require AWS Business plan — NOT available on free tier.**
+**Solution: Use CloudFront Functions instead — free tier includes 2M invocations/month.**
+
+**Step 2 — Create a CloudFront Function to inject the CSP header**
+1. CloudFront Console → left sidebar → **Functions** → **Create function**
+2. Name: `add-csp-header`
+3. Paste this code (Runtime: cloudfront-js-2.0):
+```javascript
+function handler(event) {
+    var response = event.response;
+    var headers = response.headers;
+    headers['content-security-policy-report-only'] = {
+        value: "default-src 'none'; script-src 'self' https://www.googletagmanager.com https://www.gstatic.com https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://*.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://ko-fi.com https://cdn.ko-fi.com https://formsubmit.co; frame-src https://ko-fi.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self' https://formsubmit.co; frame-ancestors 'none'; upgrade-insecure-requests;"
+    };
+    return response;
+}
+```
+4. Click **Save changes** → then click **Publish** (top right)
+
+**Step 3 — Attach function to prod distribution**
+1. CloudFront Console → **Distributions** → select `ED9CRAIN93YRS` (prod)
+2. Click **Behaviors** tab → select default behavior (`*`) → click **Edit**
+3. Scroll to **Function associations** section
+4. Under **Viewer response** → select `add-csp-header`
+5. Click **Save changes** — wait 3–5 minutes
+
+**Step 4 — Attach function to dev distribution**
+1. CloudFront Console → **Distributions** → select `E1Q496KLUYVM0Z` (dev)
+2. Click **Behaviors** tab → select default behavior (`*`) → click **Edit**
+3. Scroll to **Function associations** → **Viewer response** → select `add-csp-header`
+4. Click **Save changes** — wait 3–5 minutes
+
+**Step 5 — Verify prod**
+1. Open https://nonx.standingtiger.com
+2. DevTools → Network → click `index.html` → **Headers** tab → Response Headers
+3. Confirm `content-security-policy-report-only` is present
+4. Check DevTools **Console** for any `[Report Only] Refused to...` violations
+5. Play through the game — Report-Only never blocks anything
+
+**Step 6 — Verify dev**
+- Same checks on https://dev.nonx.standingtiger.com
+
+**Step 7 — Switch to enforcement (Phase 4 task 4F — do AFTER violations = zero)**
+1. CloudFront Console → Functions → `add-csp-header` → Edit
+2. Change `content-security-policy-report-only` → `content-security-policy`
+3. Save → Publish → verify game still works on both environments
+
+### Verify checklist
+- [ ] `content-security-policy-report-only` present in prod Response Headers
+- [ ] `content-security-policy-report-only` present in dev Response Headers
+- [ ] No CSP violations in DevTools Console on prod
+- [ ] No CSP violations in DevTools Console on dev
+- [ ] Game plays normally on both environments
+- [ ] All 5 security headers still present (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection)
 
 ### Code
 
-**CSP header value (paste this as the header value in CloudFront):**
+**CSP header value (paste as the Content-Security-Policy-Report-Only value):**
 ```
 default-src 'none'; script-src 'self' https://www.googletagmanager.com https://www.gstatic.com https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://*.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://ko-fi.com https://cdn.ko-fi.com https://formsubmit.co; frame-src https://ko-fi.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self' https://formsubmit.co; frame-ancestors 'none'; upgrade-insecure-requests;
 ```
 
-**Note on combining with Finding 6:** CloudFront allows only **one** Response Headers Policy per cache behavior. Create **one policy** that contains both the CSP header (Finding 4) AND all security headers (Finding 6) — do not create two separate policies.
+**Note:** CloudFront only allows one Response Headers Policy per cache behavior. The custom `nonx-security-headers` policy replaces the managed `SecurityHeadersPolicy` entirely and must include all 5 security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection) plus the CSP.
 
 ---
 
@@ -636,9 +747,11 @@ var ScoreManager = (function() {
 6. Test on production: confirm DevTools Console is clean (no game messages)
 
 ### Instance List to Replace
-**game.html:** lines 611, 631, 3267, 3277, 3718, 7635
-**game_mobile.html:** lines 575, 587, 3559, 3567, 3930, 7121, 8448
-**index.html:** line 430
+**game.html:** lines 627, 647, 3345, 3355, 3796, 7715 — logger inserted after isDevEnvironment at line 1196
+**game_mobile.html:** lines 591, 603, 3637, 3645, 4008, 7199, 8528 — logger inserted after isDevEnvironment at line 1160
+**index.html:** line 446 — isDevEnvironment + logger added at top of main `<script>` block (line 579, before `function escapeHtml`)
+
+**Last verified:** June 14, 2026 (Haiku agent audit)
 
 ### Verify
 - [ ] Open dev.nonx.standingtiger.com → DevTools Console → error messages appear as expected
