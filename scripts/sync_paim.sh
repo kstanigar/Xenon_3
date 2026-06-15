@@ -3,8 +3,10 @@
 # Bidirectional PAIM sync script - syncs whichever file is newer
 # Usage: ./sync_paim.sh
 
-XENON="/Users/keithstanigar/Documents/Projects/Xenon_3/NON-X_PAIM_Memory.md"
-ANALYTICS="/Users/keithstanigar/Documents/Projects/non-x_analytics/docs/NON-X_PAIM_Memory.md"
+XENON_PATH="${XENON_PATH:-/Users/ks2026/Documents/Projects/2026/Xenon_3}"
+ANALYTICS_PATH="${ANALYTICS_PATH:-/Users/ks2026/Documents/Projects/2026/non-x_analytics}"
+XENON="${XENON_PATH}/NON-X_PAIM_Memory.md"
+ANALYTICS="${ANALYTICS_PATH}/docs/NON-X_PAIM_Memory.md"
 
 # Check if both files exist
 if [ ! -f "$XENON" ]; then
