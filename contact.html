@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact — NON-X</title>
+  <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #000;
+      color: rgba(255,255,255,0.85);
+      font-family: Arial, sans-serif;
+      line-height: 1.7;
+      padding: 48px 24px 80px;
+    }
+    .wrap {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 36px;
+      color: #00FFFF;
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+    .back-link:hover { text-decoration: underline; }
+    h1 {
+      color: #00FFFF;
+      font-size: 28px;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+    .meta {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 40px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 6px;
+      letter-spacing: 0.3px;
+    }
+    input, select, textarea {
+      width: 100%;
+      background: #1a1a1a;
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: Arial, sans-serif;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #00FFFF;
+    }
+    select {
+      appearance: none;
+      cursor: pointer;
+    }
+    select option {
+      background: #1a1a1a;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: #00FFFF;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      margin-top: 8px;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:hover { opacity: 0.85; }
+    .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .status-msg {
+      margin-top: 16px;
+      font-size: 13px;
+      text-align: center;
+      display: none;
+    }
+    .status-msg.success { color: #00FFFF; }
+    .status-msg.error { color: #FF5E5B; }
+    .confirmation {
+      text-align: center;
+      padding: 40px 0;
+      display: none;
+    }
+    .confirmation h2 {
+      color: #00FFFF;
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+    .confirmation p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 24px;
+    }
+    .confirmation a {
+      color: #00FFFF;
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .confirmation a:hover { text-decoration: underline; }
+    hr {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      margin: 40px 0;
+    }
+    footer {
+      margin-top: 60px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <a class="back-link" href="/">← Back to NON-X</a>
+
+  <h1>Contact</h1>
+  <p class="meta">Standing Tiger Engineering &amp; Development · Texas, USA</p>
+
+  <div id="formWrap">
+    <form id="contactForm" novalidate>
+
+      <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" placeholder="Your name" required />
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="your@email.com" required />
+      </div>
+
+      <div class="form-group">
+        <label for="reason">Reason</label>
+        <select id="reason" name="reason" required>
+          <option value="" disabled selected>Select a reason</option>
+          <option value="Bug Report">Bug Report</option>
+          <option value="Privacy Request">Privacy Request</option>
+          <option value="General">General</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="message">Message</label>
+        <textarea id="message" name="message" placeholder="How can we help?" required></textarea>
+      </div>
+
+      <input type="hidden" name="_subject" value="NON-X Contact Form" />
+
+      <button type="submit" class="submit-btn" id="submitBtn">Send Message</button>
+      <p class="status-msg" id="statusMsg"></p>
+
+    </form>
+  </div>
+
+  <div class="confirmation" id="confirmation">
+    <h2>Message Sent</h2>
+    <p>Thanks for reaching out. We'll be in touch.</p>
+    <a href="/">← Back to NON-X</a>
+  </div>
+
+  <hr>
+
+  <footer>© Standing Tiger Engineering &amp; Development</footer>
+
+</div>
+
+<script>
+  var FORMSUBMIT_URL = 'https://formsubmit.co/ajax/45e055cecae307ffc412306a96dd1ff3';
+
+  document.getElementById('contactForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    var name    = document.getElementById('name').value.trim();
+    var email   = document.getElementById('email').value.trim();
+    var reason  = document.getElementById('reason').value;
+    var message = document.getElementById('message').value.trim();
+    var btn     = document.getElementById('submitBtn');
+    var status  = document.getElementById('statusMsg');
+
+    if (!name || !email || !reason || !message) {
+      status.textContent = 'Please fill out all fields.';
+      status.className = 'status-msg error';
+      status.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    status.style.display = 'none';
+
+    fetch(FORMSUBMIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ name: name, email: email, reason: reason, message: message })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success === 'true' || data.success === true) {
+        document.getElementById('formWrap').style.display = 'none';
+        document.getElementById('confirmation').style.display = 'block';
+      } else {
+        throw new Error('Submission failed');
+      }
+    })
+    .catch(function() {
+      status.textContent = 'Something went wrong. Please try again.';
+      status.className = 'status-msg error';
+      status.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Send Message';
+    });
+  });
+</script>
+
+</body>
+</html>
