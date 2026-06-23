@@ -54,8 +54,8 @@ jobs:
           echo "Deploying to: ${{ steps.target.outputs.environment }}"
           aws sts get-caller-identity
 
-      # Sync files to S3 (excluding unnecessary files)
-      - name: Sync to S3 (${{ steps.target.outputs.environment }})
+      # Sync files to S3 with per-type cache headers
+      - name: Sync assets to S3 (${{ steps.target.outputs.environment }})
         run: |
           aws s3 sync . s3://${{ steps.target.outputs.bucket }} \
             --exclude ".git/*" \
@@ -66,7 +66,14 @@ jobs:
             --exclude "*.md" \
             --exclude ".DS_Store" \
             --exclude ".claude/*" \
+            --exclude "*.html" \
+            --cache-control "public, max-age=31536000, immutable" \
             --delete
+
+          aws s3 sync . s3://${{ steps.target.outputs.bucket }} \
+            --exclude "*" \
+            --include "*.html" \
+            --cache-control "no-cache"
 
       # Invalidate CloudFront cache
       - name: Invalidate CloudFront cache
