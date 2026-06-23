@@ -1,3 +1,5 @@
+.env
+.env.local
 *.bak
 *.htm
 *.docx

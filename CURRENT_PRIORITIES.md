@@ -1,33 +1,95 @@
 # Current Project Priorities
 
-**Updated:** June 13, 2026
+**Updated:** June 15, 2026 (evening)
 **Phase:** 7/7 Complete (100%) ✅
 
 ---
 
-## 🔴 CURRENT PRIORITY: Security Audit (Started June 13, 2026)
+## ✅ Security Audit — COMPLETE (June 13–15, 2026)
 
-**Status:** In Progress
-**Plan:** SECURITY_AUDIT_PLAN.md — 18 findings, 4 phases
-**Critical Path:** Phase 1 (Firestore rules) → Phase 2 (API key, XSS, CSP, headers) → Phase 3 (consent, email, localStorage) → Phase 4 (polish)
+**Status:** ✅ All 4 phases complete (18 findings resolved)
+**Plan:** SECURITY_AUDIT_PLAN.md — full details
 
 | Phase | Items | Status |
 |---|---|---|
 | Phase 1 — Critical | 3 tasks | ✅ Complete |
-| Phase 2 — High Priority | 6 tasks | ⏳ In Progress (3/6 done) |
-| Phase 3 — Medium Priority | 7 tasks | ⬜ Not Started |
-| Phase 4 — Low Priority / Polish | 6 tasks | ⬜ Not Started |
+| Phase 2 — High Priority | 6 tasks | ✅ Complete |
+| Phase 3 — Medium Priority | 7 tasks | ✅ Complete |
+| Phase 4 — Low Priority / Polish | 7 tasks | ✅ Complete |
 
-**Completed (June 13–14, 2026):**
-- ✅ Finding 1 — Firestore security rules
-- ✅ Finding 2 — Firebase API key restricted
-- ✅ Finding 3 — XSS innerHTML fixed (PR #123)
-- ✅ Finding 6 — CloudFront security headers
-- ✅ Finding 16 — Firebase App Check SDK integrated (PR #124)
+**Phase 4 final status (June 15, 2026):**
+- ✅ 4A — sync_paim.sh: env vars + .gitignore (PR #141)
+- ✅ 4B — SRI: N/A (no eligible scripts, mitigated by CSP)
+- ✅ 4C — HTTPS: Redirect HTTP to HTTPS — prod + dev verified
+- ✅ 4D — TLS: prod TLSv1.3_2025 / dev TLSv1.2_2021 — both ✅
+- ✅ 4E — Access logging: N/A (Pro plan required, mitigated by CSP + App Check)
+- ✅ 4F — CSP enforcement: complete, zero violations
+- ✅ 4G — GA4 final_score: code + DebugView verified (⏳ dashboard ~June 16–17)
 
-**⚠️ In progress:** Leaderboard timeout fix applied to game.html + game_mobile.html — needs commit + deploy + verify before App Check enforcement.
+**🟡 In progress — App Check enforcement + Firestore hardening (see HANDOFF_SUMMARY.md for full plan):**
+- ✅ Task 1: Firestore security rules tightened (June 23) — `request.app.token.valid == true` on create + update; bot writes now blocked at rules level
+- ⏳ Task 2: App Check enforcement (Firebase Console → App Check → Cloud Firestore → Enforce) — PENDING; do not enforce until verified % reaches ~90% and outdated % drops to ~0%. Re-check ~July 6–7.
+- ✅ Task 3: Leaderboard error message updated — game.html:1457 + game_mobile.html:1397 (PR #150, June 23)
+- ✅ Branch cleanup: 128 stale remote branches deleted (June 23); only origin/dev + origin/main remain
+- ✅ Copyright update: "Raginats" → "Standing Tiger" linking to /contact.html — 4 locations in game.html + 4 in game_mobile.html (PR pending, June 23)
+- ⏳ Dev → Main merge: pending copyright PR merge
 
-**Reference:** See SECURITY_AUDIT_PLAN.md for full task list with step-by-step instructions per finding.
+**⚠️ Two time-gated items remain:**
+- **App Check enforcement** — NOT ready. Do NOT enforce until verified % reaches ~90%+ and outdated % drops to ~0%. Last check June 23: 33% verified / 61% invalid / 7% outdated (46 requests). June 22 check: 57% verified / 31% invalid / 12% outdated (503 requests). Outdated trending down (12% → 7%) — cache-control fix (PR #149) working. Enforcement is a full block including reads — real users on outdated clients would lose leaderboard access. Task 1 complete (June 23): Firestore rules now block bot writes at rules level via `request.app.token.valid == true`. Re-check metrics ~July 6–7. See HANDOFF_SUMMARY.md for full details.
+- **GA4 dashboard chart** — check GA4 Explore for `final_score` data, then build Final Score × New Tier chart. See docs/GA4_FINAL_SCORE_IMPLEMENTATION.md.
+
+---
+
+## ✅ Legal Pages — Complete (June 15, 2026)
+
+- `privacy.html` — 13 sections; TDPSA + COPPA + GDPR compliant; full analytics pipeline disclosed (GA4 → BigQuery → AWS Lambda → public dashboard); 13+ age disclosure; Texas governing law
+- `terms.html` — 15 sections; analytics toggle documented; public dashboard consent disclosed; Ko-fi, AWS, Firebase, BigQuery third-party terms linked; Texas governing law
+- `contact.html` — standalone contact form (name/email/reason/message); FormSubmit AJAX; in-place confirmation; matches NON-X dark theme
+- `index.html` — Privacy, Terms, Contact links in consent banner and footer (centered, wraps correctly on mobile)
+- ⚠️ Contact email placeholder — add Standing Tiger business email to privacy.html + terms.html once created
+- Research: `docs/LEGAL_PAGES_PLAN.md`
+
+---
+
+## ✅ Standing Tiger Favicon (Item 6) — Complete (June 15, 2026)
+
+- `favicon_st.png` (new asset) cropped to 768×768, resized to 32×32 + 180×180 via Python script (`scripts/make_favicon.py`)
+- `favicon-32x32.png` + `apple-touch-icon.png` generated with dark background
+- `<link rel="icon">` + `<link rel="apple-touch-icon">` added to all 3 HTML files (index.html, game.html, game_mobile.html)
+- Open Graph + Twitter card meta tags added to `index.html` (OG image: `favicon_st.png`)
+- Standing Tiger footer credit added below Play button on `index.html`
+
+---
+
+## ✅ FIXED: 120fps Game Loop (June 15, 2026)
+
+**Status:** Fixed — PR #137 merged to dev
+**Severity:** HIGH — broke core gameplay on 120Hz monitors
+**Fix:** `performance.now()` timestamp-based 60fps cap in `draw()` — rAF fires at display rate, frames skipped until 16.67ms elapsed. Applied to game.html + game_mobile.html.
+
+**Also fixed:** Spacebar blocked in survey/comments textarea — `if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;` added at top of keydown handler in game.html (line 7301) + game_mobile.html (line 7843). PR #139 merged to dev June 15, 2026.
+
+---
+
+## 🐯 Standing Tiger Branding (Favicon + Studio Identity)
+
+**Asset:** `st_favicon.png` — 1024×1024 RGBA PNG, transparent background, circular badge
+**Brand:** Standing Tiger Engineering & Development
+**Philosophy:** Logo stays subconscious — game titles and features shine; ST brand builds recognition passively
+
+**Implementation plan (subtlest → most visible):**
+1. **Browser tab favicon** — resize to 32×32 + 180×180 (Apple touch); add `<link rel="icon">` to all 3 HTML files
+2. **Open Graph meta tags** — `og:image` uses logo; shows when URL shared on Discord/social. Invisible to players
+3. **HTML footer on index.html** — small `© Standing Tiger Engineering & Development` below play button
+4. **Game scorecard corner watermark** — tiny ST logo watermark bottom-right of end-screen scorecard
+5. **PWA app manifest** — logo as app icon if player installs to home screen
+
+**Format note:** Source file (1024×1024) is perfect to keep. Need to generate:
+- `favicon-32x32.png` — browser tab
+- `apple-touch-icon.png` (180×180) — iOS home screen
+- `favicon.ico` — legacy fallback (optional)
+
+**Status:** Asset ready, implementation pending (not part of current security audit)
 
 ---
 

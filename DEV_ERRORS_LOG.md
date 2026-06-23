@@ -50,6 +50,125 @@
 
 # Error Log Entries
 
+## June 15, 2026 - Uncapped Game Loop Runs at 120fps on 120Hz Monitors - 🟡 WARNING
+
+**Discovered:** June 15, 2026
+**Environment:** nonx.standingtiger.com/game.html (120Hz monitor)
+**Severity:** HIGH — breaks core gameplay balance
+**Status:** OPEN
+
+**Error:**
+Game loop uses uncapped `requestAnimationFrame`. On 120Hz monitors the game runs at 120fps. All mechanics are hardcoded in px/frame assuming 60fps, so everything runs 2× faster than intended.
+
+**Impact:**
+- Player, bullet, enemy movement: 2× faster
+- Enemy spawn rate: 2× more frequent per second
+- Invincibility frames: 120 frames = 1s at 120fps (intended 2s at 60fps)
+- Shield flash visual: ~25ms (imperceptible)
+- Game is significantly harder and faster on high-refresh monitors
+
+**Root Cause:**
+`requestAnimationFrame` matches display refresh rate. No delta-time compensation or FPS cap exists. All movement values are hardcoded as px/frame (not px/second).
+
+**Key lines (game.html):**
+- Game loop: 7712–7739, 8423
+- Invincibility: 6962, 7018 (hardcoded 120 frames)
+- Player speed: CONFIG ~lines 788–801
+- Enemy speed: 4141, 4155, 4167, 8033
+
+**Solution:**
+Option 1 (simple — recommended first): Add FPS cap in the draw function:
+```javascript
+// Replace: requestAnimationFrame(draw);
+// With:
+setTimeout(() => requestAnimationFrame(draw), 1000 / 60);
+```
+Option 2 (proper): Implement delta-time — multiply all px/frame values by `deltaTime / (1000/60)`.
+
+**Resolution:** Pending
+
+---
+
+## June 15, 2026 - Spacebar Blocked in Survey/Comments Textarea Fields - 🟡 WARNING
+
+**Discovered:** June 15, 2026
+**Environment:** nonx.standingtiger.com/game.html
+**Severity:** MEDIUM — breaks user feedback forms
+**Status:** OPEN
+
+**Error:**
+Global `keydown` listener at line ~7574 fires `e.preventDefault()` for spacebar with no check for focused input/textarea elements. Spacebar is intercepted even when user is typing in a text field.
+
+**Impact:**
+- Cannot type spaces in `surveyComments` textarea (line 6101)
+- Cannot type spaces in `bugDescription` (line 6363) or `bugSteps` (line 6367)
+- Affects both game.html and likely game_mobile.html
+
+**Root Cause:**
+Spacebar fires a game action (shoot/pause). The handler lacks a guard to ignore input when focus is on a form field.
+
+**Solution:**
+Add at the top of the spacebar keydown handler (~line 7574):
+```javascript
+if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+```
+
+**Resolution:** Pending
+
+---
+
+## June 14, 2026 - Firebase App Check Enforcement Blocked — Persistent Outdated Client Requests - 📝 DOCUMENTED
+
+**Discovered:** June 14, 2026 (6:30 AM initial attempt; 2:17 PM follow-up)
+**Environment:** Firebase Console → App Check → APIs → Cloud Firestore
+**Severity:** WARNING
+**Status:** OPEN — monitoring, enforcement deferred
+
+**Error:**
+App Check enforcement blocked. After 8+ hours, "Unverified: outdated client requests" metric remains at 33% (31/94 requests). Firebase shows 67% verified, 33% outdated. Enforcing would block ~1/3 of real users.
+
+**Metrics at time of documentation (June 14, 2:17 PM):**
+- Verified requests: 67% (63/94 total)
+- Unverified outdated: 33% (31/94 total)
+- Unverified unknown origin: 0%
+- Unverified invalid: 0%
+- Status: Monitoring (not enforced)
+
+**Impact:**
+- App Check enforcement cannot safely proceed
+- Firestore remains unprotected by App Check while in Monitoring mode
+
+**Root Cause (Researched — Firebase docs + GitHub issues):**
+"Outdated client requests" are NOT a CDN/browser cache issue. They are requests from users who have NOT yet loaded the new version of the game that includes the App Check SDK (PR #124). These users either:
+1. Have the game open in an old tab and haven't refreshed
+2. Haven't visited the game since before the App Check SDK was deployed
+
+The CloudFront cache invalidation that runs on every deploy clears the CDN — but users who already loaded the page before the deploy still have the old JS in their browser session. These users generate requests without an App Check token, which Firebase classifies as "outdated client."
+
+**Firebase Guidance:**
+- Firebase recommends waiting until a "large majority" of requests are verified before enforcing
+- Industry standard interpretation: 85%+ verified before it's safe to enforce
+- Firebase does NOT publish a specific numeric threshold
+- The 33% outdated % is too high per Firebase's own guidance ("significant portion = wait longer")
+
+**Resolution Options:**
+1. **Wait longer** — users naturally close/reopen the game over 24-48 hours, loading the new App Check-enabled version. No action needed, just wait.
+2. **Gradual rollout via Firebase Remote Config** — enforce for 10% → 25% → 50% → 100% of traffic over 24-48 hours (complex, overkill for this project).
+3. **Cache-bust HTML files** — CloudFront already invalidates on deploy (confirmed). Not the issue.
+
+**Recommended path:** Wait 24-48 hours total from when App Check SDK was deployed (deployed ~5 AM June 14). Re-check on June 15 at 5 AM. Enforce when verified % reaches 85%+.
+
+**Recheck — June 14, 6:25 PM (146 total requests):**
+- Verified: 61% (89/146)
+- Unverified outdated: 21% (31/146)
+- Unverified unknown origin: 0% (0/146)
+- Unverified invalid: 18% (26/146)
+- Note: Invalid requests appeared (were 0% at 2:17 PM). May indicate bots or automated scanners hitting Firestore. Still below 85% threshold — do NOT enforce.
+
+**Do not enforce until verified % ≥ 85%.**
+
+---
+
 ## June 14, 2026 - Leaderboard Broken After XSS Fix — escapeHtml Scope Error - 🟢 RESOLVED
 
 **Discovered:** June 14, 2026

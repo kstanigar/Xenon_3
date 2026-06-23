@@ -140,6 +140,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NON-X - Mobile</title>
+  <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <style>
     /* Prevent pull-to-refresh (mobile) and swipe-to-navigate (desktop touchpads) */
     html,
@@ -1392,7 +1394,7 @@
             showLeaderboard();
           } else {
             document.getElementById('leaderboardDisplay').innerHTML =
-              "<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Could not reach leaderboard. Check your connection.</div>";
+              "<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Leaderboard unavailable. Please refresh the page and try again.</div>";
           }
         });
       } else {
@@ -2279,6 +2281,8 @@
     var fpsFrameTimes = [];
     var fpsLastTime = Date.now();
     var lastWarningTime = 0; // Throttle console warnings to prevent feedback loop
+    var msPrev = window.performance.now(); // 60fps cap — prevents 2x speed on 120Hz displays
+    var MS_PER_FRAME = 1000 / 60;
 
     // Dev mode: 5-tap toggle (mobile-friendly alternative to Shift+D)
     var devModeTapCount = 0;
@@ -6544,7 +6548,7 @@
       boss = null;
 
       // player_won fires when all 3 bosses are defeated.
-      // score is used (not final_score) to match naming convention across all events.
+      // score and final_score both sent — score matches naming convention across all events; final_score is the GA4 custom dimension for the analytics dashboard.
       // session_duration_seconds measures the full run length for completion-time analysis.
       // health_remaining_bonus tracks the health bonus added at victory (Mar 26, 2026)
       // tier_multiplier and effective_multiplier track AI Agent scoring impact (Apr 1, 2026)
@@ -6565,7 +6569,8 @@
         'tier': currentTier,
         'tier_multiplier': tierMult,
         'movement_multiplier': scoreMultiplier,
-        'effective_multiplier': effectiveMult
+        'effective_multiplier': effectiveMult,
+        'final_score': score
       });
 
       null;
@@ -6636,7 +6641,7 @@
       html += "</div>";
 
       // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
-      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='/contact.html' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Standing Tiger</a> 2026</div>";
       // Bug/Ko-fi buttons removed Apr 12, 2026: Consolidated into "Player Intel & Power" button above
 
       victoryEl.innerHTML = html;
@@ -7006,7 +7011,7 @@
       html += "</div>";
       // Bug/Ko-fi buttons removed Apr 12, 2026: Consolidated into "Player Intel & Power" button above
       // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
-      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
+      html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='/contact.html' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Standing Tiger</a> 2026</div>";
       gameOverEl.innerHTML = html;
       showLeaderboard();
     }
@@ -7794,7 +7799,7 @@
         html += "</div>";
         // Bug/Ko-fi buttons removed Apr 12, 2026: Consolidated into "Player Intel & Power" button above
         // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
-        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
+        html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='/contact.html' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Standing Tiger</a> 2026</div>";
         gameOverEl.innerHTML = html;
         gameOverEl.style.display = "block";
         document.getElementById("startButton").style.display = "none";
@@ -7857,6 +7862,7 @@
     // INPUT HANDLING
     // ============================================
     document.addEventListener("keydown", function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (isDevEnvironment) {
         // Shift+D — toggle developer mode
         if (e.shiftKey && (e.key === 'd' || e.key === 'D')) {
@@ -7994,7 +8000,7 @@
           html += "<button onclick='leaveGame(\"game_over\")' style='padding: 12px 24px; font-size: 16px; border-radius: 4px; border: none; background: #555; color: #fff; cursor: pointer;'>Leave Game</button>";
           html += "</div>";
           // Copyright updated Apr 12, 2026: Modmotif → Raginats (brand consolidation)
-          html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='https://www.thomaskeithdev.com/' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Raginats</a> 2026</div>";
+          html += "<div style='margin-top: 15px; font-size: 14px;'>&copy; <a href='/contact.html' target='_blank' style='color: #00FFFF; text-decoration: underline;'>Standing Tiger</a> 2026</div>";
           gameOverEl.innerHTML = html;
           gameOverEl.style.display = 'block';
           document.getElementById('startButton').style.display = 'none';
@@ -8542,6 +8548,13 @@
      *   9. Schedules the next frame with requestAnimationFrame.
      */
     function draw() {
+      requestAnimationFrame(draw);
+
+      var msNow = window.performance.now();
+      var msPassed = msNow - msPrev;
+      if (msPassed < MS_PER_FRAME) return;
+      msPrev = msNow - (msPassed % MS_PER_FRAME);
+
       // Dev mode: Calculate and display FPS (BEFORE gameOver/pause checks so it always shows)
       if (devMode) {
         var currentTime = Date.now();
@@ -8566,10 +8579,7 @@
       if (gameOver) return;
 
       // If paused, just keep the animation frame going but don't update
-      if (paused) {
-        requestAnimationFrame(draw);
-        return;
-      }
+      if (paused) return;
 
       // Update screen shake effect
       updateScreenShake();
@@ -9298,8 +9308,6 @@
 
         ctx.restore();
       }
-
-      requestAnimationFrame(draw);
     }
 
     // ============================================
