@@ -1,89 +1,70 @@
 # Current Project Priorities
 
-**Updated:** June 15, 2026
+**Updated:** June 15, 2026 (evening)
 **Phase:** 7/7 Complete (100%) ✅
 
 ---
 
-## 🔴 CURRENT PRIORITY: Security Audit (Started June 13, 2026)
+## ✅ Security Audit — COMPLETE (June 13–15, 2026)
 
-**Status:** In Progress
-**Plan:** SECURITY_AUDIT_PLAN.md — 18 findings, 4 phases
-**Critical Path:** Phase 1 (Firestore rules) → Phase 2 (API key, XSS, CSP, headers) → Phase 3 (consent, email, localStorage) → Phase 4 (polish)
+**Status:** ✅ All 4 phases complete (18 findings resolved)
+**Plan:** SECURITY_AUDIT_PLAN.md — full details
 
 | Phase | Items | Status |
 |---|---|---|
 | Phase 1 — Critical | 3 tasks | ✅ Complete |
 | Phase 2 — High Priority | 6 tasks | ✅ Complete |
 | Phase 3 — Medium Priority | 7 tasks | ✅ Complete |
-| Phase 4 — Low Priority / Polish | 6 tasks | ⏳ In Progress (4F complete, remaining: SRI, HTTPS, TLS, sync_paim.sh) |
+| Phase 4 — Low Priority / Polish | 7 tasks | ✅ Complete |
 
-**Completed (June 13–14, 2026):**
-- ✅ Finding 1 — Firestore security rules
-- ✅ Finding 2 — Firebase API key restricted
-- ✅ Finding 3 — XSS innerHTML fixed in game.html + game_mobile.html (PR #123)
-- ✅ Finding 3 — XSS innerHTML fixed in index.html (PR merged June 14)
-- ✅ Finding 6 — CloudFront security headers
-- ✅ Finding 8 — Dev/god URL params gated to non-production (merged June 14)
-- ✅ Finding 16 — Firebase App Check SDK integrated (PR #124)
-- ✅ Finding 18 — Shift+D/Shift+A keyboard shortcuts gated to non-production (merged June 14)
-- ✅ Finding 5 — GA4 Consent Mode v2 — consent banner + default deny on all 3 pages (PR #130, June 14)
-- ✅ Finding 7 — FormSubmit email hash — replaced plaintext email with hash endpoint in game.html + game_mobile.html (PR #131, June 14)
-- ✅ Finding 9 — Score from memory confirmed — in-memory `score` variable used at Firebase submission, localStorage only used as re-submission guard (no code change needed, June 14)
-- ✅ Finding 10 — Production-safe logger — `logger` object added to all 3 files, 14 console.error/warn calls replaced (PR merged June 14)
-- ✅ Finding 14 — HTML-encode savedHandle — `escapeAttr()` added to game.html + game_mobile.html, all 4 attribute injections wrapped (PR merged June 14)
-- ✅ Finding 13 — Ko-fi onclick refactor — `buildKofiButton()` returns DOM element, event listeners attached via addEventListener, rel=noopener noreferrer added (PR #134, June 14)
-- ✅ Finding 4 — CSP header — CloudFront Function `add-csp-header` deployed in enforcement mode (June 15). reCAPTCHA domains added, zero violations verified on prod, switched to `content-security-policy` enforcement.
+**Phase 4 final status (June 15, 2026):**
+- ✅ 4A — sync_paim.sh: env vars + .gitignore (PR #141)
+- ✅ 4B — SRI: N/A (no eligible scripts, mitigated by CSP)
+- ✅ 4C — HTTPS: Redirect HTTP to HTTPS — prod + dev verified
+- ✅ 4D — TLS: prod TLSv1.3_2025 / dev TLSv1.2_2021 — both ✅
+- ✅ 4E — Access logging: N/A (Pro plan required, mitigated by CSP + App Check)
+- ✅ 4F — CSP enforcement: complete, zero violations
+- ✅ 4G — GA4 final_score: code + DebugView verified (⏳ dashboard ~June 16–17)
 
-**⚠️ App Check enforcement pending:** Do NOT enforce until verified % ≥ 85%. Last check 6:25 PM June 14: 61% verified / 21% outdated / 18% invalid (89+31+26 = 146 total). Previously 67% at 2:17 PM — slight drop, possibly more invalid requests appearing. Re-check June 15 ~5 AM. See DEV_ERRORS_LOG.md for full research.
+**🟡 In progress — App Check enforcement + Firestore hardening (see HANDOFF_SUMMARY.md for full plan):**
+- ✅ Task 1: Firestore security rules tightened (June 23) — `request.app.token.valid == true` on create + update; bot writes now blocked at rules level
+- ⏳ Task 2: App Check enforcement (Firebase Console → App Check → Cloud Firestore → Enforce) — PENDING; do not enforce until verified % reaches ~90% and outdated % drops to ~0%. Re-check ~July 6–7.
+- ⏳ Task 3: Update leaderboard error message in game.html + game_mobile.html (code change — pending enforcement)
 
-**Phase 4 next priorities:**
-
-**1. ✅ Task 4F — Fix reCAPTCHA CSP violations + switch to enforcement — Complete (June 15, 2026)**
-
-**2. GA4 final_score custom dimension**
-- Add `final_score` as event param on `player_won` event in game.html + game_mobile.html
-- Register as GA4 custom dimension in GA4 console
-- Unblocks NON-X Analytics dashboard: replace placeholder chart with `customEvent:final_score` × `customEvent:new_tier` scatter/bar
-- No BigQuery needed — standard Lambda query once dim is registered. Cost: $0
-- Estimate: 1–2 hours once game change ships
-
-**3. App Check enforcement**
-- Re-check June 15 ~5 AM. Enforce ONLY when verified % ≥ 85% (last check 6:25 PM June 14: 61%)
-
-**4. Phase 4 polish** — SRI hashes, HTTPS verification, TLS policy, sync_paim.sh paths
-
-**Reference:** See SECURITY_AUDIT_PLAN.md for full task list with step-by-step instructions per finding.
+**⚠️ Two time-gated items remain:**
+- **App Check enforcement** — NOT ready. Do NOT enforce until verified % reaches ~90%+ and outdated % drops to ~0%. Last check June 23: 33% verified / 61% invalid / 7% outdated (46 requests). June 22 check: 57% verified / 31% invalid / 12% outdated (503 requests). Outdated trending down (12% → 7%) — cache-control fix (PR #149) working. Enforcement is a full block including reads — real users on outdated clients would lose leaderboard access. Task 1 complete (June 23): Firestore rules now block bot writes at rules level via `request.app.token.valid == true`. Re-check metrics ~July 6–7. See HANDOFF_SUMMARY.md for full details.
+- **GA4 dashboard chart** — check GA4 Explore for `final_score` data, then build Final Score × New Tier chart. See docs/GA4_FINAL_SCORE_IMPLEMENTATION.md.
 
 ---
 
-## 🟡 NEW BUG: 120fps Game Loop (Discovered June 15, 2026)
+## ✅ Legal Pages — Complete (June 15, 2026)
 
-**Status:** Open — must fix before launch
-**Severity:** HIGH — breaks core gameplay on 120Hz monitors
-**Files:** game.html (game_mobile.html likely same issue)
+- `privacy.html` — 13 sections; TDPSA + COPPA + GDPR compliant; full analytics pipeline disclosed (GA4 → BigQuery → AWS Lambda → public dashboard); 13+ age disclosure; Texas governing law
+- `terms.html` — 15 sections; analytics toggle documented; public dashboard consent disclosed; Ko-fi, AWS, Firebase, BigQuery third-party terms linked; Texas governing law
+- `contact.html` — standalone contact form (name/email/reason/message); FormSubmit AJAX; in-place confirmation; matches NON-X dark theme
+- `index.html` — Privacy, Terms, Contact links in consent banner and footer (centered, wraps correctly on mobile)
+- ⚠️ Contact email placeholder — add Standing Tiger business email to privacy.html + terms.html once created
+- Research: `docs/LEGAL_PAGES_PLAN.md`
 
-**Problem:** Game loop uses uncapped `requestAnimationFrame` with zero delta-time compensation. On 120Hz monitors the game runs at 120fps — all frame-dependent mechanics run 2× faster than intended.
+---
 
-**Impact at 120fps vs 60fps:**
-- Player, bullet, enemy speeds: 2× faster
-- Enemy spawn rate: 2× more frequent
-- Invincibility duration: halved (1s instead of 2s)
-- Shield flash visual: imperceptible (~25ms)
+## ✅ Standing Tiger Favicon (Item 6) — Complete (June 15, 2026)
 
-**Key lines (game.html):**
-- Game loop: 7712–7739 (uncapped `requestAnimationFrame`)
-- Invincibility timer: 6962, 7018 (hardcoded 120 frames)
-- Player speed: CONFIG ~line 788–801
-- Enemy speed: 4141, 4155, 4167, 8033
+- `favicon_st.png` (new asset) cropped to 768×768, resized to 32×32 + 180×180 via Python script (`scripts/make_favicon.py`)
+- `favicon-32x32.png` + `apple-touch-icon.png` generated with dark background
+- `<link rel="icon">` + `<link rel="apple-touch-icon">` added to all 3 HTML files (index.html, game.html, game_mobile.html)
+- Open Graph + Twitter card meta tags added to `index.html` (OG image: `favicon_st.png`)
+- Standing Tiger footer credit added below Play button on `index.html`
 
-**Fix options:**
-1. **FPS cap (simple):** Replace `requestAnimationFrame(draw)` with `setTimeout(() => requestAnimationFrame(draw), 1000/60)` — forces 60fps cap
-2. **Delta-time (proper):** Multiply all px/frame values by `deltaTime / (1000/60)` — frame-rate independent
+---
 
-**Recommendation:** FPS cap is low-risk, 1-line fix. Delta-time requires touching every movement calculation. Fix FPS cap first, delta-time as follow-up if needed.
+## ✅ FIXED: 120fps Game Loop (June 15, 2026)
 
-**Also found:** Spacebar blocked in survey/comments textarea — global keydown handler (line ~7574) missing `if (e.target.tagName === 'TEXTAREA') return;` guard. Affects `surveyComments` (line 6101), `bugDescription` + `bugSteps` (lines 6363, 6367). Both game.html + game_mobile.html need the fix.
+**Status:** Fixed — PR #137 merged to dev
+**Severity:** HIGH — broke core gameplay on 120Hz monitors
+**Fix:** `performance.now()` timestamp-based 60fps cap in `draw()` — rAF fires at display rate, frames skipped until 16.67ms elapsed. Applied to game.html + game_mobile.html.
+
+**Also fixed:** Spacebar blocked in survey/comments textarea — `if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;` added at top of keydown handler in game.html (line 7301) + game_mobile.html (line 7843). PR #139 merged to dev June 15, 2026.
 
 ---
 
