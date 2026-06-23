@@ -95,7 +95,7 @@ jobs:
           check "scorecard_viewed"
 
           # Ko-fi Monetization (tipping support - Apr 2026)
-          check "function buildKofiButtonHTML"
+          check "function buildKofiButton"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
@@ -254,7 +254,7 @@ jobs:
           check "scorecard_viewed"
 
           # Ko-fi Monetization (tipping support - Apr 2026)
-          check "function buildKofiButtonHTML"
+          check "function buildKofiButton"
 
           if [ $FAIL -ne 0 ]; then exit 1; fi
 
