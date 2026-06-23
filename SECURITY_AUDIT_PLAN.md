@@ -15,21 +15,21 @@
 | 1 | Firestore security rules — unknown state | CRITICAL | ✅ Complete (June 13, 2026) |
 | 2 | Firebase API key exposed in all 3 HTML files | HIGH | ✅ Complete (June 13, 2026) |
 | 3 | XSS via innerHTML with Firestore player names | HIGH | ✅ Complete (June 14, 2026) |
-| 4 | No Content Security Policy (CSP) headers | HIGH | ⬜ Not Started |
-| 5 | GA4 privacy / GDPR — no consent mechanism | HIGH | ⬜ Not Started |
+| 4 | No Content Security Policy (CSP) headers | HIGH | ✅ Complete (June 15, 2026) |
+| 5 | GA4 privacy / GDPR — no consent mechanism | HIGH | ✅ Complete (June 14–15, 2026) |
 | 6 | No CloudFront security headers | HIGH | ✅ Complete (June 14, 2026) |
-| 7 | Developer email hardcoded in JS (FormSubmit) | MEDIUM | ⬜ Not Started |
-| 8 | URL parameters enable dev/god mode in production | MEDIUM | ⬜ Not Started |
-| 9 | localStorage scores submitted directly to leaderboard | MEDIUM | ⬜ Not Started |
-| 10 | console.log / console.error / console.warn in production | MEDIUM | ⬜ Not Started |
-| 11 | No Subresource Integrity (SRI) on external scripts | MEDIUM | ⬜ Not Started |
-| 12 | Developer file paths hardcoded in scripts/sync_paim.sh | MEDIUM | ⬜ Not Started |
-| 13 | Ko-fi link uses string interpolation in onclick handler | LOW | ⬜ Not Started |
-| 14 | savedHandle from localStorage injected into HTML attribute | LOW | ⬜ Not Started |
-| 15 | No HTTPS enforcement verified (relying solely on CloudFront) | LOW | ⬜ Not Started |
+| 7 | Developer email hardcoded in JS (FormSubmit) | MEDIUM | ✅ Complete (June 14, 2026) |
+| 8 | URL parameters enable dev/god mode in production | MEDIUM | ✅ Complete (June 14, 2026) |
+| 9 | localStorage scores submitted directly to leaderboard | MEDIUM | ✅ Complete (June 14, 2026) |
+| 10 | console.log / console.error / console.warn in production | MEDIUM | ✅ Complete (June 14, 2026) |
+| 11 | No Subresource Integrity (SRI) on external scripts | MEDIUM | ✅ N/A (June 15, 2026) |
+| 12 | Developer file paths hardcoded in scripts/sync_paim.sh | MEDIUM | ✅ Complete (June 15, 2026) |
+| 13 | Ko-fi link uses string interpolation in onclick handler | LOW | ✅ Complete (June 14, 2026) |
+| 14 | savedHandle from localStorage injected into HTML attribute | LOW | ✅ Complete (June 14, 2026) |
+| 15 | No HTTPS enforcement verified (relying solely on CloudFront) | LOW | ✅ Complete (June 15, 2026) |
 | 16 | Firebase App Check not enabled | LOW | ✅ Complete (June 14, 2026) |
-| 17 | No Firebase budget alerts | LOW | ⬜ Not Started |
-| 18 | Developer mode accessible via keyboard shortcuts in production | LOW | ⬜ Not Started |
+| 17 | No Firebase budget alerts | LOW | ✅ N/A (Spark plan — monitor quotas instead) |
+| 18 | Developer mode accessible via keyboard shortcuts in production | LOW | ✅ Complete (June 14, 2026) |
 
 ---
 
@@ -119,11 +119,11 @@
 | CloudFront OAC (prod) | ✅ nonx-prod-oac | June 3, 2026 |
 | CloudFront OAC (dev) | ✅ Configured | May 31, 2026 |
 | S3 Versioning (prod) | ✅ Enabled | June 3, 2026 |
-| HTTPS enforcement | ⚠️ Unverified | Verify Viewer Protocol Policy — see Finding 15 |
-| CloudFront security headers | ❌ Missing | Finding 6 |
-| Content Security Policy | ❌ Missing | Finding 4 |
-| CloudFront access logging | ⚠️ Unknown | Verify in CloudFront console |
-| Minimum TLS version | ⚠️ Unknown | Should be TLSv1.2_2021 minimum |
+| HTTPS enforcement | ✅ Complete | Redirect HTTP to HTTPS — prod + dev verified June 15, 2026 |
+| CloudFront security headers | ✅ Complete | HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy — June 14, 2026 |
+| Content Security Policy | ✅ Complete | Enforcement mode, zero violations — June 15, 2026 |
+| CloudFront access logging | ✅ N/A | Pro plan required; mitigated by CSP + App Check |
+| Minimum TLS version | ✅ Complete | Prod: TLSv1.3_2025 / Dev: TLSv1.2_2021 — both verified June 15, 2026 |
 | AWS WAF | ❌ Not configured | Optional but recommended |
 | AWS Shield Standard | ✅ Default | Free, always on |
 | GitHub Actions OIDC | ✅ Configured | Best practice — no hardcoded keys |
@@ -140,28 +140,40 @@
 
 ### Phase 2 — High Priority (This Week) ~85 min
 - [x] 2A — Restrict Firebase API key to production domains (Finding 2) — June 13, 2026
-- [ ] 2B — Enable Firebase App Check with reCAPTCHA v3 (Finding 16)
-- [ ] 2C — Refactor leaderboard rendering to use textContent (Finding 3)
-- [ ] 2D — Create & attach CloudFront Security Headers policy (Finding 6)
-- [ ] 2E — Create & attach CloudFront CSP header in Report-Only mode (Finding 4)
-- [ ] 2F — Gate dev/god URL params and keyboard shortcuts to non-production (Findings 8, 18)
+- [x] 2B — Enable Firebase App Check with reCAPTCHA v3 (Finding 16) — PR #124, June 14, 2026
+- [x] 2C — Refactor leaderboard rendering to use textContent (Finding 3) — PR #123, June 14, 2026
+- [x] 2D — Create & attach CloudFront Security Headers policy (Finding 6) — June 14, 2026
+- [x] 2E — Create & attach CloudFront CSP header (Finding 4) — CloudFront Function `add-csp-header`, enforcement mode June 15, 2026
+- [x] 2F — Gate dev/god URL params and keyboard shortcuts to non-production (Findings 8, 18) — PR #129, June 14, 2026
 
 ### Phase 3 — Medium Priority (This Sprint) ~110 min
-- [ ] 3A — Implement GA4 Consent Mode v2 + consent banner (Finding 5)
-- [ ] 3B — Add Privacy Policy page
-- [ ] 3C — Replace FormSubmit email with hashed endpoint (Finding 7)
-- [ ] 3D — Audit & refactor score submission to use in-memory variable (Finding 9)
-- [ ] 3E — Replace console.* calls with hostname-gated logger (Finding 10)
-- [ ] 3F — Fix savedHandle HTML attribute encoding (Finding 14)
-- [ ] 3G — Refactor Ko-fi onclick to addEventListener (Finding 13)
+- [x] 3A — Implement GA4 Consent Mode v2 + consent banner (Finding 5) — PR #130, June 14, 2026
+- [x] 3B — Add Privacy Policy + Terms pages (Finding 5) — PR #146, June 15, 2026
+- [x] 3C — Replace FormSubmit email with hashed endpoint (Finding 7) — PR #131, June 14, 2026
+- [x] 3D — Audit score submission (Finding 9) — audit only; `var score` in-memory variable confirmed, no code change needed
+- [x] 3E — Replace console.* calls with hostname-gated logger (Finding 10) — PR merged June 14, 2026
+- [x] 3F — Fix savedHandle HTML attribute encoding (Finding 14) — `escapeAttr()` added, PR merged June 14, 2026
+- [x] 3G — Refactor Ko-fi onclick to addEventListener (Finding 13) — PR #134, June 14, 2026
 
 ### Phase 4 — Low Priority / Polish ~65 min
-- [ ] 4A — Replace hardcoded paths in scripts/sync_paim.sh (Finding 12)
-- [ ] 4B — Add SRI to Ko-fi script and DOMPurify (Finding 11)
-- [ ] 4C — Verify CloudFront HTTPS enforcement (Finding 15)
-- [ ] 4D — Verify CloudFront TLS policy = TLSv1.2_2021
-- [ ] 4E — Verify CloudFront access logging enabled
-- [x] 4F — Fix reCAPTCHA CSP violations then switch to enforcement mode (see notes below) — ✅ Complete June 15, 2026
+
+**Status as of June 15, 2026:**
+
+| Task | Status | Notes |
+|---|---|---|
+| 4A — Replace hardcoded paths in sync_paim.sh | ✅ Complete | PR #141 merged June 15, 2026. Env vars XENON_PATH/ANALYTICS_PATH with defaults. .env + .env.local added to .gitignore. |
+| 4B — SRI hashes for external scripts | ✅ N/A — Complete | Grepped all 3 HTML files: DOMPurify not used (Finding 3 used custom escapeHtml()). Ko-fi has no CDN script tag. Firebase/GA4 SRI not feasible — mitigated by CSP. No eligible scripts. |
+| 4C — Verify CloudFront HTTPS enforcement | ✅ Complete | Viewer protocol policy = Redirect HTTP to HTTPS — prod ED9CRAIN93YRS ✅ + dev E1Q496KLUYVM0Z ✅ (verified June 15, 2026) |
+| 4D — Verify CloudFront TLS policy | ✅ Complete | Prod: TLSv1.3_2025 ✅ / Dev: TLSv1.2_2021 ✅ — both meet minimum (verified June 15, 2026) |
+| 4E — Verify CloudFront access logging | ✅ N/A | Standard logging requires Pro plan ($) — not enabled on either distribution. Mitigated by CSP + App Check. |
+| 4F — CSP enforcement | ✅ Complete | reCAPTCHA domains added, switched to enforcement mode. June 15, 2026. |
+| 4G — GA4 final_score | ✅ Code + DebugView complete | PR merged June 15. DebugView verified 3:04 AM. ⏳ Dashboard pending ~June 16–17. |
+
+**Remaining actionable (next session):**
+- [x] 4A — Replace hardcoded paths in scripts/sync_paim.sh (Finding 12) — Complete June 15, 2026
+- [x] 4C — Viewer protocol policy = Redirect HTTP to HTTPS — prod + dev verified June 15, 2026
+- [x] 4D — TLS: prod TLSv1.3_2025 / dev TLSv1.2_2021 — both ✅ verified June 15, 2026
+- [x] 4E — Access logging N/A — requires Pro plan, mitigated by CSP + App Check
 
 **4F — CSP reCAPTCHA violation fixes (researched June 15, 2026):**
 
@@ -1112,6 +1124,229 @@ if (isDevEnvironment) {
 
 ---
 
+## Finding 19 — GA4 `final_score` Custom Dimension (Task 4G)
+
+**Priority:** Medium
+**Status:** ✅ Complete June 15, 2026
+**Estimated Time:** 30 min code + PR, 10 min GA4 console (manual), 24–48 hrs data population
+**Purpose:** Unblocks NON-X Analytics dashboard chart: `customEvent:final_score` × `customEvent:new_tier` scatter/bar. No BigQuery needed. Cost: $0.
+
+---
+
+### Background
+
+The `player_won` event currently sends a `score` param. GA4 custom dimensions must be explicitly registered by parameter name before they appear in Explore reports. The dashboard chart requires a param named `final_score` registered as a GA4 custom dimension. Adding it alongside the existing `score` param (not replacing it) preserves backwards compatibility with any existing queries.
+
+---
+
+### Part 1 — Code Changes
+
+#### Task 4G-1: game.html — Add `final_score` param to `player_won` event
+
+**File:** `game.html`
+**Event location:** Line 5937 (`fireEvent('player_won', {`)
+**Current block (lines 5937–5948):**
+
+```javascript
+fireEvent('player_won', {
+  'ab_music_group': userABGroup,
+  'platform': 'desktop',
+  'score': score,
+  'health_remaining_bonus': Math.floor(health),
+  'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+  'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+  'tier': currentTier,
+  'tier_multiplier': tierMult,
+  'movement_multiplier': scoreMultiplier,
+  'effective_multiplier': effectiveMult
+});
+```
+
+**Change:** Add `'final_score': score` after `'effective_multiplier': effectiveMult` (line 5947), before closing `}`
+
+**After (insertion at line 5947–5948):**
+
+```javascript
+fireEvent('player_won', {
+  'ab_music_group': userABGroup,
+  'platform': 'desktop',
+  'score': score,
+  'health_remaining_bonus': Math.floor(health),
+  'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
+  'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
+  'tier': currentTier,
+  'tier_multiplier': tierMult,
+  'movement_multiplier': scoreMultiplier,
+  'effective_multiplier': effectiveMult,
+  'final_score': score
+});
+```
+
+**Also update comment at line 5926:**
+- Current: `// score is used (not final_score) to match naming convention across all events.`
+- After: `// score and final_score both sent — score matches naming convention across all events; final_score is the GA4 custom dimension for the analytics dashboard.`
+
+---
+
+#### Task 4G-2: game_mobile.html — Add `final_score` param to `player_won` event
+
+**File:** `game_mobile.html`
+**Event location:** Line 6560 (`fireEvent('player_won', {`)
+**Current block (lines 6560–6571):** Identical structure to game.html with `'platform': 'mobile'`
+
+**Change:** Same as 4G-1 — add `'final_score': score` after `'effective_multiplier': effectiveMult` (line 6570)
+
+**Also update comment at line 6549:** Same comment update as game.html line 5926.
+
+---
+
+### Part 2 — Git Workflow
+
+```bash
+git checkout -b feat/ga4-final-score-dimension
+git add game.html game_mobile.html
+git commit -m "feat: add final_score param to player_won GA4 event"
+git push -u origin feat/ga4-final-score-dimension
+gh pr create --base dev --title "feat: add final_score param to player_won GA4 event"
+```
+
+After PR merged to dev → verify on dev.nonx.standingtiger.com:
+- **Primary:** GA4 DebugView (Admin → Data Display → DebugView) — shows all event params in real time
+- **Secondary:** DevTools → Network tab → filter `google-analytics.com` or `analytics.google.com`
+- Play through to victory
+- Confirm `final_score` appears in the `player_won` event payload in DebugView
+
+---
+
+### Part 3 — GA4 Console (Manual — You Do This)
+
+**Step 1: Register `final_score` custom dimension**
+1. GA4 → Admin (gear icon) → Property column → Custom definitions
+2. Click **Custom dimensions** tab → **Create custom dimension**
+3. Fill in:
+   - **Dimension name:** `final_score`
+   - **Scope:** Event
+   - **Event parameter:** `final_score`
+   - **Description:** Final score at game completion (player_won event)
+4. Click **Save**
+
+**Step 2: Verify `tier` / `new_tier` registration**
+- The dashboard chart needs `customEvent:new_tier` on the Y axis
+- The `player_won` event sends `'tier': currentTier` — check if `tier` or `new_tier` is already registered as a custom dimension
+- If `tier` is registered as `new_tier` → no action needed
+- If `tier` is registered as `tier` → the dashboard chart dimension name must match what's registered
+- If neither exists → register `tier` param as a custom dimension (name it to match what the dashboard expects)
+
+**Note:** GA4 custom dimensions only backfill from the registration date forward. No historical data.
+
+---
+
+### Part 4 — Dashboard Update (After 24–48 hrs data population)
+
+- Open NON-X Analytics dashboard
+- Replace placeholder chart with `customEvent:final_score` × `customEvent:new_tier` scatter/bar
+- Dimension on X axis: `customEvent:final_score`
+- Dimension on Y axis: `customEvent:new_tier`
+- Filter: event name = `player_won`
+
+---
+
+### Verification Checklist
+
+- [x] 4G-1: `final_score` param added to `player_won` in game.html (line 5948)
+- [x] 4G-2: `final_score` param added to `player_won` in game_mobile.html (line 6571)
+- [x] 4G-3: Comment updated in both files (lines 5926 / 6549)
+- [x] 4G-4: PR merged to dev (June 15, 2026)
+- [x] 4G-5: Verified `final_score` in `player_won` payload via GA4 DebugView — confirmed June 15, 2026 3:04 AM
+- [x] 4G-6: `final_score` already registered as custom **metric** "Final Score" — do NOT register as dimension (GA4 blocks duplicate param names across metrics/dimensions)
+- [x] 4G-7: `new_tier` registered as custom dimension "New Tier" ✅ — `tier` also registered as "Tier" ✅ (both confirmed June 15, 2026)
+- [ ] 4G-8: GA4 Explore data populated — check ~June 16–17 (24–48 hrs after first player_won at 3:04 AM June 15)
+- [ ] 4G-9: NON-X Analytics dashboard chart built — Final Score (metric) × New Tier (dimension), filter event_name = player_won
+
+---
+
+## Item 6 — Standing Tiger Favicon + Open Graph Tags
+**Status:** ✅ Complete (PR #142, June 15, 2026)
+**Estimated Time:** 20 min
+**Files:** index.html, game.html, game_mobile.html + 2 new image assets
+
+### Overview
+
+Add browser tab favicon, Apple touch icon, Open Graph meta tags (social sharing), and Standing Tiger footer credit to index.html. Source asset: `st_favicon.png` (1024×1024 RGBA PNG, project root).
+
+### Step 1 — Generate image assets (terminal, run from project root)
+
+```bash
+sips --resampleHeightWidth 32 32 -s format png st_favicon.png -o favicon-32x32.png && \
+sips --resampleHeightWidth 180 180 -s format png st_favicon.png -o apple-touch-icon.png
+```
+
+Outputs `favicon-32x32.png` + `apple-touch-icon.png` in project root. These deploy to S3 root via GitHub Actions.
+
+### Step 2 — index.html: favicon + OG tags
+
+**Insert after line 132** (`<title>NON-X</title>`):
+
+```html
+  <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta property="og:title" content="NON-X">
+  <meta property="og:description" content="A fast-paced space shooter. Take on 3 bosses. See how far you can go.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nonx.standingtiger.com">
+  <meta property="og:image" content="https://nonx.standingtiger.com/st_favicon.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="NON-X">
+  <meta name="twitter:image" content="https://nonx.standingtiger.com/st_favicon.png">
+```
+
+### Step 3 — game.html: favicon only
+
+**Insert after line 142** (`<title>NON-X - Desktop</title>`):
+
+```html
+  <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+```
+
+### Step 4 — game_mobile.html: favicon only
+
+**Insert after line 142** (`<title>NON-X - Mobile</title>`):
+
+```html
+  <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+```
+
+### Step 5 — index.html: footer credit
+
+**Insert after line 575** (`<button id="playBtn" onclick="launchGame()">Play</button>`):
+
+```html
+  <p style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:0.5px;">© Standing Tiger Engineering & Development</p>
+```
+
+### Step 6 — Commit + PR
+
+- Branch: `feat/favicon-og-tags`
+- Stage: `favicon-32x32.png`, `apple-touch-icon.png`, `index.html`, `game.html`, `game_mobile.html`
+- PR: `gh pr create --base dev`
+
+### Verify
+
+- [ ] Browser tab shows Standing Tiger logo on all 3 pages
+- [ ] iOS: Add to Home Screen shows 180×180 icon
+- [ ] Paste `https://nonx.standingtiger.com` in Discord — shows OG preview card with logo + title
+- [ ] No 404 for `/favicon-32x32.png` in DevTools Network tab
+
+### Notes
+
+- `og:image` uses `st_favicon.png` directly (1024×1024 square). `twitter:card` = `summary` (square thumbnail) — correct for square source. For a landscape preview card (1200×630), a separate asset would be needed.
+- OG tags only added to index.html — game pages are not typically shared as URLs.
+- `favicon.ico` not generated — modern browsers use PNG; `.ico` only needed for legacy IE/RSS readers (not applicable here).
+
+---
+
 **Document Status:** Active
-**Last Updated:** June 13, 2026
+**Last Updated:** June 15, 2026
 **Related Docs:** CURRENT_PRIORITIES.md, DEV_ERRORS_LOG.md, HANDOFF_SUMMARY.md

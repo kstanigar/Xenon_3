@@ -29,7 +29,10 @@
 **🟡 In progress — App Check enforcement + Firestore hardening (see HANDOFF_SUMMARY.md for full plan):**
 - ✅ Task 1: Firestore security rules tightened (June 23) — `request.app.token.valid == true` on create + update; bot writes now blocked at rules level
 - ⏳ Task 2: App Check enforcement (Firebase Console → App Check → Cloud Firestore → Enforce) — PENDING; do not enforce until verified % reaches ~90% and outdated % drops to ~0%. Re-check ~July 6–7.
-- ⏳ Task 3: Update leaderboard error message in game.html + game_mobile.html (code change — pending enforcement)
+- ✅ Task 3: Leaderboard error message updated — game.html:1457 + game_mobile.html:1397 (PR #150, June 23)
+- ✅ Branch cleanup: 128 stale remote branches deleted (June 23); only origin/dev + origin/main remain
+- ✅ Copyright update: "Raginats" → "Standing Tiger" linking to /contact.html — 4 locations in game.html + 4 in game_mobile.html (PR pending, June 23)
+- ⏳ Dev → Main merge: pending copyright PR merge
 
 **⚠️ Two time-gated items remain:**
 - **App Check enforcement** — NOT ready. Do NOT enforce until verified % reaches ~90%+ and outdated % drops to ~0%. Last check June 23: 33% verified / 61% invalid / 7% outdated (46 requests). June 22 check: 57% verified / 31% invalid / 12% outdated (503 requests). Outdated trending down (12% → 7%) — cache-control fix (PR #149) working. Enforcement is a full block including reads — real users on outdated clients would lose leaderboard access. Task 1 complete (June 23): Firestore rules now block bot writes at rules level via `request.app.token.valid == true`. Re-check metrics ~July 6–7. See HANDOFF_SUMMARY.md for full details.

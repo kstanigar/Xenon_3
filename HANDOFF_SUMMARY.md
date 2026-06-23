@@ -14,6 +14,38 @@
 
 ---
 
+## Session: June 23, 2026 — Status: ⏳ PENDING
+
+**Agent:** Claude Sonnet 4.6
+**Branch:** dev
+
+### What Was Accomplished
+
+**App Check + Firestore Hardening:**
+- ✅ Task 1: Firestore security rules deployed (Firebase Console, user action) — `request.app.token.valid == true` on create + update; bot writes blocked at rules level
+- ⏳ Task 2: App Check enforcement — NOT ready. Do not enforce until verified ~90% + outdated ~0%. Re-check ~July 6–7.
+- ✅ Task 3: Leaderboard error message updated — game.html:1457 + game_mobile.html:1397 (PR #150, merged June 23)
+
+**Branch Cleanup — ✅ Complete (June 23):**
+- Deleted 128 stale remote branches
+- Only `origin/dev` and `origin/main` remain
+- `dev` and `main` branch-protected — deletion blocked as expected (correct behavior)
+
+**Copyright Update — ✅ Complete (PR pending, June 23):**
+- "Raginats" → "Standing Tiger" linking to `/contact.html` in all end-game screens
+- game.html: 4 locations — lines 6022, 6350, 7112, 7437 (victory + 3 game over variants)
+- game_mobile.html: 4 locations — lines 6644, 6995, 7783, 7984 (victory + 3 game over variants)
+- Ko-fi URLs (`ko-fi.com/raginats`) left unchanged — functional Ko-fi account handle
+
+### Next Steps
+- [ ] Commit + PR copyright changes (branch: `fix/copyright-standing-tiger`)
+- [ ] Merge dev → main (deploys all work since PR #141 to production)
+- [ ] GA4 final_score chart — check GA4 Explore for data, build Final Score × New Tier chart (see docs/GA4_FINAL_SCORE_IMPLEMENTATION.md)
+- [ ] App Check Task 2 — re-check metrics ~July 6–7, enforce when verified ~90% + outdated ~0%
+- [ ] Pink Infinite Level — #1 feature priority after dev → main merge
+
+---
+
 ## Session: June 22, 2026 — Status: ✅ COMPLETE
 
 **Agent:** Claude Sonnet 4.6
@@ -143,13 +175,9 @@ Do NOT enforce until outdated % drops to ~0% and verified reaches ~90%. Enforcem
 Re-check metrics: ~July 6–7.
 
 ### Task 3 — Update Leaderboard Error Message *(code change)*
-Change misleading "Check your connection." message to one that works for both connection issues and App Check blocks (refresh gets a fresh token).
-
-- **game.html line 1457:** Change inner string to:
-  `"<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Leaderboard unavailable. Please refresh the page and try again.</div>"`
-- **game_mobile.html line 1397:** Same change
-
-Commit as: `fix: update leaderboard error message for App Check enforcement`
+**✅ COMPLETE — June 23, 2026 (PR #150)**
+Updated error message in game.html:1457 + game_mobile.html:1397.
+"Could not reach leaderboard. Check your connection." → "Leaderboard unavailable. Please refresh the page and try again."
 
 ---
 
