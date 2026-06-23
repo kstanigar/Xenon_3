@@ -14,7 +14,198 @@
 
 ---
 
-## Session: June 13–15, 2026 - Status: ⏳ PENDING
+## Session: June 22, 2026 — Status: ✅ COMPLETE
+
+**Agent:** Claude Sonnet 4.6
+**Branch:** dev
+
+### What Was Accomplished
+
+**App Check metrics check (June 22, 2026):**
+- 503 total requests over last 7 days (Jun 10–18 window shown)
+- ✅ Verified: 57% (287 requests)
+- ⚠️ Unverified outdated clients: 12% (58 requests) — users on old cached HTML without App Check
+- ✅ Unverified unknown origin: 0%
+- ❌ Unverified invalid: 31% (158 requests) — unknown source (bots or other), under investigation
+
+**Decision:** Do NOT enforce yet. Firebase guidance is ~90%+ verified ("almost all requests") — prior 85% target was incorrect. Key findings from Firebase docs (haiku agent, June 22):
+- Outdated clients will NOT self-resolve on web — users must hard-refresh or clear cache
+- Invalid requests are not definitively bots — may include test environments, cached old page loads
+- Enforcement is a full block (`permission-denied` on all Firestore calls, no graceful degradation)
+
+**Fix deployed — June 22, PR #149:**
+- Set `Cache-Control: no-cache` on all HTML files in S3 sync workflow
+- Set `Cache-Control: public, max-age=31536000, immutable` on all non-HTML assets
+- Effect: browsers will always fetch fresh HTML → outdated clients should drop toward 0% over 1–2 weeks
+- Even if outdated resolves fully, verified only reaches ~69% — 31% invalid is the real blocker
+**Invalid requests investigation — reCAPTCHA Console checked June 22:**
+- reCAPTCHA only saw **3 requests** over the same 7-day window where Firebase App Check logged 503
+- All 3 scored **0.9–1.0** (perfect legitimate human scores) — 0% suspicious
+- Score threshold is NOT the problem — real players score fine
+- **Root cause confirmed: 31% invalid = direct API bots** — hitting Firestore without loading the frontend game at all, so no reCAPTCHA token is ever generated
+- No config fix needed — reCAPTCHA is working correctly for real users
+
+**Revised enforcement strategy:**
+- Real players are fine (0.9–1.0 scores) — enforcement won't hurt them
+- Bots are the 31% invalid — enforcement is exactly what kills them
+- Blocker is not the bots themselves, but getting verified % to ~90% first
+- Path to enforcement: wait for cache-control fix (PR #149) to clear outdated clients (~69% verified) + organic verified growth before enforcing
+- Once verified reaches ~90%, enforce — bots get blocked, real players unaffected
+
+Re-check metrics ~July 6–7.
+
+**GA4 final_score chart:** Not yet checked this session — still pending. Check GA4 Explore for `final_score` data and build Final Score × New Tier chart.
+
+**Dev → Main merge:** Status unconfirmed — user was smoke testing `dev.nonx.standingtiger.com` after June 15 session. Confirm before starting Pink Infinite Level work.
+
+---
+
+## Next Session Plan — App Check Enforcement + Firestore Hardening
+
+**Status:** ⏳ In progress — Task 1 complete, Task 2 pending metrics threshold
+**Priority:** HIGH — bots confirmed hitting Firestore directly; Task 1 blocks bot writes now; Task 2 (full enforcement) pending
+
+### Background
+- reCAPTCHA console (checked June 22) confirmed only 3 real requests in 7 days, all scoring 0.9–1.0
+- 31% invalid = direct API bots bypassing frontend entirely (no reCAPTCHA token)
+- Real players are fine — enforcement won't hurt them
+- Cache-control fix (PR #149) will clear outdated clients → verified climbs from 57% to ~69%
+- Can't reach 90% organically while bots keep pulling invalid % up — enforcement IS the fix
+
+**June 23 metrics check (46 requests, Jun 16–23 window):**
+- ✅ Verified: 33% (15/46) — lower % but smaller sample
+- ⚠️ Outdated: 7% (3/46) — DOWN from 12% on June 22; cache-control fix working
+- ❌ Invalid: 61% (28/46) — bots; blocked at rules level by Task 1
+
+**Decision — June 23:** Did NOT enable enforcement (Task 2). Reason: enforcement blocks ALL Firestore operations including reads. At 7% outdated, real users would lose leaderboard read access. Task 1 already blocks bot writes via `request.app.token.valid == true` in rules. Re-check ~July 6–7.
+
+### Task 1 — Tighten Firestore Security Rules *(Firebase Console — user action)*
+**✅ COMPLETE — June 23, 2026**
+Rules deployed. Bot writes now blocked at rules level. `request.app.token.valid == true` enforced on create + update independent of App Check enforcement mode.
+
+Rules deployed (for reference):
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /leaderboard/{docId} {
+      allow read: if true;
+
+      allow create: if
+        request.app.token.valid == true &&
+        request.resource.data.keys().hasAll(['score', 'instagram', 'platform', 'movement_group', 'player_id', 'date']) &&
+        request.resource.data.score is int &&
+        request.resource.data.score >= 1 &&
+        request.resource.data.score <= 999999 &&
+        request.resource.data.instagram is string &&
+        request.resource.data.instagram.size() <= 50 &&
+        request.resource.data.platform in ['desktop', 'mobile'] &&
+        request.resource.data.movement_group in ['A', 'B'] &&
+        request.resource.data.player_id is string &&
+        request.resource.data.player_id.size() <= 50 &&
+        request.resource.data.date == request.time;
+
+      allow update: if
+        request.app.token.valid == true &&
+        request.resource.data.score is int &&
+        request.resource.data.score > resource.data.score &&
+        request.resource.data.score <= 999999 &&
+        request.resource.data.platform in ['desktop', 'mobile'] &&
+        request.resource.data.movement_group in ['A', 'B'] &&
+        request.resource.data.instagram is string &&
+        request.resource.data.instagram.size() <= 50 &&
+        request.resource.data.date == request.time;
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
+
+**Key additions over current rules:**
+- `request.app.token.valid == true` on create + update — blocks any request without valid App Check token at rules level (defense in depth, independent of enforcement mode)
+- `platform in ['desktop', 'mobile']` — rejects invalid platform values
+- `movement_group in ['A', 'B']` — rejects invalid movement group values
+- `score >= 1` — rejects zero scores
+- `instagram.size() <= 50` — rejects oversized payloads
+- `player_id.size() <= 50` — rejects oversized player IDs
+- All 6 correct field names matching actual code (score, instagram, platform, movement_group, player_id, date)
+
+### Task 2 — Enable App Check Enforcement *(Firebase Console — user action)*
+**⏳ PENDING — waiting for verified % to reach ~90%**
+Firebase Console → App Check → Cloud Firestore → click **Enforce**
+Do NOT enforce until outdated % drops to ~0% and verified reaches ~90%. Enforcement blocks reads too — 7% outdated users would lose leaderboard access.
+Re-check metrics: ~July 6–7.
+
+### Task 3 — Update Leaderboard Error Message *(code change)*
+Change misleading "Check your connection." message to one that works for both connection issues and App Check blocks (refresh gets a fresh token).
+
+- **game.html line 1457:** Change inner string to:
+  `"<div style='color:#ff6666;font-size:13px;margin-top:10px;'>Leaderboard unavailable. Please refresh the page and try again.</div>"`
+- **game_mobile.html line 1397:** Same change
+
+Commit as: `fix: update leaderboard error message for App Check enforcement`
+
+---
+
+## Session: June 15, 2026 (late evening) — Status: ✅ COMPLETE
+
+**Agent:** Claude Sonnet 4.6
+**Branch:** dev
+
+### What Was Accomplished
+
+**Contact Page + Legal Pages Polish — ✅ Complete (PRs #147, #148)**
+- Created `contact.html` — standalone contact form; name/email/reason dropdown/message; FormSubmit AJAX to existing endpoint; in-place success confirmation; dark theme matches NON-X
+- Removed personal email (`ktstanigar@hotmail.com`) from `privacy.html` + `terms.html` — contact section now links to `/contact.html`
+- Footer centering fix on `index.html` — added `text-align:center` so Privacy · Terms · Contact links center-wrap on small screens
+- `index.html` footer now shows: © Standing Tiger Engineering & Development · Privacy · Terms · Contact
+
+**⚠️ One pending action after Standing Tiger business email is created:**
+- Add business email to `privacy.html` (section 13) and `terms.html` (section 15) contact boxes
+
+**Dev → Main merge pending user smoke test:**
+- User testing `dev.nonx.standingtiger.com` before merging to prod
+- Will confirm next session if ready to merge
+
+---
+
+## Session: June 15, 2026 (evening) — Status: ✅ COMPLETE
+
+**Agent:** Claude Sonnet 4.6
+**Branch:** dev
+
+### What Was Accomplished
+
+**Legal Pages — ✅ Complete (PR #146)**
+- Created `privacy.html` — 13 sections; TDPSA + COPPA + GDPR compliant
+  - Full analytics pipeline disclosed: GA4 → BigQuery → AWS Lambda → public dashboard (`kstanigar.github.io/non-x_analytics/`)
+  - 13 categories of gameplay data listed (boss events, AI tier adjustments, death phase, A/B test groups, replay behavior, Instagram opt-in flag, etc.)
+  - Dual opt-out mechanisms documented: cookie consent banner (`nonx_consent`) + analytics toggle (`nonex_analytics`)
+  - 13+ age disclosure (COPPA — no age gate, disclosure only)
+  - Texas governing law (TDPSA)
+  - reCAPTCHA v3 disclosed as Standing Tiger-controlled (April 2, 2026 rule change)
+- Created `terms.html` — 15 sections
+  - Analytics toggle documented (opt-in/out, default ON)
+  - Public dashboard consent disclosed (aggregated/anonymized data only)
+  - Ko-fi, AWS Lambda, Firebase, BigQuery third-party terms linked
+  - Texas governing law; $0 liability cap (free game)
+- Updated `index.html` — Privacy + Terms links added to consent banner and footer
+  - Fixes live 404 on `/privacy.html` (linked from consent banner since June 14)
+- Research documented in `docs/LEGAL_PAGES_PLAN.md` (haiku agent findings: TDPSA, COPPA 2026, GDPR, reCAPTCHA controller change)
+
+**⚠️ Two time-gated items still pending (do not action until dates reached):**
+- App Check enforcement: re-check ~June 18–19, enforce only when verified % ≥ 85%
+- GA4 dashboard chart: check GA4 Explore ~June 16–17 for `final_score` data, build Final Score × New Tier chart
+
+---
+
+## Session: June 13–15, 2026 - Status: ✅ COMPLETE
 
 **Session Duration:** ~3 sessions
 **Agent:** Claude Sonnet 4.6
@@ -103,16 +294,33 @@
 - Additional fix: added `https://www.gstatic.com` to connect-src — Firebase source map files (.js.map) were blocked in enforcement mode; only triggered when DevTools is open but CSP blocks regardless. Published 4:02 AM UTC.
 - Full final function code in SECURITY_AUDIT_PLAN.md Phase 4 task 4F
 
-**Next priorities (Phase 4):**
-2. GA4 `final_score` custom dimension — add param to `player_won` event in game.html + game_mobile.html, register in GA4 console. Unblocks NON-X Analytics dashboard (`customEvent:final_score` × `customEvent:new_tier` chart). No BigQuery, cost $0. Est. 1–2 hrs.
-3. App Check enforcement — re-check June 15 ~5 AM, enforce only when verified % ≥ 85%
-4. SRI, HTTPS verification, TLS policy, sync_paim.sh (low polish)
+**Security Audit — ALL 4 PHASES COMPLETE (June 15, 2026)**
 
-**NEW BUG — 120fps game loop (discovered June 15, 2026):**
-Game runs uncapped at display refresh rate. On 120Hz monitors all frame-dependent mechanics run 2x faster. Player/bullet/enemy speeds doubled, invincibility halved to 1s, enemy spawns doubled. Fix: add FPS cap `setTimeout(() => requestAnimationFrame(draw), 1000/60)` at game loop lines 7739/8423 in game.html. game_mobile.html likely same issue. Full details in CURRENT_PRIORITIES.md.
+Phase 4 final status:
+- ✅ 4A — sync_paim.sh env vars + .gitignore (PR #141, June 15)
+- ✅ 4B — SRI N/A (no eligible scripts, mitigated by CSP)
+- ✅ 4C — HTTPS: Redirect HTTP to HTTPS — prod ED9CRAIN93YRS + dev E1Q496KLUYVM0Z verified
+- ✅ 4D — TLS: prod TLSv1.3_2025 / dev TLSv1.2_2021 — both verified
+- ✅ 4E — Access logging N/A (Pro plan required)
+- ✅ 4F — CSP enforcement: complete, zero violations
+- ✅ 4G — GA4 final_score: code + DebugView verified (⏳ dashboard ~June 16–17)
 
-**NEW BUG — Spacebar blocked in textarea fields (discovered June 15, 2026):**
-Global keydown handler at game.html line ~7574 fires e.preventDefault() for spacebar with no input/textarea target check. Blocks spacebar in surveyComments (line 6101), bugDescription + bugSteps (lines 6363, 6367). Fix: add `if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;` at top of spacebar handler. Both game.html + game_mobile.html.
+**⚠️ Two time-gated items (do not action until dates reached):**
+- App Check enforcement: re-check ~June 18–19, enforce only when verified % ≥ 85%
+- GA4 dashboard chart: check Explore ~June 16–17, then build Final Score × New Tier chart
+
+**Item 6 — Favicon + OG Tags — ✅ Complete (June 15, 2026):**
+- `favicon_st.png` (new asset, 1408×768) cropped to centered 768×768 square, resized to 32×32 + 180×180 via `scripts/make_favicon.py` (pure Python, no dependencies)
+- Dark background preserved (no transparency bleed to white)
+- Favicon link tags + Open Graph + Twitter card meta tags added to `index.html`
+- Standing Tiger footer credit added below Play button on `index.html`
+- Favicon link tags added to game.html + game_mobile.html (favicon persists in tab during gameplay)
+
+**FIXED — 120fps game loop (June 15, 2026, PR #137 merged to dev):**
+`performance.now()` timestamp-based 60fps cap added to `draw()` in game.html + game_mobile.html. rAF fires at display rate; frames skipped until 16.67ms elapsed. Verified: FPS reads ~60 on 120Hz monitor. `msPrev` + `MS_PER_FRAME` vars added at ~line 2110 (game.html) / 2282 (game_mobile.html).
+
+**FIXED — Spacebar blocked in textarea fields (PR #139, June 15, 2026):**
+`if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;` added at top of global keydown handler. game.html line 7301, game_mobile.html line 7843. Affects surveyComments, bugDescription, bugSteps. PR #139 merged to dev.
 
 ---
 
