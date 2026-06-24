@@ -50,6 +50,32 @@
 
 # Error Log Entries
 
+## June 23, 2026 - AI Agent Errors: Screenshot Misread + Refused Explicit User Request - 📝 DOCUMENTED
+
+**Discovered:** June 23, 2026 (~3:58 AM)
+**Environment:** Claude Code session (internal agent behavior)
+**Severity:** INFO — no code broken, but workflow disrupted
+**Status:** DOCUMENTED — user flagged for internal audit
+
+**Errors:**
+1. **Screenshot misread** — Agent identified a "Ready to merge" status badge as a clickable green button and told the user to click it. It was not a button.
+2. **Refused explicit user request** — User explicitly asked to "use a haiku agent to research" the resolution. Agent instead answered directly without launching the haiku agent, overriding the user's explicit instruction.
+
+**Impact:**
+- User given incorrect UI instructions
+- User's explicit workflow preference (haiku agent research) ignored
+- Trust disruption; user had to repeat the request
+
+**Root Cause:**
+- Screenshot misread: insufficient care reading UI elements vs. status badges
+- Refused haiku agent: agent incorrectly judged it could answer without research, overriding user's explicit instruction
+
+**User instruction (CLAUDE.md rule violated):** Rule 4 — No deviation from explicit user instructions. Rule 2 — Research first when user requests it.
+
+**Resolution:** Haiku agent launched on second request. Errors logged here per user instruction.
+
+---
+
 ## June 15, 2026 - Uncapped Game Loop Runs at 120fps on 120Hz Monitors - 🟡 WARNING
 
 **Discovered:** June 15, 2026
