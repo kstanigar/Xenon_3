@@ -7149,6 +7149,7 @@
           'platform': 'desktop',
           'level_reached': level,
           'phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
+          'death_phase': purplePhase ? 'purple' : redPhase ? 'red' : 'green',
           'score': score,
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
           'session_duration_seconds': gameSessionStart ? Math.round((Date.now() - gameSessionStart) / 1000) : null,
@@ -8692,7 +8693,7 @@
           'movement_group': movementABGroup,
           'platform': 'desktop',
           'music_variant': localStorage.getItem('nonex_music') !== 'off' ? 'on' : 'off',
-          'is_replay': isReplay,
+          'is_replay': isReplay ? 'true' : 'false',
           'games_played': parseInt(localStorage.getItem('nonx_game_count') || '0', 10) + 1,
           'score_multiplier': scoreMultiplier
         });
