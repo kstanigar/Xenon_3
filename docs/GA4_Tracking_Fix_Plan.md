@@ -2,7 +2,7 @@
 
 **Created:** June 27, 2026
 **Author:** Session 12 — non-x_analytics P-5 Security Audit smoke test investigation
-**Status:** 🔴 PENDING IMPLEMENTATION — awaiting user approval
+**Status:** ✅ DEBUGVIEW VERIFIED — June 28, 2026 | CI passed ✅ | Both fixes confirmed | Pending: PR dev → main
 
 ---
 
@@ -229,6 +229,14 @@ git push origin feature/ga4-fix-death-phase-is-replay
 6. Confirm: `is_replay: 'false'` ✅
 7. Die and use Play Again → start new game → `game_start`
 8. Confirm: `is_replay: 'true'` ✅
+
+**DebugView Results — June 28, 2026:**
+- `is_replay: 'false'` on fresh `game_start` ✅ CONFIRMED (main + dev)
+- `is_replay: 'true'` on play_again → `game_start` ✅ CONFIRMED (main + dev)
+- `phase: 'red'` and `phase: 'green'` on `player_death` ✅ CONFIRMED (main + dev)
+- `death_phase: 'green'` on `player_death` ✅ CONFIRMED on dev build
+- `ab_music_group` and `analytics_version` also confirmed sending on `player_death` (were scrolled off in earlier screenshots)
+- **Action needed:** PR `dev` → `main` — both fixes fully verified, ready to merge
 
 **Dashboard (24–48h after deploy):**
 - Death Triggers chart populates with green/red/purple breakdown
